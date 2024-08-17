@@ -5,7 +5,8 @@ import (
 	"errors"
 )
 
-// GetAudioConsumeSettings returns audioConsumeSettings object populated using specified parameters
+// GetAudioConsumeSettings returns an api.AudioConsumeSettings object, populated
+// with the specified parameters.
 func (client *SdkClient) GetAudioConsumeSettings(audioChannel int32,
 	audioConsumeMode api.AudioConsumeSettings_AudioConsumeMode,
 	streamStartLocation api.AudioConsumeSettings_StreamStartLocation,
@@ -27,7 +28,8 @@ func (client *SdkClient) GetAudioConsumeSettings(audioChannel int32,
 	return audioConsumeSettings, nil
 }
 
-// GetNormalizationSettings returns normalizationSettings object populated using specified parameters
+// GetNormalizationSettings returns an api.NormalizationSettings object,
+// populated with the specified parameters.
 func (client *SdkClient) GetNormalizationSettings(enableInverseText bool, enablePunctuationCapitalization bool,
 	enableRedaction bool, requestTimeoutMs *api.OptionalInt32) (normalizationSettings *api.NormalizationSettings) {
 
@@ -53,7 +55,8 @@ func (client *SdkClient) GetNormalizationSettings(enableInverseText bool, enable
 	return normalizationSettings
 }
 
-// GetVadSettings returns vadSettings object populated using specified parameters
+// GetVadSettings returns an api.VadSettings object, populated with the
+// specified parameters.
 func (client *SdkClient) GetVadSettings(useVad bool, bargeInTimeout int32, eosDelay int32,
 	endOfSpeechTimeoutMs *api.OptionalInt32,
 	noiseReductionMode api.VadSettings_NoiseReductionMode,
@@ -65,22 +68,23 @@ func (client *SdkClient) GetVadSettings(useVad bool, bargeInTimeout int32, eosDe
 ) (vadSettings *api.VadSettings) {
 
 	vadSettings = &api.VadSettings{
+		UseVad:               &api.OptionalBool{Value: useVad},
+		BargeInTimeoutMs:     &api.OptionalInt32{Value: bargeInTimeout},
 		EndOfSpeechTimeoutMs: endOfSpeechTimeoutMs,
 		NoiseReductionMode:   noiseReductionMode,
 		BargeinThreshold:     bargeInThreshold,
-		SnrSensitivity:    snrSensitivity,
-		StreamInitDelay:   streamInitDelay,
-		VolumeSensitivity: volumeSensitivity,
-		WindBackMs:        windBackMs,
+		EosDelayMs:           &api.OptionalInt32{Value: eosDelay},
+		SnrSensitivity:       snrSensitivity,
+		StreamInitDelay:      streamInitDelay,
+		VolumeSensitivity:    volumeSensitivity,
+		WindBackMs:           windBackMs,
 	}
-	vadSettings.UseVad = &api.OptionalBool{Value: useVad}
-	vadSettings.BargeInTimeoutMs = &api.OptionalInt32{Value: bargeInTimeout}
-	vadSettings.EosDelayMs = &api.OptionalInt32{Value: eosDelay}
 
 	return vadSettings
 }
 
-// GetRecognitionSettings returns recognitionSettings object populated using specified parameters
+// GetRecognitionSettings returns an api.RecognitionSettings object, populated
+// with the specified parameters.
 func (client *SdkClient) GetRecognitionSettings(decodeTimeout int32, enablePartialResults bool,
 	maxAlternatives *api.OptionalInt32,
 	trimSilence *api.OptionalInt32,

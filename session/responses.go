@@ -9,6 +9,7 @@ import (
 	"time"
 )
 
+// sessionResponseListener handles all responses from the specified session.
 func sessionResponseListener(session *SessionObject, sessionIdChan chan string) {
 
 	defer func() {
@@ -61,6 +62,15 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			}
 
 			handlePartialResult(session, response)
+
+			session.PartialResultsChannel <- response.GetPartialResult()
+		} else if response.GetFinalResult() != nil {
+
+			if EnableVerboseLogging {
+				log.Printf("Recv FinalResult:\n%+v", response)
+			}
+
+			handleFinalResult(session, response)
 
 			session.FinalResultsChannel <- response.GetFinalResult()
 
@@ -131,9 +141,11 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 
 func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
 
+	// Get the interaction id, to find the interaction object.
 	interactionId := response.GetVadEvent().GetInteractionId()
 
 	if interactionObject, ok := session.asrInteractionsMap[interactionId]; ok {
+		// This is an ASR interaction.
 		switch response.GetVadEvent().VadEventType {
 		case api.VadEvent_VAD_EVENT_TYPE_BEGIN_PROCESSING:
 			interactionObject.vadBeginProcessingReceived = true
@@ -158,6 +170,7 @@ func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
 			close(interactionObject.vadBargeInTimeoutChannel)
 		}
 	} else if interactionObject, ok := session.transcriptionInteractionsMap[interactionId]; ok {
+		// This is a transcription interaction.
 		switch response.GetVadEvent().VadEventType {
 		case api.VadEvent_VAD_EVENT_TYPE_BEGIN_PROCESSING:
 			interactionObject.vadBeginProcessingReceived = true
@@ -182,62 +195,87 @@ func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
 			close(interactionObject.vadBargeInTimeoutChannel)
 		}
 	} else {
+		// We did not find the interaction.
 		log.Printf("Recv VadEvent: interaction not found: %s", interactionId)
 	}
 }
 
 func handleFinalResult(session *SessionObject, response *api.SessionResponse) {
 
+	// Get the interaction id, to find the interaction object.
 	interactionId := response.GetFinalResult().GetInteractionId()
 
 	if interactionObject, ok := session.asrInteractionsMap[interactionId]; ok {
+		// This is an ASR interaction.
 		interactionObject.finalResults = response.GetFinalResult().GetFinalResult().GetAsrInteractionResult()
 		interactionObject.finalResultsReceived = true
 		close(interactionObject.resultsReadyChannel)
 	} else if interactionObject, ok := session.transcriptionInteractionsMap[interactionId]; ok {
+		// This is a transcription interaction.
 		interactionObject.finalResults = response.GetFinalResult().GetFinalResult().GetTranscriptionInteractionResult()
 		interactionObject.finalResultsReceived = true
 		close(interactionObject.resultsReadyChannel)
 	} else if interactionObject, ok := session.normalizationInteractionsMap[interactionId]; ok {
+		// This is a normalization interaction.
 		interactionObject.finalResults = response.GetFinalResult().GetFinalResult().GetNormalizeTextResult()
 		interactionObject.finalResultsReceived = true
 		close(interactionObject.resultsReadyChannel)
 	} else if interactionObject, ok := session.ttsInteractionsMap[interactionId]; ok {
+		// This is a TTS interaction.
 		interactionObject.finalResults = response.GetFinalResult().GetFinalResult().GetTtsInteractionResult()
 		interactionObject.finalResultsReceived = true
 		close(interactionObject.resultsReadyChannel)
 	} else {
+		// We did not find the interaction.
 		log.Printf("Recv FinalResult: interaction not found: %s", interactionId)
 	}
 }
 
 func handlePartialResult(session *SessionObject, response *api.SessionResponse) {
 
+	// Get the interaction id, to find the interaction object.
 	interactionId := response.GetPartialResult().GetInteractionId()
 
 	if interactionObject, ok := session.asrInteractionsMap[interactionId]; ok {
+		// This is an ASR interaction.
 
+		// Synchronize tracking information.
 		interactionObject.partialResultLock.Lock()
+		// Get the index of this partial result.
 		partialResultIdx := interactionObject.partialResultsReceived
+		// Store the new partial result.
 		interactionObject.partialResultsList = append(interactionObject.partialResultsList, response.GetPartialResult())
+		// Create a channel for the next partial result.
 		nextPartialChannel := make(chan struct{})
 		interactionObject.partialResultsChannels = append(interactionObject.partialResultsChannels, nextPartialChannel)
+		// Update the number of partial results received.
 		interactionObject.partialResultsReceived = partialResultIdx + 1
+		// Close the channel for this partial result.
 		close(interactionObject.partialResultsChannels[partialResultIdx])
+		// Done with updates; release lock.
 		interactionObject.partialResultLock.Unlock()
 
 	} else if interactionObject, ok := session.transcriptionInteractionsMap[interactionId]; ok {
+		// This is a transcription interaction.
 
+		// Synchronize tracking information.
 		interactionObject.partialResultLock.Lock()
+		// Get the index of this partial result.
 		partialResultIdx := interactionObject.partialResultsReceived
+		// Store the new partial result.
 		interactionObject.partialResultsList = append(interactionObject.partialResultsList, response.GetPartialResult())
+		// Create a channel for the next partial result.
 		nextPartialChannel := make(chan struct{})
 		interactionObject.partialResultsChannels = append(interactionObject.partialResultsChannels, nextPartialChannel)
+		// Update the number of partial results received.
 		interactionObject.partialResultsReceived = partialResultIdx + 1
+		// Close the channel for this partial result.
 		close(interactionObject.partialResultsChannels[partialResultIdx])
+		// Done with updates; release lock.
 		interactionObject.partialResultLock.Unlock()
 
 	} else {
+		// We did not find the interaction.
 		log.Printf("Recv FinalResult: interaction not found: %s", interactionId)
 	}
 }

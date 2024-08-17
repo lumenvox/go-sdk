@@ -5,9 +5,13 @@ import (
 	"github.com/google/uuid"
 )
 
+// getSessionCreateRequest returns a create session request. The specified
+// correlationId will be used if nonempty. Otherwise, one will be
+// auto-generated.
 func getSessionCreateRequest(correlationId string, deploymentId string, operatorId string) *api.SessionRequest {
 
 	if correlationId == "" {
+		// Create a new correlationId if one is not specified
 		correlationId = uuid.NewString()
 	}
 
@@ -28,9 +32,13 @@ func getSessionCreateRequest(correlationId string, deploymentId string, operator
 	return res
 }
 
+// getAudioFormatRequest returns an audio format request. The specified
+// correlationId will be used if nonempty. Otherwise, one will be
+// auto-generated.
 func getAudioFormatRequest(correlationId string, audioConfig AudioConfig) (newRequest *api.SessionRequest) {
 
 	if correlationId == "" {
+		// Create a new correlationId if one is not specified
 		correlationId = uuid.NewString()
 	}
 
@@ -53,6 +61,9 @@ func getAudioFormatRequest(correlationId string, audioConfig AudioConfig) (newRe
 	return newRequest
 }
 
+// getAsrRequest returns an ASR interaction request. The specified
+// correlationId will be used if nonempty. Otherwise, one will be
+// auto-generated.
 func getAsrRequest(
 	correlationId string,
 	language string,
@@ -64,6 +75,7 @@ func getAsrRequest(
 	generalInteractionSettings *api.GeneralInteractionSettings) (asrRequest *api.SessionRequest) {
 
 	if correlationId == "" {
+		// Create a new correlationId if one is not specified
 		correlationId = uuid.NewString()
 	}
 
@@ -89,6 +101,8 @@ func getAsrRequest(
 	return asrRequest
 }
 
+// getTranscriptionRequest returns a transcription interaction request. The specified
+// correlationId will be used if nonempty. Otherwise, one will be auto-generated.
 func getTranscriptionRequest(
 	correlationId string,
 	language string,
@@ -98,6 +112,7 @@ func getTranscriptionRequest(
 	recognitionSettings *api.RecognitionSettings) (transcriptionRequest *api.SessionRequest) {
 
 	if correlationId == "" {
+		// Create a new correlationId if one is not specified
 		correlationId = uuid.NewString()
 	}
 
@@ -108,6 +123,7 @@ func getTranscriptionRequest(
 				InteractionRequest: &api.InteractionRequestMessage_InteractionCreateTranscription{
 					InteractionCreateTranscription: &api.InteractionCreateTranscriptionRequest{
 						Language: language,
+						//EmbeddedGrammars:      inlineGrammarsRequest(),
 						VadSettings:           vadSettings,
 						AudioConsumeSettings:  audioConsumeSettings,
 						NormalizationSettings: normalizationSettings,
@@ -121,6 +137,8 @@ func getTranscriptionRequest(
 	return transcriptionRequest
 }
 
+// getNormalizationRequest returns a normalization interaction request. The specified
+// correlationId will be used if nonempty. Otherwise, one will be auto-generated.
 func getNormalizationRequest(
 	correlationId string,
 	language string,
@@ -130,6 +148,7 @@ func getNormalizationRequest(
 ) (transcriptionRequest *api.SessionRequest) {
 
 	if correlationId == "" {
+		// Create a new correlationId if one is not specified
 		correlationId = uuid.NewString()
 	}
 
@@ -152,6 +171,8 @@ func getNormalizationRequest(
 	return transcriptionRequest
 }
 
+// getInlineTtsRequest returns an inline TTS interaction request. The specified
+// correlationId will be used if nonempty. Otherwise, one will be auto-generated.
 func getInlineTtsRequest(
 	correlationId string,
 	language string,
@@ -163,6 +184,7 @@ func getInlineTtsRequest(
 ) (ttsRequest *api.SessionRequest) {
 
 	if correlationId == "" {
+		// Create a new correlationId if one is not specified
 		correlationId = uuid.NewString()
 	}
 
@@ -193,6 +215,8 @@ func getInlineTtsRequest(
 	return ttsRequest
 }
 
+// getSsmlTtsRequest returns an SSML TTS interaction request. The specified
+// correlationId will be used if nonempty. Otherwise, one will be auto-generated.
 func getSsmlTtsRequest(
 	correlationId string,
 	language string,
@@ -204,6 +228,7 @@ func getSsmlTtsRequest(
 ) (ttsRequest *api.SessionRequest) {
 
 	if correlationId == "" {
+		// Create a new correlationId if one is not specified
 		correlationId = uuid.NewString()
 	}
 
@@ -234,9 +259,13 @@ func getSsmlTtsRequest(
 	return ttsRequest
 }
 
+// getAudioPushRequest returns an audio push request. The specified
+// correlationId will be used if nonempty. Otherwise, one will be
+// auto-generated.
 func getAudioPushRequest(correlationId string, audioChunk []byte) (newAudioPushMessage *api.SessionRequest) {
 
 	if correlationId == "" {
+		// Create a new correlationId if one is not specified
 		correlationId = uuid.NewString()
 	}
 
@@ -256,9 +285,13 @@ func getAudioPushRequest(correlationId string, audioChunk []byte) (newAudioPushM
 	return newAudioPushMessage
 }
 
+// getInteractionFinalizeRequest returns an interaction finalize request.
+// The specified correlationId will be used if nonempty. Otherwise, one
+// will be auto-generated.
 func getInteractionFinalizeRequest(correlationId string, interactionId string) (newRequest *api.SessionRequest) {
 
 	if correlationId == "" {
+		// Create a new correlationId if one is not specified
 		correlationId = uuid.NewString()
 	}
 
@@ -278,10 +311,14 @@ func getInteractionFinalizeRequest(correlationId string, interactionId string) (
 	return newRequest
 }
 
+// getAudioPullRequest returns an audio pull request.
+// The specified correlationId will be used if nonempty. Otherwise, one
+// will be auto-generated.
 func getAudioPullRequest(correlationId string, interactionId string, audioChannel int32, audioStartMs int32,
 	audioLengthMs int32) (newRequest *api.SessionRequest) {
 
 	if correlationId == "" {
+		// Create a new correlationId if one is not specified
 		correlationId = uuid.NewString()
 	}
 
@@ -316,9 +353,13 @@ func getAudioPullRequest(correlationId string, interactionId string, audioChanne
 	return newRequest
 }
 
+// getSessionCloseRequest returns a session close request.
+// The specified correlationId will be used if nonempty. Otherwise, one
+// will be auto-generated.
 func getSessionCloseRequest(correlationId string) (newRequest *api.SessionRequest) {
 
 	if correlationId == "" {
+		// Create a new correlationId if one is not specified
 		correlationId = uuid.NewString()
 	}
 

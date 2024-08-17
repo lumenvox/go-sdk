@@ -42,7 +42,9 @@ func CreateSdkClient(apiEndpoint string, tlsEnabled bool, certificatePath string
 	return client, err
 }
 
-// NewSession attempts to create a new session for the specified sdkClient.
+// NewSession attempts to create a new session for the specified sdkClient. On
+// success, it will return the new session object.
+//
 // streamTimeout controls the maximum duration of the stream, and audioConfig
 // controls the audio configuration: streaming/batch, audio format, sample rate, etc.
 func (client *SdkClient) NewSession(streamTimeout time.Duration, audioConfig session.AudioConfig) (

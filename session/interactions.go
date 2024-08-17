@@ -7,72 +7,92 @@ import (
 	"sync"
 )
 
+// AsrInteractionObject represents an ASR interaction.
 type AsrInteractionObject struct {
 	InteractionId string
 
+	// VAD begin processing tracking
 	vadBeginProcessingReceived bool
 	vadBeginProcessingChannel  chan struct{}
 
+	// VAD barge-in tracking
 	vadBargeInReceived int
 	vadBargeInChannel  chan int
 
+	// VAD barge-out tracking
 	vadBargeOutReceived int
 	vadBargeOutChannel  chan int
 
+	// VAD barge-in timeout tracking
 	vadBargeInTimeoutReceived bool
 	vadBargeInTimeoutChannel  chan struct{}
 
+	// Partial result tracking
 	partialResultLock      sync.Mutex
 	partialResultsReceived int
 	partialResultsChannels []chan struct{}
 	partialResultsList     []*api.PartialResult
 
+	// Final result tracking
 	finalResultsReceived bool
 	finalResults         *api.AsrInteractionResult
 	resultsReadyChannel  chan struct{}
 }
 
+// TranscriptionInteractionObject represents a transcription interaction.
 type TranscriptionInteractionObject struct {
 	InteractionId string
 
+	// VAD begin processing tracking
 	vadBeginProcessingReceived bool
 	vadBeginProcessingChannel  chan struct{}
 
+	// VAD barge-in tracking
 	vadBargeInReceived int
 	vadBargeInChannel  chan int
 
+	// VAD barge-out tracking
 	vadBargeOutReceived int
 	vadBargeOutChannel  chan int
 
+	// VAD barge-in timeout tracking
 	vadBargeInTimeoutReceived bool
 	vadBargeInTimeoutChannel  chan struct{}
 
+	// Partial result tracking
 	partialResultLock      sync.Mutex
 	partialResultsReceived int
 	partialResultsChannels []chan struct{}
 	partialResultsList     []*api.PartialResult
 
+	// Final result tracking
 	finalResultsReceived bool
 	finalResults         *api.TranscriptionInteractionResult
 	resultsReadyChannel  chan struct{}
 }
 
+// NormalizationInteractionObject represents a normalization interaction.
 type NormalizationInteractionObject struct {
 	InteractionId string
 
+	// Final result tracking
 	finalResultsReceived bool
 	finalResults         *api.NormalizeTextResult
 	resultsReadyChannel  chan struct{}
 }
 
+// TtsInteractionObject represents a TTS interaction.
 type TtsInteractionObject struct {
 	InteractionId string
 
+	// Final result tracking
 	finalResultsReceived bool
 	finalResults         *api.TtsInteractionResult
 	resultsReadyChannel  chan struct{}
 }
 
+// NewAsr attempts to create a new ASR interaction.
+// If successful, a new interaction object will be returned.
 func (session *SessionObject) NewAsr(
 	language string,
 	grammars []*api.Grammar,
@@ -81,6 +101,8 @@ func (session *SessionObject) NewAsr(
 	vadSettings *api.VadSettings,
 	audioConsumeSettings *api.AudioConsumeSettings,
 	generalInteractionSettings *api.GeneralInteractionSettings) (interactionObject *AsrInteractionObject, err error) {
+
+	// Create ASR interaction, adding parameters such as VAD and recognition settings
 
 	session.streamSendLock.Lock()
 	err = session.SessionStream.Send(getAsrRequest("", language, grammars, grammarSettings,
@@ -92,12 +114,14 @@ func (session *SessionObject) NewAsr(
 		return nil, err
 	}
 
+	// Get the interaction ID.
 	asrResponse := <-session.createdAsrChannel
 	interactionId := asrResponse.InteractionId
 	if EnableVerboseLogging {
-		log.Printf("received asr response: %s", interactionId)
+		log.Printf("created new ASR interaction: %s", interactionId)
 	}
 
+	// Create the interaction object.
 	interactionObject = &AsrInteractionObject{
 		InteractionId:             interactionId,
 		vadBeginProcessingChannel: make(chan struct{}, 1),
@@ -112,17 +136,23 @@ func (session *SessionObject) NewAsr(
 		resultsReadyChannel:       make(chan struct{}),
 	}
 	interactionObject.partialResultsChannels = append(interactionObject.partialResultsChannels, make(chan struct{}))
+
+	// Add the interaction object to the session
 	session.asrInteractionsMap[interactionId] = interactionObject
 
 	return interactionObject, err
 }
 
+// NewTranscription attempts to create a new transcription interaction.
+// If successful, a new interaction object will be returned.
 func (session *SessionObject) NewTranscription(
 	language string,
 	audioConsumeSettings *api.AudioConsumeSettings,
 	normalizationSettings *api.NormalizationSettings,
 	vadSettings *api.VadSettings,
 	recognitionSettings *api.RecognitionSettings) (interactionObject *TranscriptionInteractionObject, err error) {
+
+	// Create transcription interaction, adding parameters such as VAD and recognition settings
 
 	session.streamSendLock.Lock()
 	err = session.SessionStream.Send(getTranscriptionRequest("", language,
@@ -134,12 +164,14 @@ func (session *SessionObject) NewTranscription(
 		return nil, err
 	}
 
+	// Get the interaction ID.
 	transcriptionResponse := <-session.createdTranscriptionChannel
 	interactionId := transcriptionResponse.InteractionId
 	if EnableVerboseLogging {
-		log.Printf("received transcription response: %s", interactionId)
+		log.Printf("created new transcription interaction: %s", interactionId)
 	}
 
+	// Create the interaction object.
 	interactionObject = &TranscriptionInteractionObject{
 		InteractionId:             interactionId,
 		vadBeginProcessingChannel: make(chan struct{}, 1),
@@ -154,15 +186,21 @@ func (session *SessionObject) NewTranscription(
 		resultsReadyChannel:       make(chan struct{}),
 	}
 	interactionObject.partialResultsChannels = append(interactionObject.partialResultsChannels, make(chan struct{}))
+
+	// Add the interaction object to the session
 	session.transcriptionInteractionsMap[interactionId] = interactionObject
 
 	return interactionObject, err
 }
 
+// NewNormalization attempts to create a new ITN normalization interaction.
+// If successful, a new interaction object will be returned.
 func (session *SessionObject) NewNormalization(language string,
 	textToNormalize string,
 	normalizationSettings *api.NormalizationSettings,
 	generalInteractionSettings *api.GeneralInteractionSettings) (interactionObject *NormalizationInteractionObject, err error) {
+
+	// Create normalization interaction, adding specified parameters
 
 	session.streamSendLock.Lock()
 	err = session.SessionStream.Send(getNormalizationRequest("", language, textToNormalize,
@@ -174,27 +212,37 @@ func (session *SessionObject) NewNormalization(language string,
 		return nil, err
 	}
 
+	// Get the interaction ID.
 	normalizationResponse := <-session.createdNormalizeChannel
 	interactionId := normalizationResponse.InteractionId
-	log.Printf("received normalization response: %s", interactionId)
+	if EnableVerboseLogging {
+		log.Printf("created new ITN interaction: %s", interactionId)
+	}
 
+	// Create the interaction object.
 	interactionObject = &NormalizationInteractionObject{
 		interactionId,
 		false,
 		nil,
 		make(chan struct{}),
 	}
+
+	// Add the interaction object to the session
 	session.normalizationInteractionsMap[interactionId] = interactionObject
 
 	return interactionObject, err
 }
 
+// NewInlineTts attempts to create a new inline TTS interaction. If successful,
+// a new interaction object will be returned.
 func (session *SessionObject) NewInlineTts(language string,
 	textToSynthesize string,
 	inlineSettings *api.TtsInlineSynthesisSettings,
 	synthesizedAudioFormat *api.AudioFormat,
 	synthesisTimeoutMs *api.OptionalInt32,
 	generalInteractionSettings *api.GeneralInteractionSettings) (interactionObject *TtsInteractionObject, err error) {
+
+	// Create TTS interaction, adding specified parameters
 
 	session.streamSendLock.Lock()
 	err = session.SessionStream.Send(getInlineTtsRequest("", language, textToSynthesize,
@@ -206,27 +254,37 @@ func (session *SessionObject) NewInlineTts(language string,
 		return nil, err
 	}
 
+	// Get the interaction ID.
 	ttsResponse := <-session.createdTtsChannel
 	interactionId := ttsResponse.InteractionId
-	log.Printf("received tts response: %s", interactionId)
+	if EnableVerboseLogging {
+		log.Printf("created new TTS interaction: %s", interactionId)
+	}
 
+	// Create the interaction object.
 	interactionObject = &TtsInteractionObject{
 		interactionId,
 		false,
 		nil,
 		make(chan struct{}),
 	}
+
+	// Add the interaction object to the session
 	session.ttsInteractionsMap[interactionId] = interactionObject
 
 	return interactionObject, err
 }
 
+// NewSsmlTts attempts to create a new SSML TTS interaction. If successful, a new interaction
+// object will be returned.
 func (session *SessionObject) NewSsmlTts(language string,
 	textToSynthesize string,
 	sslVerifyPeer *api.OptionalBool,
 	synthesizedAudioFormat *api.AudioFormat,
 	synthesisTimeoutMs *api.OptionalInt32,
 	generalInteractionSettings *api.GeneralInteractionSettings) (interactionObject *TtsInteractionObject, err error) {
+
+	// Create TTS interaction, adding specified parameters
 
 	session.streamSendLock.Lock()
 	err = session.SessionStream.Send(getSsmlTtsRequest("", language, textToSynthesize,
@@ -238,23 +296,32 @@ func (session *SessionObject) NewSsmlTts(language string,
 		return nil, err
 	}
 
+	// Get the interaction ID.
 	ttsResponse := <-session.createdTtsChannel
 	interactionId := ttsResponse.InteractionId
-	log.Printf("received tts response: %s", interactionId)
+	if EnableVerboseLogging {
+		log.Printf("created new TTS interaction: %s", interactionId)
+	}
 
+	// Create the interaction object.
 	interactionObject = &TtsInteractionObject{
 		interactionId,
 		false,
 		nil,
 		make(chan struct{}),
 	}
+
+	// Add the interaction object to the session
 	session.ttsInteractionsMap[interactionId] = interactionObject
 
 	return interactionObject, err
 }
 
+// PullTtsAudio fetches generated audio from a specified TTS interaction.
 func (session *SessionObject) PullTtsAudio(interactionId string, audioChannel int32, audioStartMs int32,
 	audioLengthMs int32) (audioData []byte, err error) {
+
+	// Send audio pull request using the provided interactionId, adding specified parameters
 
 	session.streamSendLock.Lock()
 	err = session.SessionStream.Send(getAudioPullRequest("", interactionId, audioChannel, audioStartMs, audioLengthMs))
@@ -271,7 +338,11 @@ func (session *SessionObject) PullTtsAudio(interactionId string, audioChannel in
 	return audioData, nil
 }
 
+// FinalizeInteraction attempts to finalize an existing interaction. This is not limited to a
+// single interaction type.
 func (session *SessionObject) FinalizeInteraction(interactionId string) (err error) {
+
+	// Send finalize request using the provided interactionId, adding specified parameters
 
 	session.streamSendLock.Lock()
 	err = session.SessionStream.Send(getInteractionFinalizeRequest("", interactionId))
