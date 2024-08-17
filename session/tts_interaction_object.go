@@ -1,15 +1,15 @@
 package session
 
 import (
-	"github.com/lumenvox/go-sdk/lumenvox/api"
-	"errors"
+    "github.com/lumenvox/go-sdk/lumenvox/api"
+    "errors"
 )
 
 // WaitForFinalResults waits for the final results.
 func (ttsInteraction *TtsInteractionObject) WaitForFinalResults() {
 
-	// ResultsReadyChannel is closed when final results arrive.
-	<-ttsInteraction.resultsReadyChannel
+    // ResultsReadyChannel is closed when final results arrive.
+    <-ttsInteraction.resultsReadyChannel
 }
 
 // GetFinalResults fetches the final results or error from an interaction,
@@ -17,14 +17,14 @@ func (ttsInteraction *TtsInteractionObject) WaitForFinalResults() {
 // In other cases, an error describing the issue will be returned.
 func (ttsInteraction *TtsInteractionObject) GetFinalResults() (*api.TtsInteractionResult, error) {
 
-	// Wait for the end of the interaction.
-	ttsInteraction.WaitForFinalResults()
+    // Wait for the end of the interaction.
+    ttsInteraction.WaitForFinalResults()
 
-	if ttsInteraction.finalResultsReceived {
-		// If we received final results, return them.
-		return ttsInteraction.finalResults, nil
-	} else {
-		// This should never happen.
-		return nil, errors.New("unexpected end of tts interaction")
-	}
+    if ttsInteraction.finalResultsReceived {
+        // If we received final results, return them.
+        return ttsInteraction.finalResults, nil
+    } else {
+        // This should never happen.
+        return nil, errors.New("unexpected end of tts interaction")
+    }
 }

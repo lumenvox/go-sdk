@@ -10,10 +10,10 @@
 package api
 
 import (
-	context "context"
-	grpc "google.golang.org/grpc"
-	codes "google.golang.org/grpc/codes"
-	status "google.golang.org/grpc/status"
+    context "context"
+    grpc "google.golang.org/grpc"
+    codes "google.golang.org/grpc/codes"
+    status "google.golang.org/grpc/status"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -22,25 +22,25 @@ import (
 const _ = grpc.SupportPackageIsVersion8
 
 const (
-	ReportingAPIService_AnalysisSetPreCreate_FullMethodName            = "/lumenvox.api.ReportingAPIService/AnalysisSetPreCreate"
-	ReportingAPIService_AnalysisSetCreate_FullMethodName               = "/lumenvox.api.ReportingAPIService/AnalysisSetCreate"
-	ReportingAPIService_AnalysisSetGet_FullMethodName                  = "/lumenvox.api.ReportingAPIService/AnalysisSetGet"
-	ReportingAPIService_AnalysisSetDelete_FullMethodName               = "/lumenvox.api.ReportingAPIService/AnalysisSetDelete"
-	ReportingAPIService_AnalysisSetList_FullMethodName                 = "/lumenvox.api.ReportingAPIService/AnalysisSetList"
-	ReportingAPIService_RetrieveArchiveData_FullMethodName             = "/lumenvox.api.ReportingAPIService/RetrieveArchiveData"
-	ReportingAPIService_RetrieveArchiveDataStream_FullMethodName       = "/lumenvox.api.ReportingAPIService/RetrieveArchiveDataStream"
-	ReportingAPIService_RetrieveStorageId_FullMethodName               = "/lumenvox.api.ReportingAPIService/RetrieveStorageId"
-	ReportingAPIService_InteractionList_FullMethodName                 = "/lumenvox.api.ReportingAPIService/InteractionList"
-	ReportingAPIService_InteractionGet_FullMethodName                  = "/lumenvox.api.ReportingAPIService/InteractionGet"
-	ReportingAPIService_InteractionUpdate_FullMethodName               = "/lumenvox.api.ReportingAPIService/InteractionUpdate"
-	ReportingAPIService_GetThirdPartyLicenseAttribution_FullMethodName = "/lumenvox.api.ReportingAPIService/GetThirdPartyLicenseAttribution"
-	ReportingAPIService_UsageReport_FullMethodName                     = "/lumenvox.api.ReportingAPIService/UsageReport"
-	ReportingAPIService_UsageSnapshot_FullMethodName                   = "/lumenvox.api.ReportingAPIService/UsageSnapshot"
-	ReportingAPIService_LicenseStatusReportResponsePush_FullMethodName = "/lumenvox.api.ReportingAPIService/LicenseStatusReportResponsePush"
-	ReportingAPIService_LicenseStatusReportPull_FullMethodName         = "/lumenvox.api.ReportingAPIService/LicenseStatusReportPull"
-	ReportingAPIService_ExportAnalysisSet_FullMethodName               = "/lumenvox.api.ReportingAPIService/ExportAnalysisSet"
-	ReportingAPIService_ImportAnalysisSet_FullMethodName               = "/lumenvox.api.ReportingAPIService/ImportAnalysisSet"
-	ReportingAPIService_DiagnosticsCheck_FullMethodName                = "/lumenvox.api.ReportingAPIService/DiagnosticsCheck"
+    ReportingAPIService_AnalysisSetPreCreate_FullMethodName            = "/lumenvox.api.ReportingAPIService/AnalysisSetPreCreate"
+    ReportingAPIService_AnalysisSetCreate_FullMethodName               = "/lumenvox.api.ReportingAPIService/AnalysisSetCreate"
+    ReportingAPIService_AnalysisSetGet_FullMethodName                  = "/lumenvox.api.ReportingAPIService/AnalysisSetGet"
+    ReportingAPIService_AnalysisSetDelete_FullMethodName               = "/lumenvox.api.ReportingAPIService/AnalysisSetDelete"
+    ReportingAPIService_AnalysisSetList_FullMethodName                 = "/lumenvox.api.ReportingAPIService/AnalysisSetList"
+    ReportingAPIService_RetrieveArchiveData_FullMethodName             = "/lumenvox.api.ReportingAPIService/RetrieveArchiveData"
+    ReportingAPIService_RetrieveArchiveDataStream_FullMethodName       = "/lumenvox.api.ReportingAPIService/RetrieveArchiveDataStream"
+    ReportingAPIService_RetrieveStorageId_FullMethodName               = "/lumenvox.api.ReportingAPIService/RetrieveStorageId"
+    ReportingAPIService_InteractionList_FullMethodName                 = "/lumenvox.api.ReportingAPIService/InteractionList"
+    ReportingAPIService_InteractionGet_FullMethodName                  = "/lumenvox.api.ReportingAPIService/InteractionGet"
+    ReportingAPIService_InteractionUpdate_FullMethodName               = "/lumenvox.api.ReportingAPIService/InteractionUpdate"
+    ReportingAPIService_GetThirdPartyLicenseAttribution_FullMethodName = "/lumenvox.api.ReportingAPIService/GetThirdPartyLicenseAttribution"
+    ReportingAPIService_UsageReport_FullMethodName                     = "/lumenvox.api.ReportingAPIService/UsageReport"
+    ReportingAPIService_UsageSnapshot_FullMethodName                   = "/lumenvox.api.ReportingAPIService/UsageSnapshot"
+    ReportingAPIService_LicenseStatusReportResponsePush_FullMethodName = "/lumenvox.api.ReportingAPIService/LicenseStatusReportResponsePush"
+    ReportingAPIService_LicenseStatusReportPull_FullMethodName         = "/lumenvox.api.ReportingAPIService/LicenseStatusReportPull"
+    ReportingAPIService_ExportAnalysisSet_FullMethodName               = "/lumenvox.api.ReportingAPIService/ExportAnalysisSet"
+    ReportingAPIService_ImportAnalysisSet_FullMethodName               = "/lumenvox.api.ReportingAPIService/ImportAnalysisSet"
+    ReportingAPIService_DiagnosticsCheck_FullMethodName                = "/lumenvox.api.ReportingAPIService/DiagnosticsCheck"
 )
 
 // ReportingAPIServiceClient is the client API for ReportingAPIService service.
@@ -51,325 +51,325 @@ const (
 //
 // The LumenVox Reporting API can be used to access various reporting resources
 type ReportingAPIServiceClient interface {
-	// Used to analyze AnalysisSetFilterOptions and to notify user about number of
-	// sessions and interactions which are going to be included into analysis.
-	// This request is optional, and AnalysisSet can be created without this one being called.
-	AnalysisSetPreCreate(ctx context.Context, in *AnalysisSetPreCreateRequest, opts ...grpc.CallOption) (*AnalysisSetPreCreateResponse, error)
-	// Creates an analysis set based on the requested filter. There are AnalysisSetFilterOptions as part of request for various
-	// filtering adjustments like: start/end time, type, status etc.
-	AnalysisSetCreate(ctx context.Context, in *AnalysisSetCreateRequest, opts ...grpc.CallOption) (*AnalysisSetCreateResponse, error)
-	// Retrieves analysis set by ID returned from AnalysisSetCreate method call.
-	// analysis set can be requested immediately after being created. Check its
-	// status field AnalysisSetStatus for creating progress.
-	AnalysisSetGet(ctx context.Context, in *AnalysisSetGetRequest, opts ...grpc.CallOption) (*AnalysisSetGetResponse, error)
-	// Deletes an AnalysisSet
-	AnalysisSetDelete(ctx context.Context, in *AnalysisSetDeleteRequest, opts ...grpc.CallOption) (*AnalysisSetDeleteResponse, error)
-	// Returns a list of some of AnalysisSet fields for table view.
-	// Classic pagination is used  where you need to provide page size and starting point
-	// to get only limited data set.
-	AnalysisSetList(ctx context.Context, in *AnalysisSetListRequest, opts ...grpc.CallOption) (*AnalysisSetListResponse, error)
-	// Retrieves data from the archive by its storage_id field.
-	RetrieveArchiveData(ctx context.Context, in *RetrieveArchiveDataRequest, opts ...grpc.CallOption) (*RetrieveArchiveDataResponse, error)
-	// Retrieves stream data from the archive by its storage_id field.
-	RetrieveArchiveDataStream(ctx context.Context, in *RetrieveArchiveDataRequest, opts ...grpc.CallOption) (ReportingAPIService_RetrieveArchiveDataStreamClient, error)
-	// RetrieveStorageId retrieves the storage_id from archive by its hash value.
-	RetrieveStorageId(ctx context.Context, in *RetrieveStorageIdRequest, opts ...grpc.CallOption) (*RetrieveStorageIdResponse, error)
-	// Returns a list of some of interactions within analysis set.
-	// Classic pagination is used where you need to provide page size and starting point
-	// to get only limited data set.
-	InteractionList(ctx context.Context, in *InteractionAnalysisListRequest, opts ...grpc.CallOption) (*InteractionAnalysisListResponse, error)
-	// Retrieves one interaction by ID.
-	// Interaction can be requested immediately after analysis set is created.
-	InteractionGet(ctx context.Context, in *InteractionAnalysisGetRequest, opts ...grpc.CallOption) (*InteractionAnalysisGetResponse, error)
-	// Updates the interaction.
-	// Interaction can be updated in order to test different
-	// parameters setting for interaction processing.
-	InteractionUpdate(ctx context.Context, in *InteractionAnalysisUpdateTranscriptionRequest, opts ...grpc.CallOption) (*InteractionAnalysisUpdateTranscriptionResponse, error)
-	// Returns license file of used third party components
-	GetThirdPartyLicenseAttribution(ctx context.Context, in *GetThirdPartyLicenseAttributionRequest, opts ...grpc.CallOption) (*GetThirdPartyLicenseAttributionResponse, error)
-	// Returns license usage report for specified deployment
-	UsageReport(ctx context.Context, in *UsageReportRequest, opts ...grpc.CallOption) (*UsageReportResponse, error)
-	// Returns license usage snapshots for specified deployment in specified period
-	UsageSnapshot(ctx context.Context, in *UsageSnapshotRequest, opts ...grpc.CallOption) (*UsageSnapshotResponse, error)
-	// Sends lumenvox cloud license server response to license service
-	LicenseStatusReportResponsePush(ctx context.Context, in *LicenseStatusReportResponsePushRequest, opts ...grpc.CallOption) (*LicenseStatusReportResponsePushResponse, error)
-	// Retrieves license status report from license service
-	LicenseStatusReportPull(ctx context.Context, in *LicenseStatusReportPullRequest, opts ...grpc.CallOption) (*LicenseStatusReportPullResponse, error)
-	// Export analysis set data including audio and grammars.
-	ExportAnalysisSet(ctx context.Context, in *ExportAnalysisSetRequest, opts ...grpc.CallOption) (ReportingAPIService_ExportAnalysisSetClient, error)
-	// Import an analysis set from exported data.
-	ImportAnalysisSet(ctx context.Context, opts ...grpc.CallOption) (ReportingAPIService_ImportAnalysisSetClient, error)
-	// Run various diagnostic checks: postgres, mongodb, redis
-	DiagnosticsCheck(ctx context.Context, in *DiagnosticsCheckRequest, opts ...grpc.CallOption) (*DiagnosticsCheckResponse, error)
+    // Used to analyze AnalysisSetFilterOptions and to notify user about number of
+    // sessions and interactions which are going to be included into analysis.
+    // This request is optional, and AnalysisSet can be created without this one being called.
+    AnalysisSetPreCreate(ctx context.Context, in *AnalysisSetPreCreateRequest, opts ...grpc.CallOption) (*AnalysisSetPreCreateResponse, error)
+    // Creates an analysis set based on the requested filter. There are AnalysisSetFilterOptions as part of request for various
+    // filtering adjustments like: start/end time, type, status etc.
+    AnalysisSetCreate(ctx context.Context, in *AnalysisSetCreateRequest, opts ...grpc.CallOption) (*AnalysisSetCreateResponse, error)
+    // Retrieves analysis set by ID returned from AnalysisSetCreate method call.
+    // analysis set can be requested immediately after being created. Check its
+    // status field AnalysisSetStatus for creating progress.
+    AnalysisSetGet(ctx context.Context, in *AnalysisSetGetRequest, opts ...grpc.CallOption) (*AnalysisSetGetResponse, error)
+    // Deletes an AnalysisSet
+    AnalysisSetDelete(ctx context.Context, in *AnalysisSetDeleteRequest, opts ...grpc.CallOption) (*AnalysisSetDeleteResponse, error)
+    // Returns a list of some of AnalysisSet fields for table view.
+    // Classic pagination is used  where you need to provide page size and starting point
+    // to get only limited data set.
+    AnalysisSetList(ctx context.Context, in *AnalysisSetListRequest, opts ...grpc.CallOption) (*AnalysisSetListResponse, error)
+    // Retrieves data from the archive by its storage_id field.
+    RetrieveArchiveData(ctx context.Context, in *RetrieveArchiveDataRequest, opts ...grpc.CallOption) (*RetrieveArchiveDataResponse, error)
+    // Retrieves stream data from the archive by its storage_id field.
+    RetrieveArchiveDataStream(ctx context.Context, in *RetrieveArchiveDataRequest, opts ...grpc.CallOption) (ReportingAPIService_RetrieveArchiveDataStreamClient, error)
+    // RetrieveStorageId retrieves the storage_id from archive by its hash value.
+    RetrieveStorageId(ctx context.Context, in *RetrieveStorageIdRequest, opts ...grpc.CallOption) (*RetrieveStorageIdResponse, error)
+    // Returns a list of some of interactions within analysis set.
+    // Classic pagination is used where you need to provide page size and starting point
+    // to get only limited data set.
+    InteractionList(ctx context.Context, in *InteractionAnalysisListRequest, opts ...grpc.CallOption) (*InteractionAnalysisListResponse, error)
+    // Retrieves one interaction by ID.
+    // Interaction can be requested immediately after analysis set is created.
+    InteractionGet(ctx context.Context, in *InteractionAnalysisGetRequest, opts ...grpc.CallOption) (*InteractionAnalysisGetResponse, error)
+    // Updates the interaction.
+    // Interaction can be updated in order to test different
+    // parameters setting for interaction processing.
+    InteractionUpdate(ctx context.Context, in *InteractionAnalysisUpdateTranscriptionRequest, opts ...grpc.CallOption) (*InteractionAnalysisUpdateTranscriptionResponse, error)
+    // Returns license file of used third party components
+    GetThirdPartyLicenseAttribution(ctx context.Context, in *GetThirdPartyLicenseAttributionRequest, opts ...grpc.CallOption) (*GetThirdPartyLicenseAttributionResponse, error)
+    // Returns license usage report for specified deployment
+    UsageReport(ctx context.Context, in *UsageReportRequest, opts ...grpc.CallOption) (*UsageReportResponse, error)
+    // Returns license usage snapshots for specified deployment in specified period
+    UsageSnapshot(ctx context.Context, in *UsageSnapshotRequest, opts ...grpc.CallOption) (*UsageSnapshotResponse, error)
+    // Sends lumenvox cloud license server response to license service
+    LicenseStatusReportResponsePush(ctx context.Context, in *LicenseStatusReportResponsePushRequest, opts ...grpc.CallOption) (*LicenseStatusReportResponsePushResponse, error)
+    // Retrieves license status report from license service
+    LicenseStatusReportPull(ctx context.Context, in *LicenseStatusReportPullRequest, opts ...grpc.CallOption) (*LicenseStatusReportPullResponse, error)
+    // Export analysis set data including audio and grammars.
+    ExportAnalysisSet(ctx context.Context, in *ExportAnalysisSetRequest, opts ...grpc.CallOption) (ReportingAPIService_ExportAnalysisSetClient, error)
+    // Import an analysis set from exported data.
+    ImportAnalysisSet(ctx context.Context, opts ...grpc.CallOption) (ReportingAPIService_ImportAnalysisSetClient, error)
+    // Run various diagnostic checks: postgres, mongodb, redis
+    DiagnosticsCheck(ctx context.Context, in *DiagnosticsCheckRequest, opts ...grpc.CallOption) (*DiagnosticsCheckResponse, error)
 }
 
 type reportingAPIServiceClient struct {
-	cc grpc.ClientConnInterface
+    cc grpc.ClientConnInterface
 }
 
 func NewReportingAPIServiceClient(cc grpc.ClientConnInterface) ReportingAPIServiceClient {
-	return &reportingAPIServiceClient{cc}
+    return &reportingAPIServiceClient{cc}
 }
 
 func (c *reportingAPIServiceClient) AnalysisSetPreCreate(ctx context.Context, in *AnalysisSetPreCreateRequest, opts ...grpc.CallOption) (*AnalysisSetPreCreateResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AnalysisSetPreCreateResponse)
-	err := c.cc.Invoke(ctx, ReportingAPIService_AnalysisSetPreCreate_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
+    cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+    out := new(AnalysisSetPreCreateResponse)
+    err := c.cc.Invoke(ctx, ReportingAPIService_AnalysisSetPreCreate_FullMethodName, in, out, cOpts...)
+    if err != nil {
+        return nil, err
+    }
+    return out, nil
 }
 
 func (c *reportingAPIServiceClient) AnalysisSetCreate(ctx context.Context, in *AnalysisSetCreateRequest, opts ...grpc.CallOption) (*AnalysisSetCreateResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AnalysisSetCreateResponse)
-	err := c.cc.Invoke(ctx, ReportingAPIService_AnalysisSetCreate_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
+    cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+    out := new(AnalysisSetCreateResponse)
+    err := c.cc.Invoke(ctx, ReportingAPIService_AnalysisSetCreate_FullMethodName, in, out, cOpts...)
+    if err != nil {
+        return nil, err
+    }
+    return out, nil
 }
 
 func (c *reportingAPIServiceClient) AnalysisSetGet(ctx context.Context, in *AnalysisSetGetRequest, opts ...grpc.CallOption) (*AnalysisSetGetResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AnalysisSetGetResponse)
-	err := c.cc.Invoke(ctx, ReportingAPIService_AnalysisSetGet_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
+    cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+    out := new(AnalysisSetGetResponse)
+    err := c.cc.Invoke(ctx, ReportingAPIService_AnalysisSetGet_FullMethodName, in, out, cOpts...)
+    if err != nil {
+        return nil, err
+    }
+    return out, nil
 }
 
 func (c *reportingAPIServiceClient) AnalysisSetDelete(ctx context.Context, in *AnalysisSetDeleteRequest, opts ...grpc.CallOption) (*AnalysisSetDeleteResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AnalysisSetDeleteResponse)
-	err := c.cc.Invoke(ctx, ReportingAPIService_AnalysisSetDelete_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
+    cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+    out := new(AnalysisSetDeleteResponse)
+    err := c.cc.Invoke(ctx, ReportingAPIService_AnalysisSetDelete_FullMethodName, in, out, cOpts...)
+    if err != nil {
+        return nil, err
+    }
+    return out, nil
 }
 
 func (c *reportingAPIServiceClient) AnalysisSetList(ctx context.Context, in *AnalysisSetListRequest, opts ...grpc.CallOption) (*AnalysisSetListResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AnalysisSetListResponse)
-	err := c.cc.Invoke(ctx, ReportingAPIService_AnalysisSetList_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
+    cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+    out := new(AnalysisSetListResponse)
+    err := c.cc.Invoke(ctx, ReportingAPIService_AnalysisSetList_FullMethodName, in, out, cOpts...)
+    if err != nil {
+        return nil, err
+    }
+    return out, nil
 }
 
 func (c *reportingAPIServiceClient) RetrieveArchiveData(ctx context.Context, in *RetrieveArchiveDataRequest, opts ...grpc.CallOption) (*RetrieveArchiveDataResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RetrieveArchiveDataResponse)
-	err := c.cc.Invoke(ctx, ReportingAPIService_RetrieveArchiveData_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
+    cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+    out := new(RetrieveArchiveDataResponse)
+    err := c.cc.Invoke(ctx, ReportingAPIService_RetrieveArchiveData_FullMethodName, in, out, cOpts...)
+    if err != nil {
+        return nil, err
+    }
+    return out, nil
 }
 
 func (c *reportingAPIServiceClient) RetrieveArchiveDataStream(ctx context.Context, in *RetrieveArchiveDataRequest, opts ...grpc.CallOption) (ReportingAPIService_RetrieveArchiveDataStreamClient, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ReportingAPIService_ServiceDesc.Streams[0], ReportingAPIService_RetrieveArchiveDataStream_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &reportingAPIServiceRetrieveArchiveDataStreamClient{ClientStream: stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
+    cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+    stream, err := c.cc.NewStream(ctx, &ReportingAPIService_ServiceDesc.Streams[0], ReportingAPIService_RetrieveArchiveDataStream_FullMethodName, cOpts...)
+    if err != nil {
+        return nil, err
+    }
+    x := &reportingAPIServiceRetrieveArchiveDataStreamClient{ClientStream: stream}
+    if err := x.ClientStream.SendMsg(in); err != nil {
+        return nil, err
+    }
+    if err := x.ClientStream.CloseSend(); err != nil {
+        return nil, err
+    }
+    return x, nil
 }
 
 type ReportingAPIService_RetrieveArchiveDataStreamClient interface {
-	Recv() (*RetrieveArchiveDataResponse, error)
-	grpc.ClientStream
+    Recv() (*RetrieveArchiveDataResponse, error)
+    grpc.ClientStream
 }
 
 type reportingAPIServiceRetrieveArchiveDataStreamClient struct {
-	grpc.ClientStream
+    grpc.ClientStream
 }
 
 func (x *reportingAPIServiceRetrieveArchiveDataStreamClient) Recv() (*RetrieveArchiveDataResponse, error) {
-	m := new(RetrieveArchiveDataResponse)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
+    m := new(RetrieveArchiveDataResponse)
+    if err := x.ClientStream.RecvMsg(m); err != nil {
+        return nil, err
+    }
+    return m, nil
 }
 
 func (c *reportingAPIServiceClient) RetrieveStorageId(ctx context.Context, in *RetrieveStorageIdRequest, opts ...grpc.CallOption) (*RetrieveStorageIdResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RetrieveStorageIdResponse)
-	err := c.cc.Invoke(ctx, ReportingAPIService_RetrieveStorageId_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
+    cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+    out := new(RetrieveStorageIdResponse)
+    err := c.cc.Invoke(ctx, ReportingAPIService_RetrieveStorageId_FullMethodName, in, out, cOpts...)
+    if err != nil {
+        return nil, err
+    }
+    return out, nil
 }
 
 func (c *reportingAPIServiceClient) InteractionList(ctx context.Context, in *InteractionAnalysisListRequest, opts ...grpc.CallOption) (*InteractionAnalysisListResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(InteractionAnalysisListResponse)
-	err := c.cc.Invoke(ctx, ReportingAPIService_InteractionList_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
+    cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+    out := new(InteractionAnalysisListResponse)
+    err := c.cc.Invoke(ctx, ReportingAPIService_InteractionList_FullMethodName, in, out, cOpts...)
+    if err != nil {
+        return nil, err
+    }
+    return out, nil
 }
 
 func (c *reportingAPIServiceClient) InteractionGet(ctx context.Context, in *InteractionAnalysisGetRequest, opts ...grpc.CallOption) (*InteractionAnalysisGetResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(InteractionAnalysisGetResponse)
-	err := c.cc.Invoke(ctx, ReportingAPIService_InteractionGet_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
+    cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+    out := new(InteractionAnalysisGetResponse)
+    err := c.cc.Invoke(ctx, ReportingAPIService_InteractionGet_FullMethodName, in, out, cOpts...)
+    if err != nil {
+        return nil, err
+    }
+    return out, nil
 }
 
 func (c *reportingAPIServiceClient) InteractionUpdate(ctx context.Context, in *InteractionAnalysisUpdateTranscriptionRequest, opts ...grpc.CallOption) (*InteractionAnalysisUpdateTranscriptionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(InteractionAnalysisUpdateTranscriptionResponse)
-	err := c.cc.Invoke(ctx, ReportingAPIService_InteractionUpdate_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
+    cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+    out := new(InteractionAnalysisUpdateTranscriptionResponse)
+    err := c.cc.Invoke(ctx, ReportingAPIService_InteractionUpdate_FullMethodName, in, out, cOpts...)
+    if err != nil {
+        return nil, err
+    }
+    return out, nil
 }
 
 func (c *reportingAPIServiceClient) GetThirdPartyLicenseAttribution(ctx context.Context, in *GetThirdPartyLicenseAttributionRequest, opts ...grpc.CallOption) (*GetThirdPartyLicenseAttributionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetThirdPartyLicenseAttributionResponse)
-	err := c.cc.Invoke(ctx, ReportingAPIService_GetThirdPartyLicenseAttribution_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
+    cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+    out := new(GetThirdPartyLicenseAttributionResponse)
+    err := c.cc.Invoke(ctx, ReportingAPIService_GetThirdPartyLicenseAttribution_FullMethodName, in, out, cOpts...)
+    if err != nil {
+        return nil, err
+    }
+    return out, nil
 }
 
 func (c *reportingAPIServiceClient) UsageReport(ctx context.Context, in *UsageReportRequest, opts ...grpc.CallOption) (*UsageReportResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(UsageReportResponse)
-	err := c.cc.Invoke(ctx, ReportingAPIService_UsageReport_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
+    cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+    out := new(UsageReportResponse)
+    err := c.cc.Invoke(ctx, ReportingAPIService_UsageReport_FullMethodName, in, out, cOpts...)
+    if err != nil {
+        return nil, err
+    }
+    return out, nil
 }
 
 func (c *reportingAPIServiceClient) UsageSnapshot(ctx context.Context, in *UsageSnapshotRequest, opts ...grpc.CallOption) (*UsageSnapshotResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(UsageSnapshotResponse)
-	err := c.cc.Invoke(ctx, ReportingAPIService_UsageSnapshot_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
+    cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+    out := new(UsageSnapshotResponse)
+    err := c.cc.Invoke(ctx, ReportingAPIService_UsageSnapshot_FullMethodName, in, out, cOpts...)
+    if err != nil {
+        return nil, err
+    }
+    return out, nil
 }
 
 func (c *reportingAPIServiceClient) LicenseStatusReportResponsePush(ctx context.Context, in *LicenseStatusReportResponsePushRequest, opts ...grpc.CallOption) (*LicenseStatusReportResponsePushResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(LicenseStatusReportResponsePushResponse)
-	err := c.cc.Invoke(ctx, ReportingAPIService_LicenseStatusReportResponsePush_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
+    cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+    out := new(LicenseStatusReportResponsePushResponse)
+    err := c.cc.Invoke(ctx, ReportingAPIService_LicenseStatusReportResponsePush_FullMethodName, in, out, cOpts...)
+    if err != nil {
+        return nil, err
+    }
+    return out, nil
 }
 
 func (c *reportingAPIServiceClient) LicenseStatusReportPull(ctx context.Context, in *LicenseStatusReportPullRequest, opts ...grpc.CallOption) (*LicenseStatusReportPullResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(LicenseStatusReportPullResponse)
-	err := c.cc.Invoke(ctx, ReportingAPIService_LicenseStatusReportPull_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
+    cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+    out := new(LicenseStatusReportPullResponse)
+    err := c.cc.Invoke(ctx, ReportingAPIService_LicenseStatusReportPull_FullMethodName, in, out, cOpts...)
+    if err != nil {
+        return nil, err
+    }
+    return out, nil
 }
 
 func (c *reportingAPIServiceClient) ExportAnalysisSet(ctx context.Context, in *ExportAnalysisSetRequest, opts ...grpc.CallOption) (ReportingAPIService_ExportAnalysisSetClient, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ReportingAPIService_ServiceDesc.Streams[1], ReportingAPIService_ExportAnalysisSet_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &reportingAPIServiceExportAnalysisSetClient{ClientStream: stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
+    cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+    stream, err := c.cc.NewStream(ctx, &ReportingAPIService_ServiceDesc.Streams[1], ReportingAPIService_ExportAnalysisSet_FullMethodName, cOpts...)
+    if err != nil {
+        return nil, err
+    }
+    x := &reportingAPIServiceExportAnalysisSetClient{ClientStream: stream}
+    if err := x.ClientStream.SendMsg(in); err != nil {
+        return nil, err
+    }
+    if err := x.ClientStream.CloseSend(); err != nil {
+        return nil, err
+    }
+    return x, nil
 }
 
 type ReportingAPIService_ExportAnalysisSetClient interface {
-	Recv() (*ExportAnalysisSetResponse, error)
-	grpc.ClientStream
+    Recv() (*ExportAnalysisSetResponse, error)
+    grpc.ClientStream
 }
 
 type reportingAPIServiceExportAnalysisSetClient struct {
-	grpc.ClientStream
+    grpc.ClientStream
 }
 
 func (x *reportingAPIServiceExportAnalysisSetClient) Recv() (*ExportAnalysisSetResponse, error) {
-	m := new(ExportAnalysisSetResponse)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
+    m := new(ExportAnalysisSetResponse)
+    if err := x.ClientStream.RecvMsg(m); err != nil {
+        return nil, err
+    }
+    return m, nil
 }
 
 func (c *reportingAPIServiceClient) ImportAnalysisSet(ctx context.Context, opts ...grpc.CallOption) (ReportingAPIService_ImportAnalysisSetClient, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ReportingAPIService_ServiceDesc.Streams[2], ReportingAPIService_ImportAnalysisSet_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &reportingAPIServiceImportAnalysisSetClient{ClientStream: stream}
-	return x, nil
+    cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+    stream, err := c.cc.NewStream(ctx, &ReportingAPIService_ServiceDesc.Streams[2], ReportingAPIService_ImportAnalysisSet_FullMethodName, cOpts...)
+    if err != nil {
+        return nil, err
+    }
+    x := &reportingAPIServiceImportAnalysisSetClient{ClientStream: stream}
+    return x, nil
 }
 
 type ReportingAPIService_ImportAnalysisSetClient interface {
-	Send(*ImportAnalysisSetRequest) error
-	CloseAndRecv() (*ImportAnalysisSetResponse, error)
-	grpc.ClientStream
+    Send(*ImportAnalysisSetRequest) error
+    CloseAndRecv() (*ImportAnalysisSetResponse, error)
+    grpc.ClientStream
 }
 
 type reportingAPIServiceImportAnalysisSetClient struct {
-	grpc.ClientStream
+    grpc.ClientStream
 }
 
 func (x *reportingAPIServiceImportAnalysisSetClient) Send(m *ImportAnalysisSetRequest) error {
-	return x.ClientStream.SendMsg(m)
+    return x.ClientStream.SendMsg(m)
 }
 
 func (x *reportingAPIServiceImportAnalysisSetClient) CloseAndRecv() (*ImportAnalysisSetResponse, error) {
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	m := new(ImportAnalysisSetResponse)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
+    if err := x.ClientStream.CloseSend(); err != nil {
+        return nil, err
+    }
+    m := new(ImportAnalysisSetResponse)
+    if err := x.ClientStream.RecvMsg(m); err != nil {
+        return nil, err
+    }
+    return m, nil
 }
 
 func (c *reportingAPIServiceClient) DiagnosticsCheck(ctx context.Context, in *DiagnosticsCheckRequest, opts ...grpc.CallOption) (*DiagnosticsCheckResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(DiagnosticsCheckResponse)
-	err := c.cc.Invoke(ctx, ReportingAPIService_DiagnosticsCheck_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
+    cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+    out := new(DiagnosticsCheckResponse)
+    err := c.cc.Invoke(ctx, ReportingAPIService_DiagnosticsCheck_FullMethodName, in, out, cOpts...)
+    if err != nil {
+        return nil, err
+    }
+    return out, nil
 }
 
 // ReportingAPIServiceServer is the server API for ReportingAPIService service.
@@ -380,57 +380,57 @@ func (c *reportingAPIServiceClient) DiagnosticsCheck(ctx context.Context, in *Di
 //
 // The LumenVox Reporting API can be used to access various reporting resources
 type ReportingAPIServiceServer interface {
-	// Used to analyze AnalysisSetFilterOptions and to notify user about number of
-	// sessions and interactions which are going to be included into analysis.
-	// This request is optional, and AnalysisSet can be created without this one being called.
-	AnalysisSetPreCreate(context.Context, *AnalysisSetPreCreateRequest) (*AnalysisSetPreCreateResponse, error)
-	// Creates an analysis set based on the requested filter. There are AnalysisSetFilterOptions as part of request for various
-	// filtering adjustments like: start/end time, type, status etc.
-	AnalysisSetCreate(context.Context, *AnalysisSetCreateRequest) (*AnalysisSetCreateResponse, error)
-	// Retrieves analysis set by ID returned from AnalysisSetCreate method call.
-	// analysis set can be requested immediately after being created. Check its
-	// status field AnalysisSetStatus for creating progress.
-	AnalysisSetGet(context.Context, *AnalysisSetGetRequest) (*AnalysisSetGetResponse, error)
-	// Deletes an AnalysisSet
-	AnalysisSetDelete(context.Context, *AnalysisSetDeleteRequest) (*AnalysisSetDeleteResponse, error)
-	// Returns a list of some of AnalysisSet fields for table view.
-	// Classic pagination is used  where you need to provide page size and starting point
-	// to get only limited data set.
-	AnalysisSetList(context.Context, *AnalysisSetListRequest) (*AnalysisSetListResponse, error)
-	// Retrieves data from the archive by its storage_id field.
-	RetrieveArchiveData(context.Context, *RetrieveArchiveDataRequest) (*RetrieveArchiveDataResponse, error)
-	// Retrieves stream data from the archive by its storage_id field.
-	RetrieveArchiveDataStream(*RetrieveArchiveDataRequest, ReportingAPIService_RetrieveArchiveDataStreamServer) error
-	// RetrieveStorageId retrieves the storage_id from archive by its hash value.
-	RetrieveStorageId(context.Context, *RetrieveStorageIdRequest) (*RetrieveStorageIdResponse, error)
-	// Returns a list of some of interactions within analysis set.
-	// Classic pagination is used where you need to provide page size and starting point
-	// to get only limited data set.
-	InteractionList(context.Context, *InteractionAnalysisListRequest) (*InteractionAnalysisListResponse, error)
-	// Retrieves one interaction by ID.
-	// Interaction can be requested immediately after analysis set is created.
-	InteractionGet(context.Context, *InteractionAnalysisGetRequest) (*InteractionAnalysisGetResponse, error)
-	// Updates the interaction.
-	// Interaction can be updated in order to test different
-	// parameters setting for interaction processing.
-	InteractionUpdate(context.Context, *InteractionAnalysisUpdateTranscriptionRequest) (*InteractionAnalysisUpdateTranscriptionResponse, error)
-	// Returns license file of used third party components
-	GetThirdPartyLicenseAttribution(context.Context, *GetThirdPartyLicenseAttributionRequest) (*GetThirdPartyLicenseAttributionResponse, error)
-	// Returns license usage report for specified deployment
-	UsageReport(context.Context, *UsageReportRequest) (*UsageReportResponse, error)
-	// Returns license usage snapshots for specified deployment in specified period
-	UsageSnapshot(context.Context, *UsageSnapshotRequest) (*UsageSnapshotResponse, error)
-	// Sends lumenvox cloud license server response to license service
-	LicenseStatusReportResponsePush(context.Context, *LicenseStatusReportResponsePushRequest) (*LicenseStatusReportResponsePushResponse, error)
-	// Retrieves license status report from license service
-	LicenseStatusReportPull(context.Context, *LicenseStatusReportPullRequest) (*LicenseStatusReportPullResponse, error)
-	// Export analysis set data including audio and grammars.
-	ExportAnalysisSet(*ExportAnalysisSetRequest, ReportingAPIService_ExportAnalysisSetServer) error
-	// Import an analysis set from exported data.
-	ImportAnalysisSet(ReportingAPIService_ImportAnalysisSetServer) error
-	// Run various diagnostic checks: postgres, mongodb, redis
-	DiagnosticsCheck(context.Context, *DiagnosticsCheckRequest) (*DiagnosticsCheckResponse, error)
-	mustEmbedUnimplementedReportingAPIServiceServer()
+    // Used to analyze AnalysisSetFilterOptions and to notify user about number of
+    // sessions and interactions which are going to be included into analysis.
+    // This request is optional, and AnalysisSet can be created without this one being called.
+    AnalysisSetPreCreate(context.Context, *AnalysisSetPreCreateRequest) (*AnalysisSetPreCreateResponse, error)
+    // Creates an analysis set based on the requested filter. There are AnalysisSetFilterOptions as part of request for various
+    // filtering adjustments like: start/end time, type, status etc.
+    AnalysisSetCreate(context.Context, *AnalysisSetCreateRequest) (*AnalysisSetCreateResponse, error)
+    // Retrieves analysis set by ID returned from AnalysisSetCreate method call.
+    // analysis set can be requested immediately after being created. Check its
+    // status field AnalysisSetStatus for creating progress.
+    AnalysisSetGet(context.Context, *AnalysisSetGetRequest) (*AnalysisSetGetResponse, error)
+    // Deletes an AnalysisSet
+    AnalysisSetDelete(context.Context, *AnalysisSetDeleteRequest) (*AnalysisSetDeleteResponse, error)
+    // Returns a list of some of AnalysisSet fields for table view.
+    // Classic pagination is used  where you need to provide page size and starting point
+    // to get only limited data set.
+    AnalysisSetList(context.Context, *AnalysisSetListRequest) (*AnalysisSetListResponse, error)
+    // Retrieves data from the archive by its storage_id field.
+    RetrieveArchiveData(context.Context, *RetrieveArchiveDataRequest) (*RetrieveArchiveDataResponse, error)
+    // Retrieves stream data from the archive by its storage_id field.
+    RetrieveArchiveDataStream(*RetrieveArchiveDataRequest, ReportingAPIService_RetrieveArchiveDataStreamServer) error
+    // RetrieveStorageId retrieves the storage_id from archive by its hash value.
+    RetrieveStorageId(context.Context, *RetrieveStorageIdRequest) (*RetrieveStorageIdResponse, error)
+    // Returns a list of some of interactions within analysis set.
+    // Classic pagination is used where you need to provide page size and starting point
+    // to get only limited data set.
+    InteractionList(context.Context, *InteractionAnalysisListRequest) (*InteractionAnalysisListResponse, error)
+    // Retrieves one interaction by ID.
+    // Interaction can be requested immediately after analysis set is created.
+    InteractionGet(context.Context, *InteractionAnalysisGetRequest) (*InteractionAnalysisGetResponse, error)
+    // Updates the interaction.
+    // Interaction can be updated in order to test different
+    // parameters setting for interaction processing.
+    InteractionUpdate(context.Context, *InteractionAnalysisUpdateTranscriptionRequest) (*InteractionAnalysisUpdateTranscriptionResponse, error)
+    // Returns license file of used third party components
+    GetThirdPartyLicenseAttribution(context.Context, *GetThirdPartyLicenseAttributionRequest) (*GetThirdPartyLicenseAttributionResponse, error)
+    // Returns license usage report for specified deployment
+    UsageReport(context.Context, *UsageReportRequest) (*UsageReportResponse, error)
+    // Returns license usage snapshots for specified deployment in specified period
+    UsageSnapshot(context.Context, *UsageSnapshotRequest) (*UsageSnapshotResponse, error)
+    // Sends lumenvox cloud license server response to license service
+    LicenseStatusReportResponsePush(context.Context, *LicenseStatusReportResponsePushRequest) (*LicenseStatusReportResponsePushResponse, error)
+    // Retrieves license status report from license service
+    LicenseStatusReportPull(context.Context, *LicenseStatusReportPullRequest) (*LicenseStatusReportPullResponse, error)
+    // Export analysis set data including audio and grammars.
+    ExportAnalysisSet(*ExportAnalysisSetRequest, ReportingAPIService_ExportAnalysisSetServer) error
+    // Import an analysis set from exported data.
+    ImportAnalysisSet(ReportingAPIService_ImportAnalysisSetServer) error
+    // Run various diagnostic checks: postgres, mongodb, redis
+    DiagnosticsCheck(context.Context, *DiagnosticsCheckRequest) (*DiagnosticsCheckResponse, error)
+    mustEmbedUnimplementedReportingAPIServiceServer()
 }
 
 // UnimplementedReportingAPIServiceServer must be embedded to have forward compatible implementations.
@@ -438,61 +438,61 @@ type UnimplementedReportingAPIServiceServer struct {
 }
 
 func (UnimplementedReportingAPIServiceServer) AnalysisSetPreCreate(context.Context, *AnalysisSetPreCreateRequest) (*AnalysisSetPreCreateResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method AnalysisSetPreCreate not implemented")
+    return nil, status.Errorf(codes.Unimplemented, "method AnalysisSetPreCreate not implemented")
 }
 func (UnimplementedReportingAPIServiceServer) AnalysisSetCreate(context.Context, *AnalysisSetCreateRequest) (*AnalysisSetCreateResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method AnalysisSetCreate not implemented")
+    return nil, status.Errorf(codes.Unimplemented, "method AnalysisSetCreate not implemented")
 }
 func (UnimplementedReportingAPIServiceServer) AnalysisSetGet(context.Context, *AnalysisSetGetRequest) (*AnalysisSetGetResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method AnalysisSetGet not implemented")
+    return nil, status.Errorf(codes.Unimplemented, "method AnalysisSetGet not implemented")
 }
 func (UnimplementedReportingAPIServiceServer) AnalysisSetDelete(context.Context, *AnalysisSetDeleteRequest) (*AnalysisSetDeleteResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method AnalysisSetDelete not implemented")
+    return nil, status.Errorf(codes.Unimplemented, "method AnalysisSetDelete not implemented")
 }
 func (UnimplementedReportingAPIServiceServer) AnalysisSetList(context.Context, *AnalysisSetListRequest) (*AnalysisSetListResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method AnalysisSetList not implemented")
+    return nil, status.Errorf(codes.Unimplemented, "method AnalysisSetList not implemented")
 }
 func (UnimplementedReportingAPIServiceServer) RetrieveArchiveData(context.Context, *RetrieveArchiveDataRequest) (*RetrieveArchiveDataResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method RetrieveArchiveData not implemented")
+    return nil, status.Errorf(codes.Unimplemented, "method RetrieveArchiveData not implemented")
 }
 func (UnimplementedReportingAPIServiceServer) RetrieveArchiveDataStream(*RetrieveArchiveDataRequest, ReportingAPIService_RetrieveArchiveDataStreamServer) error {
-	return status.Errorf(codes.Unimplemented, "method RetrieveArchiveDataStream not implemented")
+    return status.Errorf(codes.Unimplemented, "method RetrieveArchiveDataStream not implemented")
 }
 func (UnimplementedReportingAPIServiceServer) RetrieveStorageId(context.Context, *RetrieveStorageIdRequest) (*RetrieveStorageIdResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method RetrieveStorageId not implemented")
+    return nil, status.Errorf(codes.Unimplemented, "method RetrieveStorageId not implemented")
 }
 func (UnimplementedReportingAPIServiceServer) InteractionList(context.Context, *InteractionAnalysisListRequest) (*InteractionAnalysisListResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method InteractionList not implemented")
+    return nil, status.Errorf(codes.Unimplemented, "method InteractionList not implemented")
 }
 func (UnimplementedReportingAPIServiceServer) InteractionGet(context.Context, *InteractionAnalysisGetRequest) (*InteractionAnalysisGetResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method InteractionGet not implemented")
+    return nil, status.Errorf(codes.Unimplemented, "method InteractionGet not implemented")
 }
 func (UnimplementedReportingAPIServiceServer) InteractionUpdate(context.Context, *InteractionAnalysisUpdateTranscriptionRequest) (*InteractionAnalysisUpdateTranscriptionResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method InteractionUpdate not implemented")
+    return nil, status.Errorf(codes.Unimplemented, "method InteractionUpdate not implemented")
 }
 func (UnimplementedReportingAPIServiceServer) GetThirdPartyLicenseAttribution(context.Context, *GetThirdPartyLicenseAttributionRequest) (*GetThirdPartyLicenseAttributionResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetThirdPartyLicenseAttribution not implemented")
+    return nil, status.Errorf(codes.Unimplemented, "method GetThirdPartyLicenseAttribution not implemented")
 }
 func (UnimplementedReportingAPIServiceServer) UsageReport(context.Context, *UsageReportRequest) (*UsageReportResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UsageReport not implemented")
+    return nil, status.Errorf(codes.Unimplemented, "method UsageReport not implemented")
 }
 func (UnimplementedReportingAPIServiceServer) UsageSnapshot(context.Context, *UsageSnapshotRequest) (*UsageSnapshotResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UsageSnapshot not implemented")
+    return nil, status.Errorf(codes.Unimplemented, "method UsageSnapshot not implemented")
 }
 func (UnimplementedReportingAPIServiceServer) LicenseStatusReportResponsePush(context.Context, *LicenseStatusReportResponsePushRequest) (*LicenseStatusReportResponsePushResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method LicenseStatusReportResponsePush not implemented")
+    return nil, status.Errorf(codes.Unimplemented, "method LicenseStatusReportResponsePush not implemented")
 }
 func (UnimplementedReportingAPIServiceServer) LicenseStatusReportPull(context.Context, *LicenseStatusReportPullRequest) (*LicenseStatusReportPullResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method LicenseStatusReportPull not implemented")
+    return nil, status.Errorf(codes.Unimplemented, "method LicenseStatusReportPull not implemented")
 }
 func (UnimplementedReportingAPIServiceServer) ExportAnalysisSet(*ExportAnalysisSetRequest, ReportingAPIService_ExportAnalysisSetServer) error {
-	return status.Errorf(codes.Unimplemented, "method ExportAnalysisSet not implemented")
+    return status.Errorf(codes.Unimplemented, "method ExportAnalysisSet not implemented")
 }
 func (UnimplementedReportingAPIServiceServer) ImportAnalysisSet(ReportingAPIService_ImportAnalysisSetServer) error {
-	return status.Errorf(codes.Unimplemented, "method ImportAnalysisSet not implemented")
+    return status.Errorf(codes.Unimplemented, "method ImportAnalysisSet not implemented")
 }
 func (UnimplementedReportingAPIServiceServer) DiagnosticsCheck(context.Context, *DiagnosticsCheckRequest) (*DiagnosticsCheckResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method DiagnosticsCheck not implemented")
+    return nil, status.Errorf(codes.Unimplemented, "method DiagnosticsCheck not implemented")
 }
 func (UnimplementedReportingAPIServiceServer) mustEmbedUnimplementedReportingAPIServiceServer() {}
 
@@ -500,457 +500,457 @@ func (UnimplementedReportingAPIServiceServer) mustEmbedUnimplementedReportingAPI
 // Use of this interface is not recommended, as added methods to ReportingAPIServiceServer will
 // result in compilation errors.
 type UnsafeReportingAPIServiceServer interface {
-	mustEmbedUnimplementedReportingAPIServiceServer()
+    mustEmbedUnimplementedReportingAPIServiceServer()
 }
 
 func RegisterReportingAPIServiceServer(s grpc.ServiceRegistrar, srv ReportingAPIServiceServer) {
-	s.RegisterService(&ReportingAPIService_ServiceDesc, srv)
+    s.RegisterService(&ReportingAPIService_ServiceDesc, srv)
 }
 
 func _ReportingAPIService_AnalysisSetPreCreate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AnalysisSetPreCreateRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ReportingAPIServiceServer).AnalysisSetPreCreate(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ReportingAPIService_AnalysisSetPreCreate_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ReportingAPIServiceServer).AnalysisSetPreCreate(ctx, req.(*AnalysisSetPreCreateRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+    in := new(AnalysisSetPreCreateRequest)
+    if err := dec(in); err != nil {
+        return nil, err
+    }
+    if interceptor == nil {
+        return srv.(ReportingAPIServiceServer).AnalysisSetPreCreate(ctx, in)
+    }
+    info := &grpc.UnaryServerInfo{
+        Server:     srv,
+        FullMethod: ReportingAPIService_AnalysisSetPreCreate_FullMethodName,
+    }
+    handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+        return srv.(ReportingAPIServiceServer).AnalysisSetPreCreate(ctx, req.(*AnalysisSetPreCreateRequest))
+    }
+    return interceptor(ctx, in, info, handler)
 }
 
 func _ReportingAPIService_AnalysisSetCreate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AnalysisSetCreateRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ReportingAPIServiceServer).AnalysisSetCreate(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ReportingAPIService_AnalysisSetCreate_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ReportingAPIServiceServer).AnalysisSetCreate(ctx, req.(*AnalysisSetCreateRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+    in := new(AnalysisSetCreateRequest)
+    if err := dec(in); err != nil {
+        return nil, err
+    }
+    if interceptor == nil {
+        return srv.(ReportingAPIServiceServer).AnalysisSetCreate(ctx, in)
+    }
+    info := &grpc.UnaryServerInfo{
+        Server:     srv,
+        FullMethod: ReportingAPIService_AnalysisSetCreate_FullMethodName,
+    }
+    handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+        return srv.(ReportingAPIServiceServer).AnalysisSetCreate(ctx, req.(*AnalysisSetCreateRequest))
+    }
+    return interceptor(ctx, in, info, handler)
 }
 
 func _ReportingAPIService_AnalysisSetGet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AnalysisSetGetRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ReportingAPIServiceServer).AnalysisSetGet(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ReportingAPIService_AnalysisSetGet_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ReportingAPIServiceServer).AnalysisSetGet(ctx, req.(*AnalysisSetGetRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+    in := new(AnalysisSetGetRequest)
+    if err := dec(in); err != nil {
+        return nil, err
+    }
+    if interceptor == nil {
+        return srv.(ReportingAPIServiceServer).AnalysisSetGet(ctx, in)
+    }
+    info := &grpc.UnaryServerInfo{
+        Server:     srv,
+        FullMethod: ReportingAPIService_AnalysisSetGet_FullMethodName,
+    }
+    handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+        return srv.(ReportingAPIServiceServer).AnalysisSetGet(ctx, req.(*AnalysisSetGetRequest))
+    }
+    return interceptor(ctx, in, info, handler)
 }
 
 func _ReportingAPIService_AnalysisSetDelete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AnalysisSetDeleteRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ReportingAPIServiceServer).AnalysisSetDelete(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ReportingAPIService_AnalysisSetDelete_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ReportingAPIServiceServer).AnalysisSetDelete(ctx, req.(*AnalysisSetDeleteRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+    in := new(AnalysisSetDeleteRequest)
+    if err := dec(in); err != nil {
+        return nil, err
+    }
+    if interceptor == nil {
+        return srv.(ReportingAPIServiceServer).AnalysisSetDelete(ctx, in)
+    }
+    info := &grpc.UnaryServerInfo{
+        Server:     srv,
+        FullMethod: ReportingAPIService_AnalysisSetDelete_FullMethodName,
+    }
+    handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+        return srv.(ReportingAPIServiceServer).AnalysisSetDelete(ctx, req.(*AnalysisSetDeleteRequest))
+    }
+    return interceptor(ctx, in, info, handler)
 }
 
 func _ReportingAPIService_AnalysisSetList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AnalysisSetListRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ReportingAPIServiceServer).AnalysisSetList(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ReportingAPIService_AnalysisSetList_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ReportingAPIServiceServer).AnalysisSetList(ctx, req.(*AnalysisSetListRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+    in := new(AnalysisSetListRequest)
+    if err := dec(in); err != nil {
+        return nil, err
+    }
+    if interceptor == nil {
+        return srv.(ReportingAPIServiceServer).AnalysisSetList(ctx, in)
+    }
+    info := &grpc.UnaryServerInfo{
+        Server:     srv,
+        FullMethod: ReportingAPIService_AnalysisSetList_FullMethodName,
+    }
+    handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+        return srv.(ReportingAPIServiceServer).AnalysisSetList(ctx, req.(*AnalysisSetListRequest))
+    }
+    return interceptor(ctx, in, info, handler)
 }
 
 func _ReportingAPIService_RetrieveArchiveData_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RetrieveArchiveDataRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ReportingAPIServiceServer).RetrieveArchiveData(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ReportingAPIService_RetrieveArchiveData_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ReportingAPIServiceServer).RetrieveArchiveData(ctx, req.(*RetrieveArchiveDataRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+    in := new(RetrieveArchiveDataRequest)
+    if err := dec(in); err != nil {
+        return nil, err
+    }
+    if interceptor == nil {
+        return srv.(ReportingAPIServiceServer).RetrieveArchiveData(ctx, in)
+    }
+    info := &grpc.UnaryServerInfo{
+        Server:     srv,
+        FullMethod: ReportingAPIService_RetrieveArchiveData_FullMethodName,
+    }
+    handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+        return srv.(ReportingAPIServiceServer).RetrieveArchiveData(ctx, req.(*RetrieveArchiveDataRequest))
+    }
+    return interceptor(ctx, in, info, handler)
 }
 
 func _ReportingAPIService_RetrieveArchiveDataStream_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(RetrieveArchiveDataRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(ReportingAPIServiceServer).RetrieveArchiveDataStream(m, &reportingAPIServiceRetrieveArchiveDataStreamServer{ServerStream: stream})
+    m := new(RetrieveArchiveDataRequest)
+    if err := stream.RecvMsg(m); err != nil {
+        return err
+    }
+    return srv.(ReportingAPIServiceServer).RetrieveArchiveDataStream(m, &reportingAPIServiceRetrieveArchiveDataStreamServer{ServerStream: stream})
 }
 
 type ReportingAPIService_RetrieveArchiveDataStreamServer interface {
-	Send(*RetrieveArchiveDataResponse) error
-	grpc.ServerStream
+    Send(*RetrieveArchiveDataResponse) error
+    grpc.ServerStream
 }
 
 type reportingAPIServiceRetrieveArchiveDataStreamServer struct {
-	grpc.ServerStream
+    grpc.ServerStream
 }
 
 func (x *reportingAPIServiceRetrieveArchiveDataStreamServer) Send(m *RetrieveArchiveDataResponse) error {
-	return x.ServerStream.SendMsg(m)
+    return x.ServerStream.SendMsg(m)
 }
 
 func _ReportingAPIService_RetrieveStorageId_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RetrieveStorageIdRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ReportingAPIServiceServer).RetrieveStorageId(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ReportingAPIService_RetrieveStorageId_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ReportingAPIServiceServer).RetrieveStorageId(ctx, req.(*RetrieveStorageIdRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+    in := new(RetrieveStorageIdRequest)
+    if err := dec(in); err != nil {
+        return nil, err
+    }
+    if interceptor == nil {
+        return srv.(ReportingAPIServiceServer).RetrieveStorageId(ctx, in)
+    }
+    info := &grpc.UnaryServerInfo{
+        Server:     srv,
+        FullMethod: ReportingAPIService_RetrieveStorageId_FullMethodName,
+    }
+    handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+        return srv.(ReportingAPIServiceServer).RetrieveStorageId(ctx, req.(*RetrieveStorageIdRequest))
+    }
+    return interceptor(ctx, in, info, handler)
 }
 
 func _ReportingAPIService_InteractionList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(InteractionAnalysisListRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ReportingAPIServiceServer).InteractionList(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ReportingAPIService_InteractionList_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ReportingAPIServiceServer).InteractionList(ctx, req.(*InteractionAnalysisListRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+    in := new(InteractionAnalysisListRequest)
+    if err := dec(in); err != nil {
+        return nil, err
+    }
+    if interceptor == nil {
+        return srv.(ReportingAPIServiceServer).InteractionList(ctx, in)
+    }
+    info := &grpc.UnaryServerInfo{
+        Server:     srv,
+        FullMethod: ReportingAPIService_InteractionList_FullMethodName,
+    }
+    handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+        return srv.(ReportingAPIServiceServer).InteractionList(ctx, req.(*InteractionAnalysisListRequest))
+    }
+    return interceptor(ctx, in, info, handler)
 }
 
 func _ReportingAPIService_InteractionGet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(InteractionAnalysisGetRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ReportingAPIServiceServer).InteractionGet(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ReportingAPIService_InteractionGet_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ReportingAPIServiceServer).InteractionGet(ctx, req.(*InteractionAnalysisGetRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+    in := new(InteractionAnalysisGetRequest)
+    if err := dec(in); err != nil {
+        return nil, err
+    }
+    if interceptor == nil {
+        return srv.(ReportingAPIServiceServer).InteractionGet(ctx, in)
+    }
+    info := &grpc.UnaryServerInfo{
+        Server:     srv,
+        FullMethod: ReportingAPIService_InteractionGet_FullMethodName,
+    }
+    handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+        return srv.(ReportingAPIServiceServer).InteractionGet(ctx, req.(*InteractionAnalysisGetRequest))
+    }
+    return interceptor(ctx, in, info, handler)
 }
 
 func _ReportingAPIService_InteractionUpdate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(InteractionAnalysisUpdateTranscriptionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ReportingAPIServiceServer).InteractionUpdate(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ReportingAPIService_InteractionUpdate_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ReportingAPIServiceServer).InteractionUpdate(ctx, req.(*InteractionAnalysisUpdateTranscriptionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+    in := new(InteractionAnalysisUpdateTranscriptionRequest)
+    if err := dec(in); err != nil {
+        return nil, err
+    }
+    if interceptor == nil {
+        return srv.(ReportingAPIServiceServer).InteractionUpdate(ctx, in)
+    }
+    info := &grpc.UnaryServerInfo{
+        Server:     srv,
+        FullMethod: ReportingAPIService_InteractionUpdate_FullMethodName,
+    }
+    handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+        return srv.(ReportingAPIServiceServer).InteractionUpdate(ctx, req.(*InteractionAnalysisUpdateTranscriptionRequest))
+    }
+    return interceptor(ctx, in, info, handler)
 }
 
 func _ReportingAPIService_GetThirdPartyLicenseAttribution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetThirdPartyLicenseAttributionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ReportingAPIServiceServer).GetThirdPartyLicenseAttribution(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ReportingAPIService_GetThirdPartyLicenseAttribution_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ReportingAPIServiceServer).GetThirdPartyLicenseAttribution(ctx, req.(*GetThirdPartyLicenseAttributionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+    in := new(GetThirdPartyLicenseAttributionRequest)
+    if err := dec(in); err != nil {
+        return nil, err
+    }
+    if interceptor == nil {
+        return srv.(ReportingAPIServiceServer).GetThirdPartyLicenseAttribution(ctx, in)
+    }
+    info := &grpc.UnaryServerInfo{
+        Server:     srv,
+        FullMethod: ReportingAPIService_GetThirdPartyLicenseAttribution_FullMethodName,
+    }
+    handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+        return srv.(ReportingAPIServiceServer).GetThirdPartyLicenseAttribution(ctx, req.(*GetThirdPartyLicenseAttributionRequest))
+    }
+    return interceptor(ctx, in, info, handler)
 }
 
 func _ReportingAPIService_UsageReport_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UsageReportRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ReportingAPIServiceServer).UsageReport(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ReportingAPIService_UsageReport_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ReportingAPIServiceServer).UsageReport(ctx, req.(*UsageReportRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+    in := new(UsageReportRequest)
+    if err := dec(in); err != nil {
+        return nil, err
+    }
+    if interceptor == nil {
+        return srv.(ReportingAPIServiceServer).UsageReport(ctx, in)
+    }
+    info := &grpc.UnaryServerInfo{
+        Server:     srv,
+        FullMethod: ReportingAPIService_UsageReport_FullMethodName,
+    }
+    handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+        return srv.(ReportingAPIServiceServer).UsageReport(ctx, req.(*UsageReportRequest))
+    }
+    return interceptor(ctx, in, info, handler)
 }
 
 func _ReportingAPIService_UsageSnapshot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UsageSnapshotRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ReportingAPIServiceServer).UsageSnapshot(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ReportingAPIService_UsageSnapshot_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ReportingAPIServiceServer).UsageSnapshot(ctx, req.(*UsageSnapshotRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+    in := new(UsageSnapshotRequest)
+    if err := dec(in); err != nil {
+        return nil, err
+    }
+    if interceptor == nil {
+        return srv.(ReportingAPIServiceServer).UsageSnapshot(ctx, in)
+    }
+    info := &grpc.UnaryServerInfo{
+        Server:     srv,
+        FullMethod: ReportingAPIService_UsageSnapshot_FullMethodName,
+    }
+    handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+        return srv.(ReportingAPIServiceServer).UsageSnapshot(ctx, req.(*UsageSnapshotRequest))
+    }
+    return interceptor(ctx, in, info, handler)
 }
 
 func _ReportingAPIService_LicenseStatusReportResponsePush_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(LicenseStatusReportResponsePushRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ReportingAPIServiceServer).LicenseStatusReportResponsePush(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ReportingAPIService_LicenseStatusReportResponsePush_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ReportingAPIServiceServer).LicenseStatusReportResponsePush(ctx, req.(*LicenseStatusReportResponsePushRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+    in := new(LicenseStatusReportResponsePushRequest)
+    if err := dec(in); err != nil {
+        return nil, err
+    }
+    if interceptor == nil {
+        return srv.(ReportingAPIServiceServer).LicenseStatusReportResponsePush(ctx, in)
+    }
+    info := &grpc.UnaryServerInfo{
+        Server:     srv,
+        FullMethod: ReportingAPIService_LicenseStatusReportResponsePush_FullMethodName,
+    }
+    handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+        return srv.(ReportingAPIServiceServer).LicenseStatusReportResponsePush(ctx, req.(*LicenseStatusReportResponsePushRequest))
+    }
+    return interceptor(ctx, in, info, handler)
 }
 
 func _ReportingAPIService_LicenseStatusReportPull_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(LicenseStatusReportPullRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ReportingAPIServiceServer).LicenseStatusReportPull(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ReportingAPIService_LicenseStatusReportPull_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ReportingAPIServiceServer).LicenseStatusReportPull(ctx, req.(*LicenseStatusReportPullRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+    in := new(LicenseStatusReportPullRequest)
+    if err := dec(in); err != nil {
+        return nil, err
+    }
+    if interceptor == nil {
+        return srv.(ReportingAPIServiceServer).LicenseStatusReportPull(ctx, in)
+    }
+    info := &grpc.UnaryServerInfo{
+        Server:     srv,
+        FullMethod: ReportingAPIService_LicenseStatusReportPull_FullMethodName,
+    }
+    handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+        return srv.(ReportingAPIServiceServer).LicenseStatusReportPull(ctx, req.(*LicenseStatusReportPullRequest))
+    }
+    return interceptor(ctx, in, info, handler)
 }
 
 func _ReportingAPIService_ExportAnalysisSet_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(ExportAnalysisSetRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(ReportingAPIServiceServer).ExportAnalysisSet(m, &reportingAPIServiceExportAnalysisSetServer{ServerStream: stream})
+    m := new(ExportAnalysisSetRequest)
+    if err := stream.RecvMsg(m); err != nil {
+        return err
+    }
+    return srv.(ReportingAPIServiceServer).ExportAnalysisSet(m, &reportingAPIServiceExportAnalysisSetServer{ServerStream: stream})
 }
 
 type ReportingAPIService_ExportAnalysisSetServer interface {
-	Send(*ExportAnalysisSetResponse) error
-	grpc.ServerStream
+    Send(*ExportAnalysisSetResponse) error
+    grpc.ServerStream
 }
 
 type reportingAPIServiceExportAnalysisSetServer struct {
-	grpc.ServerStream
+    grpc.ServerStream
 }
 
 func (x *reportingAPIServiceExportAnalysisSetServer) Send(m *ExportAnalysisSetResponse) error {
-	return x.ServerStream.SendMsg(m)
+    return x.ServerStream.SendMsg(m)
 }
 
 func _ReportingAPIService_ImportAnalysisSet_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(ReportingAPIServiceServer).ImportAnalysisSet(&reportingAPIServiceImportAnalysisSetServer{ServerStream: stream})
+    return srv.(ReportingAPIServiceServer).ImportAnalysisSet(&reportingAPIServiceImportAnalysisSetServer{ServerStream: stream})
 }
 
 type ReportingAPIService_ImportAnalysisSetServer interface {
-	SendAndClose(*ImportAnalysisSetResponse) error
-	Recv() (*ImportAnalysisSetRequest, error)
-	grpc.ServerStream
+    SendAndClose(*ImportAnalysisSetResponse) error
+    Recv() (*ImportAnalysisSetRequest, error)
+    grpc.ServerStream
 }
 
 type reportingAPIServiceImportAnalysisSetServer struct {
-	grpc.ServerStream
+    grpc.ServerStream
 }
 
 func (x *reportingAPIServiceImportAnalysisSetServer) SendAndClose(m *ImportAnalysisSetResponse) error {
-	return x.ServerStream.SendMsg(m)
+    return x.ServerStream.SendMsg(m)
 }
 
 func (x *reportingAPIServiceImportAnalysisSetServer) Recv() (*ImportAnalysisSetRequest, error) {
-	m := new(ImportAnalysisSetRequest)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
+    m := new(ImportAnalysisSetRequest)
+    if err := x.ServerStream.RecvMsg(m); err != nil {
+        return nil, err
+    }
+    return m, nil
 }
 
 func _ReportingAPIService_DiagnosticsCheck_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DiagnosticsCheckRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ReportingAPIServiceServer).DiagnosticsCheck(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ReportingAPIService_DiagnosticsCheck_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ReportingAPIServiceServer).DiagnosticsCheck(ctx, req.(*DiagnosticsCheckRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+    in := new(DiagnosticsCheckRequest)
+    if err := dec(in); err != nil {
+        return nil, err
+    }
+    if interceptor == nil {
+        return srv.(ReportingAPIServiceServer).DiagnosticsCheck(ctx, in)
+    }
+    info := &grpc.UnaryServerInfo{
+        Server:     srv,
+        FullMethod: ReportingAPIService_DiagnosticsCheck_FullMethodName,
+    }
+    handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+        return srv.(ReportingAPIServiceServer).DiagnosticsCheck(ctx, req.(*DiagnosticsCheckRequest))
+    }
+    return interceptor(ctx, in, info, handler)
 }
 
 // ReportingAPIService_ServiceDesc is the grpc.ServiceDesc for ReportingAPIService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var ReportingAPIService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "lumenvox.api.ReportingAPIService",
-	HandlerType: (*ReportingAPIServiceServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "AnalysisSetPreCreate",
-			Handler:    _ReportingAPIService_AnalysisSetPreCreate_Handler,
-		},
-		{
-			MethodName: "AnalysisSetCreate",
-			Handler:    _ReportingAPIService_AnalysisSetCreate_Handler,
-		},
-		{
-			MethodName: "AnalysisSetGet",
-			Handler:    _ReportingAPIService_AnalysisSetGet_Handler,
-		},
-		{
-			MethodName: "AnalysisSetDelete",
-			Handler:    _ReportingAPIService_AnalysisSetDelete_Handler,
-		},
-		{
-			MethodName: "AnalysisSetList",
-			Handler:    _ReportingAPIService_AnalysisSetList_Handler,
-		},
-		{
-			MethodName: "RetrieveArchiveData",
-			Handler:    _ReportingAPIService_RetrieveArchiveData_Handler,
-		},
-		{
-			MethodName: "RetrieveStorageId",
-			Handler:    _ReportingAPIService_RetrieveStorageId_Handler,
-		},
-		{
-			MethodName: "InteractionList",
-			Handler:    _ReportingAPIService_InteractionList_Handler,
-		},
-		{
-			MethodName: "InteractionGet",
-			Handler:    _ReportingAPIService_InteractionGet_Handler,
-		},
-		{
-			MethodName: "InteractionUpdate",
-			Handler:    _ReportingAPIService_InteractionUpdate_Handler,
-		},
-		{
-			MethodName: "GetThirdPartyLicenseAttribution",
-			Handler:    _ReportingAPIService_GetThirdPartyLicenseAttribution_Handler,
-		},
-		{
-			MethodName: "UsageReport",
-			Handler:    _ReportingAPIService_UsageReport_Handler,
-		},
-		{
-			MethodName: "UsageSnapshot",
-			Handler:    _ReportingAPIService_UsageSnapshot_Handler,
-		},
-		{
-			MethodName: "LicenseStatusReportResponsePush",
-			Handler:    _ReportingAPIService_LicenseStatusReportResponsePush_Handler,
-		},
-		{
-			MethodName: "LicenseStatusReportPull",
-			Handler:    _ReportingAPIService_LicenseStatusReportPull_Handler,
-		},
-		{
-			MethodName: "DiagnosticsCheck",
-			Handler:    _ReportingAPIService_DiagnosticsCheck_Handler,
-		},
-	},
-	Streams: []grpc.StreamDesc{
-		{
-			StreamName:    "RetrieveArchiveDataStream",
-			Handler:       _ReportingAPIService_RetrieveArchiveDataStream_Handler,
-			ServerStreams: true,
-		},
-		{
-			StreamName:    "ExportAnalysisSet",
-			Handler:       _ReportingAPIService_ExportAnalysisSet_Handler,
-			ServerStreams: true,
-		},
-		{
-			StreamName:    "ImportAnalysisSet",
-			Handler:       _ReportingAPIService_ImportAnalysisSet_Handler,
-			ClientStreams: true,
-		},
-	},
-	Metadata: "lumenvox/api/reporting.proto",
+    ServiceName: "lumenvox.api.ReportingAPIService",
+    HandlerType: (*ReportingAPIServiceServer)(nil),
+    Methods: []grpc.MethodDesc{
+        {
+            MethodName: "AnalysisSetPreCreate",
+            Handler:    _ReportingAPIService_AnalysisSetPreCreate_Handler,
+        },
+        {
+            MethodName: "AnalysisSetCreate",
+            Handler:    _ReportingAPIService_AnalysisSetCreate_Handler,
+        },
+        {
+            MethodName: "AnalysisSetGet",
+            Handler:    _ReportingAPIService_AnalysisSetGet_Handler,
+        },
+        {
+            MethodName: "AnalysisSetDelete",
+            Handler:    _ReportingAPIService_AnalysisSetDelete_Handler,
+        },
+        {
+            MethodName: "AnalysisSetList",
+            Handler:    _ReportingAPIService_AnalysisSetList_Handler,
+        },
+        {
+            MethodName: "RetrieveArchiveData",
+            Handler:    _ReportingAPIService_RetrieveArchiveData_Handler,
+        },
+        {
+            MethodName: "RetrieveStorageId",
+            Handler:    _ReportingAPIService_RetrieveStorageId_Handler,
+        },
+        {
+            MethodName: "InteractionList",
+            Handler:    _ReportingAPIService_InteractionList_Handler,
+        },
+        {
+            MethodName: "InteractionGet",
+            Handler:    _ReportingAPIService_InteractionGet_Handler,
+        },
+        {
+            MethodName: "InteractionUpdate",
+            Handler:    _ReportingAPIService_InteractionUpdate_Handler,
+        },
+        {
+            MethodName: "GetThirdPartyLicenseAttribution",
+            Handler:    _ReportingAPIService_GetThirdPartyLicenseAttribution_Handler,
+        },
+        {
+            MethodName: "UsageReport",
+            Handler:    _ReportingAPIService_UsageReport_Handler,
+        },
+        {
+            MethodName: "UsageSnapshot",
+            Handler:    _ReportingAPIService_UsageSnapshot_Handler,
+        },
+        {
+            MethodName: "LicenseStatusReportResponsePush",
+            Handler:    _ReportingAPIService_LicenseStatusReportResponsePush_Handler,
+        },
+        {
+            MethodName: "LicenseStatusReportPull",
+            Handler:    _ReportingAPIService_LicenseStatusReportPull_Handler,
+        },
+        {
+            MethodName: "DiagnosticsCheck",
+            Handler:    _ReportingAPIService_DiagnosticsCheck_Handler,
+        },
+    },
+    Streams: []grpc.StreamDesc{
+        {
+            StreamName:    "RetrieveArchiveDataStream",
+            Handler:       _ReportingAPIService_RetrieveArchiveDataStream_Handler,
+            ServerStreams: true,
+        },
+        {
+            StreamName:    "ExportAnalysisSet",
+            Handler:       _ReportingAPIService_ExportAnalysisSet_Handler,
+            ServerStreams: true,
+        },
+        {
+            StreamName:    "ImportAnalysisSet",
+            Handler:       _ReportingAPIService_ImportAnalysisSet_Handler,
+            ClientStreams: true,
+        },
+    },
+    Metadata: "lumenvox/api/reporting.proto",
 }
