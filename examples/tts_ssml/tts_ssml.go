@@ -41,7 +41,8 @@ func main() {
     // Session creation
     ///////////////////////
 
-    // Set audio configuration for session. We're not sending audio, so empty is fine.
+    // Set audio configuration for session. We're not sending any audio to the API,
+    // so it's fine to leave it empty.
     audioConfig := session.AudioConfig{}
 
     // Create a new session.
@@ -83,7 +84,7 @@ func main() {
     // Get results
     ///////////////////////
 
-    // Wait for final results to arrive.
+    // Wait for the final results to arrive.
     ttsInteraction.WaitForFinalResults()
     finalResults, err := ttsInteraction.GetFinalResults()
     if err != nil {
@@ -99,29 +100,29 @@ func main() {
     // Get TTS audio data
     ///////////////////////
 
-    // Create the output directory if not already existing
+    // Create the output directory if it doesn't already exist.
     audioOutputFolder := "./examples/synthesized_audio/"
     _ = os.MkdirAll(audioOutputFolder, os.ModePerm)
 
     synthesisFilename := audioOutputFolder + "ssml-Chris.wav"
 
-    // Now pull the audio from that synthesis...
+    // Pull the audio from the synthesis.
     synthesizedAudioData, err := sessionObject.PullTtsAudio(interactionId, 0, 0, 0)
     if err != nil {
         fmt.Printf("error pulling audio: %v\n", err)
         sessionObject.CloseSession()
-        time.Sleep(500 * time.Millisecond) // Delay a little to get any residual messages
+        time.Sleep(500 * time.Millisecond) // Delay a little to get any residual messages.
         return
     }
 
-    // convert the data to WAV
+    // Convert the data to WAV.
     var intData []int
     intData = twoByteDataToIntSlice(synthesizedAudioData)
     err = saveWavFile(synthesisFilename, audioSampleRate, intData)
     if err != nil {
         log.Printf("Failed to save audio: %v", err.Error())
         sessionObject.CloseSession()
-        time.Sleep(500 * time.Millisecond) // Delay a little to get any residual messages
+        time.Sleep(500 * time.Millisecond) // Delay a little to get any residual messages.
         return
     }
 
