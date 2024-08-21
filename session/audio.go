@@ -255,3 +255,9 @@ func streamStreamAudio(session *SessionObject, producerCtx context.Context, prod
 
     return nil
 }
+
+// AudioBufferSize returns the size of the internal audio buffer. This can be used to
+// monitor streaming operations.
+func (session *SessionObject) AudioBufferSize() int {
+    return len(session.audioForStream)
+}
