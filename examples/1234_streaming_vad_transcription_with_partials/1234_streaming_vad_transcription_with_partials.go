@@ -94,7 +94,8 @@ func main() {
     )
 
     // Create interaction.
-    transcriptionInteraction, err := sessionObject.NewTranscription(language, audioConsumeSettings, nil, vadSettings, recognitionSettings)
+    transcriptionInteraction, err := sessionObject.NewTranscription(language, audioConsumeSettings, nil,
+        vadSettings, recognitionSettings, "", "", "")
     if err != nil {
         log.Printf("failed to create interaction: %v", err)
         sessionObject.CloseSession()
