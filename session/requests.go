@@ -109,11 +109,33 @@ func getTranscriptionRequest(
     vadSettings *api.VadSettings,
     audioConsumeSettings *api.AudioConsumeSettings,
     normalizationSettings *api.NormalizationSettings,
-    recognitionSettings *api.RecognitionSettings) (transcriptionRequest *api.SessionRequest) {
+    recognitionSettings *api.RecognitionSettings,
+    languageModelName string,
+    acousticModelName string,
+    enablePostProcessing string) (transcriptionRequest *api.SessionRequest) {
 
     if correlationId == "" {
         // Create a new correlationId if one is not specified
         correlationId = uuid.NewString()
+    }
+
+    interactionCreateTranscriptionRequest := &api.InteractionCreateTranscriptionRequest{
+        Language: language,
+        //EmbeddedGrammars:      inlineGrammarsRequest(),
+        VadSettings:           vadSettings,
+        AudioConsumeSettings:  audioConsumeSettings,
+        NormalizationSettings: normalizationSettings,
+        RecognitionSettings:   recognitionSettings,
+    }
+
+    if languageModelName != "" {
+        interactionCreateTranscriptionRequest.LanguageModelName = &api.OptionalString{Value: languageModelName}
+    }
+    if acousticModelName != "" {
+        interactionCreateTranscriptionRequest.AcousticModelName = &api.OptionalString{Value: acousticModelName}
+    }
+    if enablePostProcessing != "" {
+        interactionCreateTranscriptionRequest.EnablePostprocessing = &api.OptionalString{Value: enablePostProcessing}
     }
 
     transcriptionRequest = &api.SessionRequest{
@@ -121,14 +143,7 @@ func getTranscriptionRequest(
         RequestType: &api.SessionRequest_InteractionRequest{
             InteractionRequest: &api.InteractionRequestMessage{
                 InteractionRequest: &api.InteractionRequestMessage_InteractionCreateTranscription{
-                    InteractionCreateTranscription: &api.InteractionCreateTranscriptionRequest{
-                        Language: language,
-                        //EmbeddedGrammars:      inlineGrammarsRequest(),
-                        VadSettings:           vadSettings,
-                        AudioConsumeSettings:  audioConsumeSettings,
-                        NormalizationSettings: normalizationSettings,
-                        RecognitionSettings:   recognitionSettings,
-                    },
+                    InteractionCreateTranscription: interactionCreateTranscriptionRequest,
                 },
             },
         },

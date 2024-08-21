@@ -150,13 +150,17 @@ func (session *SessionObject) NewTranscription(
     audioConsumeSettings *api.AudioConsumeSettings,
     normalizationSettings *api.NormalizationSettings,
     vadSettings *api.VadSettings,
-    recognitionSettings *api.RecognitionSettings) (interactionObject *TranscriptionInteractionObject, err error) {
+    recognitionSettings *api.RecognitionSettings,
+    languageModelName string,
+    acousticModelName string,
+    enablePostProcessing string) (interactionObject *TranscriptionInteractionObject, err error) {
 
     // Create transcription interaction, adding parameters such as VAD and recognition settings
 
     session.streamSendLock.Lock()
     err = session.SessionStream.Send(getTranscriptionRequest("", language,
-        vadSettings, audioConsumeSettings, normalizationSettings, recognitionSettings))
+        vadSettings, audioConsumeSettings, normalizationSettings, recognitionSettings,
+        languageModelName, acousticModelName, enablePostProcessing))
     session.streamSendLock.Unlock()
     if err != nil {
         session.errorChan <- fmt.Errorf("sending InteractionCreateTranscriptionRequest error: %v", err)
