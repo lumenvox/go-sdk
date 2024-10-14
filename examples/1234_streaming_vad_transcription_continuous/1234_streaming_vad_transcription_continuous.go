@@ -17,6 +17,7 @@ func main() {
     ///////////////////////
     // Client creation
     ///////////////////////
+    //session.EnableVerboseLogging = true
 
     // Set variables for connection to lumenvox API.
     defaultDeploymentId := "00000000-0000-0000-0000-000000000000"
@@ -58,7 +59,8 @@ func main() {
     var audioData []byte
 
     // Read data from disk.
-    audioFilePath := "./examples/test_data/1234.ulaw"
+    //audioFilePath := "./examples/test_data/1234.ulaw"
+    audioFilePath := "./examples/test_data/the_great_gatsby_1_minute.ulaw"
     audioData, err = os.ReadFile(audioFilePath)
     if err != nil {
         log.Fatalf("Error reading audio file: %v", err.Error())
@@ -82,7 +84,7 @@ func main() {
 
     // Configure recognition settings.
     decodeTimeout := int32(10000)
-    enablePartialResults := true
+    enablePartialResults := false
     recognitionSettings := client.GetRecognitionSettings(decodeTimeout, enablePartialResults, nil, nil, nil)
 
     // Configure audio consume settings.
@@ -93,9 +95,12 @@ func main() {
         nil,
     )
 
+    // to enable continuous transcription:
+    enableContinuousTranscription := &api.OptionalBool{Value: true}
+
     // Create interaction.
     transcriptionInteraction, err := sessionObject.NewTranscription(language, audioConsumeSettings, nil,
-        vadSettings, recognitionSettings, "", "", "", nil)
+        vadSettings, recognitionSettings, "", "", "", enableContinuousTranscription)
     if err != nil {
         log.Printf("failed to create interaction: %v", err)
         sessionObject.CloseSession()
@@ -110,13 +115,56 @@ func main() {
     // Get results
     ///////////////////////
 
+    // declare a channel to signal to the result handler when we have finalized
+    // the interaction. In a production environment, you probably want some
+    // other mechanism to determine when to finalize the interaction and when
+    // you should stop listening for results. For the purposes of this example,
+    // we're just waiting for our outbound audio stream to complete.
+    finalizeChannel := make(chan struct{})
+    go func() {
+        // For this example, we'll wait for the audio to finish streaming before calling
+        // finalize. This is not a standard use case. Typically, you'd use batch for
+        // something like this.
+        for sessionObject.AudioBufferSize() > 0 {
+            time.Sleep(500 * time.Millisecond)
+        }
+
+        // The audio has finished streaming. Finalize the interaction.
+        err = sessionObject.FinalizeInteraction(interactionId)
+        if err != nil {
+            log.Printf("failed to finalize interaction: %v", err.Error())
+        } else {
+            fmt.Println("finalized interaction")
+        }
+
+        close(finalizeChannel)
+    }()
+
+    transcriptionInteraction.WaitForBeginProcessing(0)
+    fmt.Println("got begin processing")
+    transcriptionInteraction.WaitForBargeIn(0)
+    fmt.Println("got barge in")
+
     // set up loop to listen for any results, partial or otherwise
     finalResultReceived := false
     resultIdx := 0
     for finalResultReceived == false {
+
+        // detect if we have finalized the interaction
+        finalizedInteraction := false
+        select {
+        case <-finalizeChannel:
+            finalizedInteraction = true
+        default:
+        }
+        if finalizedInteraction {
+            break
+        }
+
+        // if we haven't finalized, wait for the next result
         resultIdx, finalResultReceived, err = transcriptionInteraction.WaitForNextResult()
         if err != nil {
-            fmt.Printf("Error waiting for next result: %+v\n", err)
+            fmt.Printf("Error waiting for results: %+v\n", err)
         } else if finalResultReceived == false {
             partialResult, err := transcriptionInteraction.GetPartialResult(resultIdx)
             if err != nil {
@@ -125,15 +173,10 @@ func main() {
                 fmt.Printf("PARTIAL RESULT %d: %+v\n", resultIdx, partialResult)
             }
         } else {
+            // note that final results are not currently produced by continuous transcription,
+            // so this line should not be reached.
             fmt.Println("Interaction complete")
         }
-    }
-
-    finalResults, err := transcriptionInteraction.GetFinalResults()
-    if err != nil {
-        fmt.Printf("error while waiting for final results: %v\n", err)
-    } else {
-        fmt.Printf("got final results: %v\n", finalResults)
     }
 
     ///////////////////////

@@ -95,7 +95,7 @@ func main() {
 
     // Create interaction.
     transcriptionInteraction, err := sessionObject.NewTranscription(language, audioConsumeSettings, nil,
-        vadSettings, recognitionSettings, "", "", "")
+        vadSettings, recognitionSettings, "", "", "", nil)
     if err != nil {
         log.Printf("failed to create interaction: %v", err)
         sessionObject.CloseSession()
@@ -110,9 +110,9 @@ func main() {
     // Get results
     ///////////////////////
 
-    transcriptionInteraction.WaitForBeginProcessing()
+    transcriptionInteraction.WaitForBeginProcessing(0)
     fmt.Println("got begin processing")
-    transcriptionInteraction.WaitForBargeIn()
+    transcriptionInteraction.WaitForBargeIn(0)
     fmt.Println("got barge in")
 
     // For an example of a manual finalize request, we can wait 1 second after barge-in

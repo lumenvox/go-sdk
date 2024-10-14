@@ -7,6 +7,26 @@ import (
     "sync"
 )
 
+// vadInteractionRecord records the data from a single VAD interaction.
+// For a successful interaction, it will store the values for barge-in and
+// barge-out. If a timeout was received instead, the struct values will
+// indicate that as well.
+type vadInteractionRecord struct {
+    beginProcessingReceived bool
+    bargeInReceived         int
+    bargeOutReceived        int
+    bargeInTimeoutReceived  bool
+}
+
+func createEmptyVadInteractionRecord() *vadInteractionRecord {
+    return &vadInteractionRecord{
+        beginProcessingReceived: false,
+        bargeInReceived:         0,
+        bargeOutReceived:        0,
+        bargeInTimeoutReceived:  false,
+    }
+}
+
 // AsrInteractionObject represents an ASR interaction.
 type AsrInteractionObject struct {
     InteractionId string
@@ -43,21 +63,15 @@ type AsrInteractionObject struct {
 type TranscriptionInteractionObject struct {
     InteractionId string
 
-    // VAD begin processing tracking
-    vadBeginProcessingReceived bool
-    vadBeginProcessingChannel  chan struct{}
-
-    // VAD barge-in tracking
-    vadBargeInReceived int
-    vadBargeInChannel  chan int
-
-    // VAD barge-out tracking
-    vadBargeOutReceived int
-    vadBargeOutChannel  chan int
-
-    // VAD barge-in timeout tracking
-    vadBargeInTimeoutReceived bool
-    vadBargeInTimeoutChannel  chan struct{}
+    // VAD event tracking
+    vadEventsLock              sync.Mutex
+    vadBeginProcessingChannels []chan struct{}
+    vadBargeInChannels         []chan struct{}
+    vadBargeOutChannels        []chan struct{}
+    vadBargeInTimeoutChannels  []chan struct{}
+    vadRecordLog               []*vadInteractionRecord
+    vadInteractionCounter      int
+    vadCurrentState            api.VadEvent_VadEventType
 
     // Partial result tracking
     partialResultLock      sync.Mutex
@@ -69,6 +83,9 @@ type TranscriptionInteractionObject struct {
     finalResultsReceived bool
     finalResults         *api.TranscriptionInteractionResult
     resultsReadyChannel  chan struct{}
+
+    // For special result handling
+    isContinuousTranscription bool
 }
 
 // NormalizationInteractionObject represents a normalization interaction.
@@ -153,14 +170,15 @@ func (session *SessionObject) NewTranscription(
     recognitionSettings *api.RecognitionSettings,
     languageModelName string,
     acousticModelName string,
-    enablePostProcessing string) (interactionObject *TranscriptionInteractionObject, err error) {
+    enablePostProcessing string,
+    enableContinuousTranscription *api.OptionalBool) (interactionObject *TranscriptionInteractionObject, err error) {
 
     // Create transcription interaction, adding parameters such as VAD and recognition settings
 
     session.streamSendLock.Lock()
     err = session.SessionStream.Send(getTranscriptionRequest("", language,
         vadSettings, audioConsumeSettings, normalizationSettings, recognitionSettings,
-        languageModelName, acousticModelName, enablePostProcessing))
+        languageModelName, acousticModelName, enablePostProcessing, enableContinuousTranscription))
     session.streamSendLock.Unlock()
     if err != nil {
         session.errorChan <- fmt.Errorf("sending InteractionCreateTranscriptionRequest error: %v", err)
@@ -175,21 +193,28 @@ func (session *SessionObject) NewTranscription(
         log.Printf("created new transcription interaction: %s", interactionId)
     }
 
+    // determine if this is a continuous interaction
+    isContinuousTranscription := false
+    if enableContinuousTranscription != nil && enableContinuousTranscription.Value {
+        isContinuousTranscription = true
+    }
+
     // Create the interaction object.
     interactionObject = &TranscriptionInteractionObject{
-        InteractionId:             interactionId,
-        vadBeginProcessingChannel: make(chan struct{}, 1),
-        vadBargeInChannel:         make(chan int, 1),
-        vadBargeInReceived:        -1,
-        vadBargeOutChannel:        make(chan int, 1),
-        vadBargeOutReceived:       -1,
-        vadBargeInTimeoutChannel:  make(chan struct{}),
-        vadBargeInTimeoutReceived: false,
-        finalResultsReceived:      false,
-        finalResults:              nil,
-        resultsReadyChannel:       make(chan struct{}),
+        InteractionId:        interactionId,
+        finalResultsReceived: false,
+        finalResults:         nil,
+        resultsReadyChannel:  make(chan struct{}),
+        vadCurrentState:      api.VadEvent_VAD_EVENT_TYPE_UNSPECIFIED,
+
+        isContinuousTranscription: isContinuousTranscription,
     }
     interactionObject.partialResultsChannels = append(interactionObject.partialResultsChannels, make(chan struct{}))
+    interactionObject.vadBeginProcessingChannels = append(interactionObject.vadBeginProcessingChannels, make(chan struct{}))
+    interactionObject.vadBargeInChannels = append(interactionObject.vadBargeInChannels, make(chan struct{}))
+    interactionObject.vadBargeOutChannels = append(interactionObject.vadBargeOutChannels, make(chan struct{}))
+    interactionObject.vadBargeInTimeoutChannels = append(interactionObject.vadBargeInTimeoutChannels, make(chan struct{}))
+    interactionObject.vadRecordLog = append(interactionObject.vadRecordLog, createEmptyVadInteractionRecord())
 
     // Add the interaction object to the session
     session.transcriptionInteractionsMap[interactionId] = interactionObject

@@ -95,7 +95,7 @@ func main() {
 
     // Create interaction.
     transcriptionInteraction, err := sessionObject.NewTranscription(language, audioConsumeSettings, nil,
-        vadSettings, recognitionSettings, "", "", "")
+        vadSettings, recognitionSettings, "", "", "", nil)
     if err != nil {
         log.Printf("failed to create interaction: %v", err)
         sessionObject.CloseSession()
@@ -110,13 +110,13 @@ func main() {
     // Get results
     ///////////////////////
 
-    transcriptionInteraction.WaitForBeginProcessing()
+    transcriptionInteraction.WaitForBeginProcessing(0)
     fmt.Println("got begin processing")
-    transcriptionInteraction.WaitForBargeIn()
+    transcriptionInteraction.WaitForBargeIn(0)
     fmt.Println("got barge in")
 
     // Wait for the interaction to finish normally, without calling finalize.
-    transcriptionInteraction.WaitForEndOfSpeech()
+    transcriptionInteraction.WaitForEndOfSpeech(0)
     fmt.Println("got end of speech")
 
     // Now that we have waited for the end of speech, wait for the final results to become available.

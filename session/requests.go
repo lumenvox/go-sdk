@@ -112,7 +112,8 @@ func getTranscriptionRequest(
     recognitionSettings *api.RecognitionSettings,
     languageModelName string,
     acousticModelName string,
-    enablePostProcessing string) (transcriptionRequest *api.SessionRequest) {
+    enablePostProcessing string,
+    enableContinuousTranscription *api.OptionalBool) (transcriptionRequest *api.SessionRequest) {
 
     if correlationId == "" {
         // Create a new correlationId if one is not specified
@@ -136,6 +137,9 @@ func getTranscriptionRequest(
     }
     if enablePostProcessing != "" {
         interactionCreateTranscriptionRequest.EnablePostprocessing = &api.OptionalString{Value: enablePostProcessing}
+    }
+    if enableContinuousTranscription != nil {
+        interactionCreateTranscriptionRequest.ContinuousUtteranceTranscription = enableContinuousTranscription
     }
 
     transcriptionRequest = &api.SessionRequest{

@@ -140,7 +140,7 @@ func main() {
 
 }
 
-// Saves the specified audio to the specified .wav filename using the specified samplerate
+// Saves the specified audio to the specified .wav filename using the specified sample rate
 func saveWavFile(wavFilename string, audioSampleRate int32, pcmData []int) (err error) {
 
     // Create output wav file
