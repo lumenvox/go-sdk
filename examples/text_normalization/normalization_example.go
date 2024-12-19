@@ -21,7 +21,7 @@ func main() {
 
     // Create client and open connection.
     client, err := lumenvoxSdk.CreateClient("localhost:8280", false, "",
-        false, defaultDeploymentId)
+        false, defaultDeploymentId, "")
 
     // Catch error from client creation.
     if err != nil {
@@ -53,7 +53,7 @@ func main() {
 
     // Configure normalization settings.
     enableCapitalization := true
-    normalizationSettings := client.GetNormalizationSettings(false, enableCapitalization, false, nil)
+    normalizationSettings := client.GetNormalizationSettings(false, enableCapitalization, false, false, false, nil)
 
     textToNormalize := "recorded books presents an unabridged recording of the great gatsby by f scott" +
         " fitzgerald narrated by frank muller chapter one in my younger and more vulnerable years my father" +
@@ -82,8 +82,7 @@ func main() {
     ///////////////////////
 
     // Wait for the final results to arrive.
-    normalizationInteraction.WaitForFinalResults()
-    finalResults, err := normalizationInteraction.GetFinalResults()
+    finalResults, err := normalizationInteraction.GetFinalResults(10 * time.Second)
     if err != nil {
         fmt.Printf("error while waiting for final results: %v\n", err)
     } else {
@@ -95,7 +94,4 @@ func main() {
     ///////////////////////
 
     sessionObject.CloseSession()
-
-    // Delay a little to get any residual messages
-    time.Sleep(500 * time.Millisecond)
 }

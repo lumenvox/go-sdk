@@ -23,7 +23,7 @@ func main() {
 
     // Create client and open connection.
     client, err := lumenvoxSdk.CreateClient("localhost:8280", false, "",
-        false, defaultDeploymentId)
+        false, defaultDeploymentId, "")
 
     // Catch error from client creation.
     if err != nil {
@@ -110,18 +110,35 @@ func main() {
     // Get results
     ///////////////////////
 
-    transcriptionInteraction.WaitForBeginProcessing(0)
+    // Wait for the interaction to start processing
+    err = transcriptionInteraction.WaitForBeginProcessing(0, 10*time.Second)
+    if err != nil {
+        fmt.Printf("error while waiting for begin processing: %v\n", err)
+        sessionObject.CloseSession()
+        return
+    }
     fmt.Println("got begin processing")
-    transcriptionInteraction.WaitForBargeIn(0)
+
+    // Wait for the start of speech
+    err = transcriptionInteraction.WaitForBargeIn(0, 10*time.Second)
+    if err != nil {
+        fmt.Printf("error while waiting for barge in: %v\n", err)
+        sessionObject.CloseSession()
+        return
+    }
     fmt.Println("got barge in")
 
     // Wait for the interaction to finish normally, without calling finalize.
-    transcriptionInteraction.WaitForEndOfSpeech(0)
+    err = transcriptionInteraction.WaitForEndOfSpeech(0, 10*time.Second)
+    if err != nil {
+        fmt.Printf("error while waiting for end of speech: %v\n", err)
+        sessionObject.CloseSession()
+        return
+    }
     fmt.Println("got end of speech")
 
     // Now that we have waited for the end of speech, wait for the final results to become available.
-    transcriptionInteraction.WaitForFinalResults()
-    finalResults, err := transcriptionInteraction.GetFinalResults()
+    finalResults, err := transcriptionInteraction.GetFinalResults(10 * time.Second)
     if err != nil {
         fmt.Printf("error while waiting for final results: %v\n", err)
     } else {
@@ -133,7 +150,4 @@ func main() {
     ///////////////////////
 
     sessionObject.CloseSession()
-
-    // Delay a little to get any residual messages
-    time.Sleep(500 * time.Millisecond)
 }

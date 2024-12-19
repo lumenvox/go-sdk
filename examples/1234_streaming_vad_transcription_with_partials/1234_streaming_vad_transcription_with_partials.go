@@ -23,7 +23,7 @@ func main() {
 
     // Create client and open connection.
     client, err := lumenvoxSdk.CreateClient("localhost:8280", false, "",
-        false, defaultDeploymentId)
+        false, defaultDeploymentId, "")
 
     // Catch error from client creation.
     if err != nil {
@@ -114,7 +114,7 @@ func main() {
     finalResultReceived := false
     resultIdx := 0
     for finalResultReceived == false {
-        resultIdx, finalResultReceived, err = transcriptionInteraction.WaitForNextResult()
+        resultIdx, finalResultReceived, err = transcriptionInteraction.WaitForNextResult(10 * time.Second)
         if err != nil {
             fmt.Printf("Error waiting for next result: %+v\n", err)
         } else if finalResultReceived == false {
@@ -129,7 +129,7 @@ func main() {
         }
     }
 
-    finalResults, err := transcriptionInteraction.GetFinalResults()
+    finalResults, err := transcriptionInteraction.GetFinalResults(10 * time.Second)
     if err != nil {
         fmt.Printf("error while waiting for final results: %v\n", err)
     } else {
@@ -142,6 +142,4 @@ func main() {
 
     sessionObject.CloseSession()
 
-    // Delay a little to get any residual messages
-    time.Sleep(500 * time.Millisecond)
 }

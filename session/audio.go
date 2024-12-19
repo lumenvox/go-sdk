@@ -48,9 +48,11 @@ func (session *SessionObject) AddAudio(audioData []byte) error {
 
     // Check audio config: streaming or batch?
     if session.audioConfig.IsBatch {
+        // if we're in batch mode, block until all audio is sent
         streamBatchAudio(session, producerCtx, audioData)
         producerCancel()
     } else {
+        // if we're in streaming mode, add the audio to the internal queue
         err := streamStreamAudio(session, producerCtx, producerCancel, audioData)
         if err != nil {
             return err
@@ -72,6 +74,18 @@ func streamBatchAudio(session *SessionObject, producerCtx context.Context, audio
     // Get audio chunk parameters from the audio config
     chunkSize := session.audioConfig.BatchChunkSize
     chunkDelayMs := session.audioConfig.BatchChunkDelayMs
+
+    // Catch invalid chunk parameters
+    if chunkSize < 0 {
+        log.Printf("warning: invalid BatchChunkSize %d (should be non-negative). Using default (%d)",
+            chunkSize, defaultBatchChunkSize)
+        chunkSize = 0
+    }
+    if chunkDelayMs < 0 {
+        log.Printf("warning: invalid BatchChunkDelayMs %d (should be non-negative). Using default (%d)",
+            chunkDelayMs, defaultBatchChunkDelayMs)
+        chunkDelayMs = 0
+    }
 
     // Use defaults if necessary
     if chunkSize == 0 {
@@ -124,14 +138,14 @@ audioStreamLoop:
             }
 
             // Update the remaining audio
-            remainingAudioData = remainingAudioData[firstChunkSize:]
+            remainingAudioData = remainingAudioData[nextChunkSize:]
 
         case <-session.stopStreamingAudio:
             // Session closing, stop streaming
             break audioStreamLoop
 
         case <-producerCtx.Done():
-            // Session closing, stop streaming
+            // Producer context canceled or timed out, stop streaming
             break audioStreamLoop
         }
     }
@@ -140,6 +154,8 @@ audioStreamLoop:
     ticker.Stop()
 }
 
+// handleInternalStream streams audio in the background. It is typically run in
+// its own goroutine.
 func (session *SessionObject) handleInternalStream(producerCtx context.Context, chunkSizeMs, chunkSizeBytes int) {
 
     // Set up a ticker to handle audio streaming
@@ -184,7 +200,7 @@ audioStreamLoop:
             break audioStreamLoop
 
         case <-producerCtx.Done():
-            // Session closing, stop streaming.
+            // Producer context canceled or timed out, stop streaming
             break audioStreamLoop
         }
     }
@@ -198,7 +214,7 @@ audioStreamLoop:
 // reads audio from this buffer and streams it in the background according to
 // the audio configuration.
 //
-// The goroutine is initialized on the first call to this function. On later
+// On the first call to this function, the goroutine is initialized. On later
 // calls, this function is only responsible for adding audio to the internal
 // session buffer as the internal streamer continues to stream.
 func streamStreamAudio(session *SessionObject, producerCtx context.Context, producerCancel context.CancelFunc,
@@ -210,12 +226,18 @@ func streamStreamAudio(session *SessionObject, producerCtx context.Context, prod
         return nil
     }
 
-    // Check if we have initialized the audio streaming goroutine. If we haven't, do so.
+    // Check if we have initialized the audio streaming goroutine. If we haven't,
+    // initialize it.
     session.audioStreamerLock.Lock()
     if session.audioStreamerInitialized == false {
 
         // Get the chunk size in milliseconds
         chunkSizeMs := session.audioConfig.StreamingChunkSizeMs
+        if chunkSizeMs < 0 {
+            log.Printf("warning: invalid StreamingChunkSizeMs %d (should be non-negative). Using default (%d)",
+                chunkSizeMs, defaultStreamingChunkSizeMs)
+            chunkSizeMs = 0
+        }
         if chunkSizeMs == 0 {
             chunkSizeMs = defaultStreamingChunkSizeMs
         }
@@ -223,7 +245,7 @@ func streamStreamAudio(session *SessionObject, producerCtx context.Context, prod
         // Based on the milliseconds, format, and sample rate, get the chunk size in bytes
         sampleRate := session.audioConfig.SampleRate
         if sampleRate <= 0 {
-            return errors.New("invalid sample rate")
+            return errors.New("invalid sample rate (must be positive)")
         }
         format := session.audioConfig.Format
         if format == api.AudioFormat_STANDARD_AUDIO_FORMAT_NO_AUDIO_RESOURCE {
@@ -260,4 +282,12 @@ func streamStreamAudio(session *SessionObject, producerCtx context.Context, prod
 // monitor streaming operations.
 func (session *SessionObject) AudioBufferSize() int {
     return len(session.audioForStream)
+}
+
+// ClearAudioBuffer clears the internal audio queue, preventing any new
+// packets from being sent. This is only relevant for streaming operations.
+func (session *SessionObject) ClearAudioBuffer() {
+    session.audioLock.Lock()
+    session.audioForStream = nil
+    session.audioLock.Unlock()
 }

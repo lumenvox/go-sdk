@@ -11,9 +11,12 @@ require (
 	google.golang.org/protobuf v1.33.0
 )
 
+require cloud.google.com/go/compute/metadata v0.3.0 // indirect
+
 require (
 	github.com/go-audio/riff v1.0.0 // indirect
 	golang.org/x/net v0.24.0 // indirect
+	golang.org/x/oauth2 v0.24.0 // indirect
 	golang.org/x/sys v0.19.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 )

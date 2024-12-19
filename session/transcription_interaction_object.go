@@ -3,16 +3,112 @@ package session
 import (
     "github.com/lumenvox/go-sdk/lumenvox/api"
     "errors"
+    "fmt"
+    "log"
+    "sync"
+    "time"
 )
+
+// TranscriptionInteractionObject represents a transcription interaction.
+type TranscriptionInteractionObject struct {
+    InteractionId string
+
+    // VAD event tracking
+    vadEventsLock              sync.Mutex
+    vadBeginProcessingChannels []chan struct{}
+    vadBargeInChannels         []chan struct{}
+    vadBargeOutChannels        []chan struct{}
+    vadBargeInTimeoutChannels  []chan struct{}
+    vadRecordLog               []*vadInteractionRecord
+    vadInteractionCounter      int
+    vadCurrentState            api.VadEvent_VadEventType
+
+    // Partial result tracking
+    partialResultLock      sync.Mutex
+    partialResultsReceived int
+    partialResultsChannels []chan struct{}
+    partialResultsList     []*api.PartialResult
+
+    // Final result tracking
+    finalResultsReceived bool
+    finalResults         *api.TranscriptionInteractionResult
+    resultsReadyChannel  chan struct{}
+
+    // For special result handling
+    isContinuousTranscription bool
+}
+
+// NewTranscription attempts to create a new transcription interaction.
+// If successful, a new interaction object will be returned.
+func (session *SessionObject) NewTranscription(
+    language string,
+    audioConsumeSettings *api.AudioConsumeSettings,
+    normalizationSettings *api.NormalizationSettings,
+    vadSettings *api.VadSettings,
+    recognitionSettings *api.RecognitionSettings,
+    languageModelName string,
+    acousticModelName string,
+    enablePostProcessing string,
+    enableContinuousTranscription *api.OptionalBool) (interactionObject *TranscriptionInteractionObject, err error) {
+
+    // Create transcription interaction, adding parameters such as VAD and recognition settings
+
+    session.streamSendLock.Lock()
+    err = session.SessionStream.Send(getTranscriptionRequest("", language,
+        vadSettings, audioConsumeSettings, normalizationSettings, recognitionSettings,
+        languageModelName, acousticModelName, enablePostProcessing, enableContinuousTranscription))
+    session.streamSendLock.Unlock()
+    if err != nil {
+        session.errorChan <- fmt.Errorf("sending InteractionCreateTranscriptionRequest error: %v", err)
+        log.Printf("error sending transcription create request: %v", err.Error())
+        return nil, err
+    }
+
+    // Get the interaction ID.
+    transcriptionResponse := <-session.createdTranscriptionChannel
+    interactionId := transcriptionResponse.InteractionId
+    if EnableVerboseLogging {
+        log.Printf("created new transcription interaction: %s", interactionId)
+    }
+
+    // determine if this is a continuous interaction
+    isContinuousTranscription := false
+    if enableContinuousTranscription != nil && enableContinuousTranscription.Value {
+        isContinuousTranscription = true
+    }
+
+    // Create the interaction object.
+    interactionObject = &TranscriptionInteractionObject{
+        InteractionId:        interactionId,
+        finalResultsReceived: false,
+        finalResults:         nil,
+        resultsReadyChannel:  make(chan struct{}),
+        vadCurrentState:      api.VadEvent_VAD_EVENT_TYPE_UNSPECIFIED,
+
+        isContinuousTranscription: isContinuousTranscription,
+    }
+    interactionObject.partialResultsChannels = append(interactionObject.partialResultsChannels, make(chan struct{}))
+    interactionObject.vadBeginProcessingChannels = append(interactionObject.vadBeginProcessingChannels, make(chan struct{}))
+    interactionObject.vadBargeInChannels = append(interactionObject.vadBargeInChannels, make(chan struct{}))
+    interactionObject.vadBargeOutChannels = append(interactionObject.vadBargeOutChannels, make(chan struct{}))
+    interactionObject.vadBargeInTimeoutChannels = append(interactionObject.vadBargeInTimeoutChannels, make(chan struct{}))
+    interactionObject.vadRecordLog = append(interactionObject.vadRecordLog, createEmptyVadInteractionRecord())
+
+    // Add the interaction object to the session
+    session.transcriptionInteractionsMap[interactionId] = interactionObject
+
+    return interactionObject, err
+}
 
 // WaitForBeginProcessing blocks until the API sends a VAD_BEGIN_PROCESSING
 // message. If the message has already arrived, this function returns
-// immediately.
-func (transcriptionInteraction *TranscriptionInteractionObject) WaitForBeginProcessing(vadInteractionIdx int) error {
+// immediately. Otherwise, if the message does not return before the timeout,
+// an error will be returned.
+func (transcriptionInteraction *TranscriptionInteractionObject) WaitForBeginProcessing(vadInteractionIdx int, timeout time.Duration) error {
 
     // Verify that the index is valid
     vadRecordLogLength := len(transcriptionInteraction.vadRecordLog)
-    if vadInteractionIdx >= vadRecordLogLength {
+    if vadInteractionIdx >= vadRecordLogLength || vadInteractionIdx < 0 {
         return errors.New("invalid VAD interaction index")
     }
 
@@ -23,14 +119,18 @@ func (transcriptionInteraction *TranscriptionInteractionObject) WaitForBeginProc
     }
 
     // Otherwise, wait for the BEGIN_PROCESSING event to arrive.
-    <-transcriptionInteraction.vadBeginProcessingChannels[vadInteractionIdx]
-
-    return nil
+    select {
+    case <-transcriptionInteraction.vadBeginProcessingChannels[vadInteractionIdx]:
+        return nil
+    case <-time.After(timeout):
+        return TimeoutError
+    }
 }
 
 // WaitForBargeIn blocks until the API sends a VAD_BARGE_IN message. If the
-// message has already arrived, this function returns immediately.
-func (transcriptionInteraction *TranscriptionInteractionObject) WaitForBargeIn(vadInteractionIdx int) error {
+// message has already arrived, this function returns immediately. Otherwise,
+// if the message does not return before the timeout, an error will be returned.
+func (transcriptionInteraction *TranscriptionInteractionObject) WaitForBargeIn(vadInteractionIdx int, timeout time.Duration) error {
 
     // TODO: instead of just checking the barge_in channel, we should also pay attention
     //       to other events that may preclude a barge_in. For example, if a barge_in_timeout
@@ -39,7 +139,7 @@ func (transcriptionInteraction *TranscriptionInteractionObject) WaitForBargeIn(v
 
     // Verify that the index is valid
     vadRecordLogLength := len(transcriptionInteraction.vadRecordLog)
-    if vadInteractionIdx >= vadRecordLogLength {
+    if vadInteractionIdx >= vadRecordLogLength || vadInteractionIdx < 0 {
         return errors.New("invalid VAD interaction index")
     }
 
@@ -52,18 +152,22 @@ func (transcriptionInteraction *TranscriptionInteractionObject) WaitForBargeIn(v
     }
 
     // Otherwise, wait for the BARGE_IN event to arrive.
-    <-transcriptionInteraction.vadBargeInChannels[vadInteractionIdx]
-
-    return nil
+    select {
+    case <-transcriptionInteraction.vadBargeInChannels[vadInteractionIdx]:
+        return nil
+    case <-time.After(timeout):
+        return TimeoutError
+    }
 }
 
 // WaitForEndOfSpeech blocks until the API sends a VAD_END_OF_SPEECH message. If
-// the message has already arrived, this function returns immediately.
-func (transcriptionInteraction *TranscriptionInteractionObject) WaitForEndOfSpeech(vadInteractionIdx int) error {
+// the message has already arrived, this function returns immediately. Otherwise,
+// if the message does not return before the timeout, an error will be returned.
+func (transcriptionInteraction *TranscriptionInteractionObject) WaitForEndOfSpeech(vadInteractionIdx int, timeout time.Duration) error {
 
     // Verify that the index is valid
     vadRecordLogLength := len(transcriptionInteraction.vadRecordLog)
-    if vadInteractionIdx >= vadRecordLogLength {
+    if vadInteractionIdx >= vadRecordLogLength || vadInteractionIdx < 0 {
         return errors.New("invalid VAD interaction index")
     }
 
@@ -76,19 +180,23 @@ func (transcriptionInteraction *TranscriptionInteractionObject) WaitForEndOfSpee
     }
 
     // Otherwise, wait for the BARGE_OUT event to arrive.
-    <-transcriptionInteraction.vadBargeOutChannels[vadInteractionIdx]
-
-    return nil
+    select {
+    case <-transcriptionInteraction.vadBargeOutChannels[vadInteractionIdx]:
+        return nil
+    case <-time.After(timeout):
+        return TimeoutError
+    }
 }
 
 // WaitForBargeInTimeout blocks until the API sends a VAD_BARGE_IN_TIMEOUT
 // message. If the message has already arrived, this function returns
-// immediately.
-func (transcriptionInteraction *TranscriptionInteractionObject) WaitForBargeInTimeout(vadInteractionIdx int) error {
+// immediately. Otherwise, if the message does not return before the timeout,
+// an error will be returned.
+func (transcriptionInteraction *TranscriptionInteractionObject) WaitForBargeInTimeout(vadInteractionIdx int, timeout time.Duration) error {
 
     // Verify that the index is valid
     vadRecordLogLength := len(transcriptionInteraction.vadRecordLog)
-    if vadInteractionIdx >= vadRecordLogLength {
+    if vadInteractionIdx >= vadRecordLogLength || vadInteractionIdx < 0 {
         return errors.New("invalid VAD interaction index")
     }
 
@@ -99,27 +207,41 @@ func (transcriptionInteraction *TranscriptionInteractionObject) WaitForBargeInTi
     }
 
     // Otherwise, wait for the BARGE_OUT event to arrive.
-    <-transcriptionInteraction.vadBargeInTimeoutChannels[vadInteractionIdx]
-
-    return nil
+    select {
+    case <-transcriptionInteraction.vadBargeInTimeoutChannels[vadInteractionIdx]:
+        return nil
+    case <-time.After(timeout):
+        return TimeoutError
+    }
 }
 
 // WaitForFinalResults waits for the end of the interaction. This is typically
 // triggered by final results, but it can also be triggered by errors (like a
 // barge-in timeout).
-func (transcriptionInteraction *TranscriptionInteractionObject) WaitForFinalResults() {
+//
+// If nothing arrives before the timeout, an error will be returned. Note that
+// interaction failures (like a barge-in timeout) do not trigger errors from
+// this function, so long as the notification arrives before the timeout.
+func (transcriptionInteraction *TranscriptionInteractionObject) WaitForFinalResults(timeout time.Duration) error {
 
     if transcriptionInteraction.isContinuousTranscription {
         select {
         case <-transcriptionInteraction.resultsReadyChannel:
             // resultsReadyChannel is closed when final results arrive
+            return nil
+        case <-time.After(timeout):
+            return TimeoutError
         }
     } else {
         select {
         case <-transcriptionInteraction.resultsReadyChannel:
             // resultsReadyChannel is closed when final results arrive
+            return nil
         case <-transcriptionInteraction.vadBargeInTimeoutChannels[0]:
             // vadBargeInTimeoutChannel is closed when a barge-in timeout arrives
+            return nil
+        case <-time.After(timeout):
+            return TimeoutError
         }
     }
 }
@@ -133,7 +255,10 @@ func (transcriptionInteraction *TranscriptionInteractionObject) WaitForFinalResu
 // If the return indicates that a partial result has arrived, GetPartialResult
 // can be used to fetch the result. Otherwise, GetFinalResults can be used to
 // fetch the final result or error.
-func (transcriptionInteraction *TranscriptionInteractionObject) WaitForNextResult() (resultIdx int, final bool, err error) {
+//
+// If a result-like response does not arrive before the timeout, an error will
+// be returned.
+func (transcriptionInteraction *TranscriptionInteractionObject) WaitForNextResult(timeout time.Duration) (resultIdx int, final bool, err error) {
 
     // before doing anything else, get the index of the next partial result. this
     // will allow us to read from the correct channel, if we end up waiting.
@@ -157,8 +282,6 @@ func (transcriptionInteraction *TranscriptionInteractionObject) WaitForNextResul
     // The final result has not arrived. Wait for the next partial result or final result.
     if transcriptionInteraction.isContinuousTranscription {
 
-        vadInteractionIdx := transcriptionInteraction.vadInteractionCounter
-
         select {
         case <-transcriptionInteraction.resultsReadyChannel:
             // We received a final result. Return (0, true) to indicate that the
@@ -168,10 +291,9 @@ func (transcriptionInteraction *TranscriptionInteractionObject) WaitForNextResul
             // We received a new partial result. Return the index, and false to
             // indicate a partial result.
             return nextPartialResultIdx, false, nil
-        case <-transcriptionInteraction.vadBargeInTimeoutChannels[vadInteractionIdx]:
-            // We received a barge-in timeout. Return an error to indicate
-            // there are no results for this interaction.
-            return 0, false, errors.New("barge in timeout")
+        case <-time.After(timeout):
+            // We didn't get any result-like responses. Return an error.
+            return 0, false, TimeoutError
         }
     } else {
         select {
@@ -187,6 +309,9 @@ func (transcriptionInteraction *TranscriptionInteractionObject) WaitForNextResul
             // We received a barge-in timeout. Return (0, true) to indicate that the
             // interaction is complete.
             return 0, true, nil
+        case <-time.After(timeout):
+            // We didn't get any result-like responses. Return an error.
+            return 0, false, TimeoutError
         }
     }
 }
@@ -209,10 +334,16 @@ func (transcriptionInteraction *TranscriptionInteractionObject) GetPartialResult
 // waiting if necessary. If the interaction succeeds, results will be returned.
 // In other cases, like when a barge-in timeout is received, an error
 // describing the issue will be returned.
-func (transcriptionInteraction *TranscriptionInteractionObject) GetFinalResults() (*api.TranscriptionInteractionResult, error) {
+//
+// If the interaction does not end before the specified timeout, an error will
+// be returned.
+func (transcriptionInteraction *TranscriptionInteractionObject) GetFinalResults(timeout time.Duration) (*api.TranscriptionInteractionResult, error) {
 
     // Wait for the end of the interaction.
-    transcriptionInteraction.WaitForFinalResults()
+    err := transcriptionInteraction.WaitForFinalResults(timeout)
+    if err != nil {
+        return nil, err
+    }
 
     if transcriptionInteraction.finalResultsReceived {
         // If we received final results, return them.

@@ -27,7 +27,7 @@ func main() {
 
     // Create client and open connection.
     client, err := lumenvoxSdk.CreateClient("localhost:8280", false, "",
-        false, defaultDeploymentId)
+        false, defaultDeploymentId, "")
 
     // Catch error from client creation.
     if err != nil {
@@ -86,8 +86,7 @@ func main() {
     ///////////////////////
 
     // Wait for the final results to arrive.
-    ttsInteraction.WaitForFinalResults()
-    finalResults, err := ttsInteraction.GetFinalResults()
+    finalResults, err := ttsInteraction.GetFinalResults(10 * time.Second)
     if err != nil {
         fmt.Printf("error while waiting for final results: %v\n", err)
         sessionObject.CloseSession()

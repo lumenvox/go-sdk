@@ -23,7 +23,7 @@ func main() {
 
     // Create client and open connection.
     client, err := lumenvoxSdk.CreateClient("localhost:8280", false, "",
-        false, defaultDeploymentId)
+        false, defaultDeploymentId, "")
 
     // Catch error from client creation.
     if err != nil {
@@ -110,9 +110,20 @@ func main() {
     // Get results
     ///////////////////////
 
-    transcriptionInteraction.WaitForBeginProcessing(0)
+    err = transcriptionInteraction.WaitForBeginProcessing(0, 10*time.Second)
+    if err != nil {
+        log.Printf("error while waiting for begin processing: %v", err.Error())
+        sessionObject.CloseSession()
+        return
+    }
     fmt.Println("got begin processing")
-    transcriptionInteraction.WaitForBargeIn(0)
+
+    err = transcriptionInteraction.WaitForBargeIn(0, 10*time.Second)
+    if err != nil {
+        log.Printf("error while waiting for barge in: %v", err.Error())
+        sessionObject.CloseSession()
+        return
+    }
     fmt.Println("got barge in")
 
     // For an example of a manual finalize request, we can wait 1 second after barge-in
@@ -128,8 +139,7 @@ func main() {
     }
 
     // Now that we have called finalize, wait for the final results to become available.
-    transcriptionInteraction.WaitForFinalResults()
-    finalResults, err := transcriptionInteraction.GetFinalResults()
+    finalResults, err := transcriptionInteraction.GetFinalResults(10 * time.Second)
     if err != nil {
         fmt.Printf("error while waiting for final results: %v\n", err)
     } else {
@@ -142,6 +152,4 @@ func main() {
 
     sessionObject.CloseSession()
 
-    // Delay a little to get any residual messages
-    time.Sleep(500 * time.Millisecond)
 }

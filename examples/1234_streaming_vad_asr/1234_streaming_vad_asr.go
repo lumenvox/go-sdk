@@ -23,7 +23,7 @@ func main() {
 
     // Create client and open connection.
     client, err := lumenvoxSdk.CreateClient("localhost:8280", false, "",
-        false, defaultDeploymentId)
+        false, defaultDeploymentId, "")
 
     // Catch error from client creation.
     if err != nil {
@@ -125,18 +125,35 @@ func main() {
     // Get results
     ///////////////////////
 
-    asrInteraction.WaitForBeginProcessing()
+    // Wait for the interaction to start processing
+    err = asrInteraction.WaitForBeginProcessing(10 * time.Second)
+    if err != nil {
+        fmt.Printf("error while waiting for begin processing: %v\n", err)
+        sessionObject.CloseSession()
+        return
+    }
     fmt.Println("got begin processing")
-    asrInteraction.WaitForBargeIn()
+
+    // Wait for the start of speech
+    err = asrInteraction.WaitForBargeIn(10 * time.Second)
+    if err != nil {
+        fmt.Printf("error while waiting for barge in: %v\n", err)
+        sessionObject.CloseSession()
+        return
+    }
     fmt.Println("got barge in")
 
     // Wait for the interaction to finish normally, without calling finalize.
-    asrInteraction.WaitForEndOfSpeech()
+    err = asrInteraction.WaitForEndOfSpeech(10 * time.Second)
+    if err != nil {
+        fmt.Printf("error while waiting for end of speech: %v\n", err)
+        sessionObject.CloseSession()
+        return
+    }
     fmt.Println("got end of speech")
 
     // Now that we have waited for the end of speech, wait for the final results to become available.
-    asrInteraction.WaitForFinalResults()
-    finalResults, err := asrInteraction.GetFinalResults()
+    finalResults, err := asrInteraction.GetFinalResults(10 * time.Second)
     if err != nil {
         fmt.Printf("error while waiting for final results: %v\n", err)
     } else {
@@ -148,7 +165,4 @@ func main() {
     ///////////////////////
 
     sessionObject.CloseSession()
-
-    // Delay a little to get any residual messages
-    time.Sleep(500 * time.Millisecond)
 }

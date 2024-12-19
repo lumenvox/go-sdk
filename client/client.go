@@ -22,8 +22,10 @@ type SdkClient struct {
 // Depending on your environment, you may need to provide a root certificate
 // using certificatePath. allowInsecureTls may be used to avoid this
 // requirement, but this setting should not be used in production.
-func CreateSdkClient(apiEndpoint string, tlsEnabled bool, certificatePath string, allowInsecureTls bool,
-    deploymentId string) (client *SdkClient, err error) {
+//
+// If you have an OAuth token, you should provide it here.
+func CreateSdkClient(apiEndpoint string, tlsEnabled bool, certificatePath string,
+    allowInsecureTls bool, deploymentId string, authToken string) (client *SdkClient, err error) {
 
     client = &SdkClient{
         Connection:   nil,
@@ -35,6 +37,7 @@ func CreateSdkClient(apiEndpoint string, tlsEnabled bool, certificatePath string
         ApiEndpoint:      apiEndpoint,
         CertificatePath:  certificatePath,
         AllowInsecureTls: allowInsecureTls,
+        AuthToken:        authToken,
     }
 
     client.Connection, err = connection.CreateNewConnection(connectionConfig)

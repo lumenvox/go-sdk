@@ -27,7 +27,7 @@ func main() {
 
     // Create client and open connection.
     client, err := lumenvoxSdk.CreateClient("localhost:8280", false, "",
-        false, defaultDeploymentId)
+        false, defaultDeploymentId, "")
 
     // Catch error from client creation.
     if err != nil {
@@ -69,7 +69,7 @@ func main() {
     }
 
     // Create interaction.
-    ttsInteraction, err := sessionObject.NewSsmlTts(language, ssmlUrl, sslVerifyPeer, synthesizedAudioFormat, nil, nil)
+    ttsInteraction, err := sessionObject.NewUrlTts(language, ssmlUrl, sslVerifyPeer, synthesizedAudioFormat, nil, nil)
     if err != nil {
         log.Printf("failed to create interaction: %v", err)
         sessionObject.CloseSession()
@@ -85,8 +85,7 @@ func main() {
     ///////////////////////
 
     // Wait for the final results to arrive.
-    ttsInteraction.WaitForFinalResults()
-    finalResults, err := ttsInteraction.GetFinalResults()
+    finalResults, err := ttsInteraction.GetFinalResults(10 * time.Second)
     if err != nil {
         fmt.Printf("error while waiting for final results: %v\n", err)
         sessionObject.CloseSession()

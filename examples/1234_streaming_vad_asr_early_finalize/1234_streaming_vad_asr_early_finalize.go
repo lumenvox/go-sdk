@@ -23,7 +23,7 @@ func main() {
 
     // Create client and open connection.
     client, err := lumenvoxSdk.CreateClient("localhost:8280", false, "",
-        false, defaultDeploymentId)
+        false, defaultDeploymentId, "")
 
     // Catch error from client creation.
     if err != nil {
@@ -125,9 +125,20 @@ func main() {
     // Get results
     ///////////////////////
 
-    asrInteraction.WaitForBeginProcessing()
+    err = asrInteraction.WaitForBeginProcessing(10 * time.Second)
+    if err != nil {
+        fmt.Printf("error while waiting for begin processing: %v\n", err)
+        sessionObject.CloseSession()
+        return
+    }
     fmt.Println("got begin processing")
-    asrInteraction.WaitForBargeIn()
+
+    err = asrInteraction.WaitForBargeIn(10 * time.Second)
+    if err != nil {
+        fmt.Printf("error while waiting for barge in: %v\n", err)
+        sessionObject.CloseSession()
+        return
+    }
     fmt.Println("got barge in")
 
     // For an example of a manual finalize request, we can wait 1 second after barge-in
@@ -143,8 +154,7 @@ func main() {
     }
 
     // Now that we have called finalize, wait for the final results to become available.
-    asrInteraction.WaitForFinalResults()
-    finalResults, err := asrInteraction.GetFinalResults()
+    finalResults, err := asrInteraction.GetFinalResults(10 * time.Second)
     if err != nil {
         fmt.Printf("error while waiting for final results: %v\n", err)
     } else {
@@ -157,6 +167,4 @@ func main() {
 
     sessionObject.CloseSession()
 
-    // Delay a little to get any residual messages
-    time.Sleep(500 * time.Millisecond)
 }

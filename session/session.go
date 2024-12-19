@@ -7,12 +7,23 @@ import (
     "fmt"
     "google.golang.org/grpc"
     "log"
+    "os"
     "sync"
     "time"
 )
 
-// EnableVerboseLogging generates debugging logs for developers.
-var EnableVerboseLogging = false
+// TimeoutError represents a specific SDK error indicating that a timeout has occurred during an operation.
+// This concerns timeouts while waiting for API responses, not recognition-based timeouts (like barge-in
+// and barge-out timeouts).
+const TimeoutError = SdkError("timeout waiting for API response")
+
+type SdkError string
+
+func (e SdkError) Error() string { return string(e) }
+
+var EnableVerboseLogging = func() bool {
+    return os.Getenv("LUMENVOX_GO_SDK__ENABLE_VERBOSE_LOGGING") == "true"
+}()
 
 // SessionObject contains all state information for a single session.
 type SessionObject struct {
@@ -40,9 +51,6 @@ type SessionObject struct {
     audioForStream []byte
 
     // channels
-    VadMessagesChannel          chan *api.VadEvent
-    PartialResultsChannel       chan *api.PartialResult
-    FinalResultsChannel         chan *api.FinalResult
     audioPullChannel            chan *api.AudioPullResponse
     sessionLoadChannel          chan *api.SessionLoadGrammarResponse
     SessionCloseChannel         chan struct{}
@@ -53,7 +61,7 @@ type SessionObject struct {
     createdTtsChannel           chan *api.InteractionCreateTtsResponse
     grammarErrorChannel         chan *api.SessionEvent
     errorChan                   chan error
-    stopStreamingAudio          chan bool
+    stopStreamingAudio          chan struct{}
 
     // maps to store all active interactions
     asrInteractionsMap           map[string]*AsrInteractionObject
@@ -65,14 +73,14 @@ type SessionObject struct {
     sessionSettingsChannel chan *api.SessionSettings
 }
 
-// SessionMapObject is used to keep track of all open sessions
-type SessionMapObject struct {
+// sessionMapObject is used to keep track of all open sessions
+type sessionMapObject struct {
     sync.RWMutex
     OpenSessions map[string]*SessionObject
 }
 
 // activeSessionsMap holds information about all current sessions
-var activeSessionsMap = SessionMapObject{
+var activeSessionsMap = sessionMapObject{
     OpenSessions: make(map[string]*SessionObject),
 }
 
@@ -95,9 +103,6 @@ func newSessionObject(
         audioConfig:   audioConfig,
 
         // channels
-        VadMessagesChannel:          make(chan *api.VadEvent, 100),
-        PartialResultsChannel:       make(chan *api.PartialResult, 100),
-        FinalResultsChannel:         make(chan *api.FinalResult, 100),
         audioPullChannel:            make(chan *api.AudioPullResponse, 100),
         sessionLoadChannel:          make(chan *api.SessionLoadGrammarResponse, 100),
         SessionCloseChannel:         make(chan struct{}, 1),
@@ -108,7 +113,7 @@ func newSessionObject(
         createdTtsChannel:           make(chan *api.InteractionCreateTtsResponse, 100),
         grammarErrorChannel:         make(chan *api.SessionEvent, 100),
         errorChan:                   make(chan error, 10),
-        stopStreamingAudio:          make(chan bool, 1),
+        stopStreamingAudio:          make(chan struct{}, 1),
         sessionSettingsChannel:      make(chan *api.SessionSettings, 100),
 
         // interaction maps
@@ -119,7 +124,7 @@ func newSessionObject(
     }
 }
 
-// CreateNewSession creates a new session object that can be used to create and run interactions.
+// CreateNewSession creates a new session object which can be used to create and run interactions.
 func CreateNewSession(
     clientConn *grpc.ClientConn,
     streamTimeout time.Duration,
@@ -216,6 +221,18 @@ func (session *SessionObject) CloseSession() {
 
     sessionId := session.SessionId
 
+    // this logic is here to prevent a crash from closing a session twice.
+    select {
+    case _, ok := <-session.stopStreamingAudio:
+        if ok {
+            // the channel is still open, close it.
+            close(session.stopStreamingAudio)
+        }
+    default:
+        // the channel is still open, close it.
+        close(session.stopStreamingAudio)
+    }
+
     session.streamSendLock.Lock()
     err := session.SessionStream.Send(getSessionCloseRequest(""))
     session.streamSendLock.Unlock()
@@ -224,7 +241,7 @@ func (session *SessionObject) CloseSession() {
     }
 
     // Pause to allow the close session message to be sent.
-    time.Sleep(500 * time.Millisecond)
+    time.Sleep(100 * time.Millisecond)
 
     session.SessionCancel()
 

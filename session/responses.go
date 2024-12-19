@@ -12,21 +12,27 @@ import (
 // sessionResponseListener handles all responses from the specified session.
 func sessionResponseListener(session *SessionObject, sessionIdChan chan string) {
 
-    defer func() {
-        if EnableVerboseLogging {
+    if EnableVerboseLogging {
+        defer func() {
             log.Printf("exiting responseHandler for session: %s", session.SessionId)
-        }
-    }()
+        }()
+    }
+
+    waitingOnSessionId := true
 
     for {
         response, err := session.SessionStream.Recv()
         if err == io.EOF {
-            sessionIdChan <- ""
+            if waitingOnSessionId {
+                sessionIdChan <- ""
+            }
             break
         }
         if err != nil {
             fmt.Printf("%s: sessionStream.Recv() failed: %v", time.Now().String(), err)
-            sessionIdChan <- ""
+            if waitingOnSessionId {
+                sessionIdChan <- ""
+            }
             break
         }
 
@@ -39,10 +45,19 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
                 if EnableVerboseLogging {
                     log.Printf("Recv SessionId: %s", response.SessionId.Value)
                 }
-                sessionIdChan <- response.SessionId.Value
+                if waitingOnSessionId {
+                    sessionIdChan <- response.SessionId.Value
+                    waitingOnSessionId = false
+                } else {
+                    // if we weren't waiting on a session ID but got one anyway,
+                    // log a warning.
+                    log.Printf("warning: received extra session ID")
+                }
             } else {
                 log.Printf("Recv empty SessionId")
-                sessionIdChan <- ""
+                if waitingOnSessionId {
+                    sessionIdChan <- ""
+                }
                 break
             }
 
@@ -54,16 +69,14 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 
             handleVadEvent(session, response)
 
-            session.VadMessagesChannel <- response.GetVadEvent()
-
         } else if response.GetPartialResult() != nil {
+
             if EnableVerboseLogging {
                 log.Printf("Recv PartialResult")
             }
 
             handlePartialResult(session, response)
 
-            session.PartialResultsChannel <- response.GetPartialResult()
         } else if response.GetFinalResult() != nil {
 
             if EnableVerboseLogging {
@@ -72,57 +85,82 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 
             handleFinalResult(session, response)
 
-            session.FinalResultsChannel <- response.GetFinalResult()
-
         } else if response.GetInteractionCreateAsr() != nil {
+
             if EnableVerboseLogging {
                 log.Printf("Recv InteractionCreateAsrResponse: %+v", response.GetInteractionCreateAsr())
             }
+
             session.createdAsrChannel <- response.GetInteractionCreateAsr()
+
         } else if response.GetInteractionCreateTranscription() != nil {
+
             if EnableVerboseLogging {
                 log.Printf("Recv GetInteractionCreateTranscription: %+v", response.GetInteractionCreateTranscription())
             }
+
             session.createdTranscriptionChannel <- response.GetInteractionCreateTranscription()
+
         } else if response.GetInteractionCreateNormalizeText() != nil {
+
             if EnableVerboseLogging {
                 log.Printf("Recv GetInteractionCreateNormalizeText: %+v", response.GetInteractionCreateNormalizeText())
             }
+
             session.createdNormalizeChannel <- response.GetInteractionCreateNormalizeText()
+
         } else if response.GetInteractionCreateGrammarParse() != nil {
+
             if EnableVerboseLogging {
                 log.Printf("Recv InteractionCreateGrammarParseResponse: %+v", response)
             }
+
             session.createdGrammarParseChannel <- response.GetInteractionCreateGrammarParse()
+
         } else if response.GetInteractionCreateTts() != nil {
+
             if EnableVerboseLogging {
                 log.Printf("Recv GetInteractionCreateTts: %+v", response)
             }
+
             session.createdTtsChannel <- response.GetInteractionCreateTts()
+
         } else if response.GetAudioPull() != nil {
+
             if EnableVerboseLogging {
                 log.Printf("Recv GetAudioPull numBytes: %d", len(response.GetAudioPull().GetAudioData()))
             }
+
             session.audioPullChannel <- response.GetAudioPull()
+
         } else if response.GetSessionGrammar() != nil {
+
             if EnableVerboseLogging {
                 log.Printf("Recv SessionLoadGrammarResponse: %+v", response)
             }
+
             session.sessionLoadChannel <- response.GetSessionGrammar()
+
         } else if response.GetSessionGetSettings() != nil {
+
             if EnableVerboseLogging {
                 log.Printf("Recv SessionGetSettings: %+v", response)
             }
+
             session.sessionSettingsChannel <- response.GetSessionGetSettings()
+
         } else {
 
             if response.GetSessionClose() != nil {
+
                 if EnableVerboseLogging {
                     log.Printf("Recv SessionCloseResponse: %+v", response)
                 }
                 session.SessionCloseChannel <- struct{}{}
                 break
+
             } else if response.GetSessionEvent() != nil {
+
                 if EnableVerboseLogging {
                     log.Printf("Recv session event: %+v", response.GetSessionEvent())
                 }
@@ -132,6 +170,7 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
                         session.grammarErrorChannel <- response.GetSessionEvent()
                     }
                 }
+
             } else {
                 log.Printf("Recv unexpected response type: %+v", response)
             }
@@ -145,6 +184,7 @@ func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
     interactionId := response.GetVadEvent().GetInteractionId()
 
     if interactionObject, ok := session.asrInteractionsMap[interactionId]; ok {
+
         // This is an ASR interaction.
         switch response.GetVadEvent().VadEventType {
         case api.VadEvent_VAD_EVENT_TYPE_BEGIN_PROCESSING:
@@ -169,9 +209,10 @@ func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
             interactionObject.vadBargeInTimeoutReceived = true
             close(interactionObject.vadBargeInTimeoutChannel)
         }
-    } else if interactionObject, ok := session.transcriptionInteractionsMap[interactionId]; ok {
-        // This is a transcription interaction.
 
+    } else if interactionObject, ok := session.transcriptionInteractionsMap[interactionId]; ok {
+
+        // This is a transcription interaction.
         interactionObject.vadEventsLock.Lock()
         // Get the index of the current VAD interaction. This should only ever be greater
         // than 0 when we're dealing with a continuous transcription.
@@ -364,8 +405,10 @@ func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
         interactionObject.vadEventsLock.Unlock()
 
     } else {
+
         // We did not find the interaction.
         log.Printf("Recv VadEvent: interaction not found: %s", interactionId)
+
     }
 }
 
@@ -375,25 +418,33 @@ func handleFinalResult(session *SessionObject, response *api.SessionResponse) {
     interactionId := response.GetFinalResult().GetInteractionId()
 
     if interactionObject, ok := session.asrInteractionsMap[interactionId]; ok {
+
         // This is an ASR interaction.
         interactionObject.finalResults = response.GetFinalResult().GetFinalResult().GetAsrInteractionResult()
         interactionObject.finalResultsReceived = true
         close(interactionObject.resultsReadyChannel)
+
     } else if interactionObject, ok := session.transcriptionInteractionsMap[interactionId]; ok {
+
         // This is a transcription interaction.
         interactionObject.finalResults = response.GetFinalResult().GetFinalResult().GetTranscriptionInteractionResult()
         interactionObject.finalResultsReceived = true
         close(interactionObject.resultsReadyChannel)
+
     } else if interactionObject, ok := session.normalizationInteractionsMap[interactionId]; ok {
+
         // This is a normalization interaction.
         interactionObject.finalResults = response.GetFinalResult().GetFinalResult().GetNormalizeTextResult()
         interactionObject.finalResultsReceived = true
         close(interactionObject.resultsReadyChannel)
+
     } else if interactionObject, ok := session.ttsInteractionsMap[interactionId]; ok {
+
         // This is a TTS interaction.
         interactionObject.finalResults = response.GetFinalResult().GetFinalResult().GetTtsInteractionResult()
         interactionObject.finalResultsReceived = true
         close(interactionObject.resultsReadyChannel)
+
     } else {
         // We did not find the interaction.
         log.Printf("Recv FinalResult: interaction not found: %s", interactionId)
@@ -406,6 +457,7 @@ func handlePartialResult(session *SessionObject, response *api.SessionResponse) 
     interactionId := response.GetPartialResult().GetInteractionId()
 
     if interactionObject, ok := session.asrInteractionsMap[interactionId]; ok {
+
         // This is an ASR interaction.
 
         // Synchronize tracking information.
@@ -425,6 +477,7 @@ func handlePartialResult(session *SessionObject, response *api.SessionResponse) 
         interactionObject.partialResultLock.Unlock()
 
     } else if interactionObject, ok := session.transcriptionInteractionsMap[interactionId]; ok {
+
         // This is a transcription interaction.
 
         // Synchronize tracking information.
@@ -445,6 +498,6 @@ func handlePartialResult(session *SessionObject, response *api.SessionResponse) 
 
     } else {
         // We did not find the interaction.
-        log.Printf("Recv FinalResult: interaction not found: %s", interactionId)
+        log.Printf("Recv PartialResult: interaction not found: %s", interactionId)
     }
 }

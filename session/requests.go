@@ -8,14 +8,14 @@ import (
 // getSessionCreateRequest returns a create session request. The specified
 // correlationId will be used if nonempty. Otherwise, one will be
 // auto-generated.
-func getSessionCreateRequest(correlationId string, deploymentId string, operatorId string) *api.SessionRequest {
+func getSessionCreateRequest(correlationId string, deploymentId string, operatorId string) (sessionRequest *api.SessionRequest) {
 
     if correlationId == "" {
         // Create a new correlationId if one is not specified
         correlationId = uuid.NewString()
     }
 
-    res := &api.SessionRequest{
+    sessionRequest = &api.SessionRequest{
         CorrelationId: &api.OptionalString{Value: correlationId},
         RequestType: &api.SessionRequest_SessionRequest{
             SessionRequest: &api.SessionRequestMessage{
@@ -29,20 +29,20 @@ func getSessionCreateRequest(correlationId string, deploymentId string, operator
         },
     }
 
-    return res
+    return sessionRequest
 }
 
 // getAudioFormatRequest returns an audio format request. The specified
 // correlationId will be used if nonempty. Otherwise, one will be
 // auto-generated.
-func getAudioFormatRequest(correlationId string, audioConfig AudioConfig) (newRequest *api.SessionRequest) {
+func getAudioFormatRequest(correlationId string, audioConfig AudioConfig) (formatRequest *api.SessionRequest) {
 
     if correlationId == "" {
         // Create a new correlationId if one is not specified
         correlationId = uuid.NewString()
     }
 
-    newRequest = &api.SessionRequest{
+    formatRequest = &api.SessionRequest{
         CorrelationId: &api.OptionalString{Value: correlationId},
         RequestType: &api.SessionRequest_SessionRequest{
             SessionRequest: &api.SessionRequestMessage{
@@ -58,7 +58,7 @@ func getAudioFormatRequest(correlationId string, audioConfig AudioConfig) (newRe
         },
     }
 
-    return newRequest
+    return formatRequest
 }
 
 // getAsrRequest returns an ASR interaction request. The specified
@@ -121,8 +121,7 @@ func getTranscriptionRequest(
     }
 
     interactionCreateTranscriptionRequest := &api.InteractionCreateTranscriptionRequest{
-        Language: language,
-        //EmbeddedGrammars:      inlineGrammarsRequest(),
+        Language:              language,
         VadSettings:           vadSettings,
         AudioConsumeSettings:  audioConsumeSettings,
         NormalizationSettings: normalizationSettings,
@@ -164,14 +163,14 @@ func getNormalizationRequest(
     textToNormalize string,
     normalizationSettings *api.NormalizationSettings,
     generalInteractionSettings *api.GeneralInteractionSettings,
-) (transcriptionRequest *api.SessionRequest) {
+) (normalizationRequest *api.SessionRequest) {
 
     if correlationId == "" {
         // Create a new correlationId if one is not specified
         correlationId = uuid.NewString()
     }
 
-    transcriptionRequest = &api.SessionRequest{
+    normalizationRequest = &api.SessionRequest{
         CorrelationId: &api.OptionalString{Value: correlationId},
         RequestType: &api.SessionRequest_InteractionRequest{
             InteractionRequest: &api.InteractionRequestMessage{
@@ -187,7 +186,7 @@ func getNormalizationRequest(
         },
     }
 
-    return transcriptionRequest
+    return normalizationRequest
 }
 
 // getInlineTtsRequest returns an inline TTS interaction request. The specified
@@ -234,9 +233,9 @@ func getInlineTtsRequest(
     return ttsRequest
 }
 
-// getSsmlTtsRequest returns an SSML TTS interaction request. The specified
+// getUrlTtsRequest returns a URL-based TTS interaction request. The specified
 // correlationId will be used if nonempty. Otherwise, one will be auto-generated.
-func getSsmlTtsRequest(
+func getUrlTtsRequest(
     correlationId string,
     language string,
     ssmlUrl string,
@@ -281,14 +280,14 @@ func getSsmlTtsRequest(
 // getAudioPushRequest returns an audio push request. The specified
 // correlationId will be used if nonempty. Otherwise, one will be
 // auto-generated.
-func getAudioPushRequest(correlationId string, audioChunk []byte) (newAudioPushMessage *api.SessionRequest) {
+func getAudioPushRequest(correlationId string, audioChunk []byte) (audioPushRequest *api.SessionRequest) {
 
     if correlationId == "" {
         // Create a new correlationId if one is not specified
         correlationId = uuid.NewString()
     }
 
-    newAudioPushMessage = &api.SessionRequest{
+    audioPushRequest = &api.SessionRequest{
         CorrelationId: &api.OptionalString{Value: correlationId},
         RequestType: &api.SessionRequest_AudioRequest{
             AudioRequest: &api.AudioRequestMessage{
@@ -301,20 +300,20 @@ func getAudioPushRequest(correlationId string, audioChunk []byte) (newAudioPushM
         },
     }
 
-    return newAudioPushMessage
+    return audioPushRequest
 }
 
 // getInteractionFinalizeRequest returns an interaction finalize request.
 // The specified correlationId will be used if nonempty. Otherwise, one
 // will be auto-generated.
-func getInteractionFinalizeRequest(correlationId string, interactionId string) (newRequest *api.SessionRequest) {
+func getInteractionFinalizeRequest(correlationId string, interactionId string) (finalizeRequest *api.SessionRequest) {
 
     if correlationId == "" {
         // Create a new correlationId if one is not specified
         correlationId = uuid.NewString()
     }
 
-    newRequest = &api.SessionRequest{
+    finalizeRequest = &api.SessionRequest{
         CorrelationId: &api.OptionalString{Value: correlationId},
         RequestType: &api.SessionRequest_InteractionRequest{
             InteractionRequest: &api.InteractionRequestMessage{
@@ -327,21 +326,21 @@ func getInteractionFinalizeRequest(correlationId string, interactionId string) (
         },
     }
 
-    return newRequest
+    return finalizeRequest
 }
 
 // getAudioPullRequest returns an audio pull request.
 // The specified correlationId will be used if nonempty. Otherwise, one
 // will be auto-generated.
 func getAudioPullRequest(correlationId string, interactionId string, audioChannel int32, audioStartMs int32,
-    audioLengthMs int32) (newRequest *api.SessionRequest) {
+    audioLengthMs int32) (audioPullRequest *api.SessionRequest) {
 
     if correlationId == "" {
         // Create a new correlationId if one is not specified
         correlationId = uuid.NewString()
     }
 
-    audioPullRequest := &api.AudioPullRequest{
+    audioPullRequestBody := &api.AudioPullRequest{
         AudioId:      interactionId,
         AudioChannel: nil,
         AudioStart:   nil,
@@ -349,40 +348,40 @@ func getAudioPullRequest(correlationId string, interactionId string, audioChanne
     }
 
     if audioChannel != 0 {
-        audioPullRequest.AudioChannel = &api.OptionalInt32{Value: audioChannel}
+        audioPullRequestBody.AudioChannel = &api.OptionalInt32{Value: audioChannel}
     }
     if audioStartMs != 0 {
-        audioPullRequest.AudioStart = &api.OptionalInt32{Value: audioStartMs}
+        audioPullRequestBody.AudioStart = &api.OptionalInt32{Value: audioStartMs}
     }
     if audioLengthMs != 0 {
-        audioPullRequest.AudioLength = &api.OptionalInt32{Value: audioLengthMs}
+        audioPullRequestBody.AudioLength = &api.OptionalInt32{Value: audioLengthMs}
     }
 
-    newRequest = &api.SessionRequest{
+    audioPullRequest = &api.SessionRequest{
         CorrelationId: &api.OptionalString{Value: correlationId},
         RequestType: &api.SessionRequest_AudioRequest{
             AudioRequest: &api.AudioRequestMessage{
                 AudioRequest: &api.AudioRequestMessage_AudioPull{
-                    AudioPull: audioPullRequest,
+                    AudioPull: audioPullRequestBody,
                 },
             },
         },
     }
 
-    return newRequest
+    return audioPullRequest
 }
 
 // getSessionCloseRequest returns a session close request.
 // The specified correlationId will be used if nonempty. Otherwise, one
 // will be auto-generated.
-func getSessionCloseRequest(correlationId string) (newRequest *api.SessionRequest) {
+func getSessionCloseRequest(correlationId string) (sessionCloseRequest *api.SessionRequest) {
 
     if correlationId == "" {
         // Create a new correlationId if one is not specified
         correlationId = uuid.NewString()
     }
 
-    newRequest = &api.SessionRequest{
+    sessionCloseRequest = &api.SessionRequest{
         CorrelationId: &api.OptionalString{Value: correlationId},
         RequestType: &api.SessionRequest_SessionRequest{
             SessionRequest: &api.SessionRequestMessage{
@@ -393,5 +392,5 @@ func getSessionCloseRequest(correlationId string) (newRequest *api.SessionReques
         },
     }
 
-    return newRequest
+    return sessionCloseRequest
 }

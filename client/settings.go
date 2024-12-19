@@ -14,7 +14,7 @@ func (client *SdkClient) GetAudioConsumeSettings(audioChannel int32,
     audioConsumeMaxMs *api.OptionalInt32) (audioConsumeSettings *api.AudioConsumeSettings, err error) {
 
     if audioChannel < 0 {
-        return nil, errors.New("audioChannel value must be valid")
+        return nil, errors.New("audioChannel value must be non negative")
     }
 
     audioConsumeSettings = &api.AudioConsumeSettings{
@@ -31,7 +31,8 @@ func (client *SdkClient) GetAudioConsumeSettings(audioChannel int32,
 // GetNormalizationSettings returns an api.NormalizationSettings object,
 // populated with the specified parameters.
 func (client *SdkClient) GetNormalizationSettings(enableInverseText bool, enablePunctuationCapitalization bool,
-    enableRedaction bool, requestTimeoutMs *api.OptionalInt32) (normalizationSettings *api.NormalizationSettings) {
+    enableRedaction bool, enableSrtGeneration bool, enableVttGeneration bool,
+    requestTimeoutMs *api.OptionalInt32) (normalizationSettings *api.NormalizationSettings) {
 
     normalizationSettings = &api.NormalizationSettings{
         EnableInverseText:               nil,
@@ -50,6 +51,12 @@ func (client *SdkClient) GetNormalizationSettings(enableInverseText bool, enable
     }
     if requestTimeoutMs != nil {
         normalizationSettings.RequestTimeoutMs = requestTimeoutMs
+    }
+    if enableSrtGeneration {
+        normalizationSettings.EnableSrtGeneration = &api.OptionalBool{Value: true}
+    }
+    if enableVttGeneration {
+        normalizationSettings.EnableVttGeneration = &api.OptionalBool{Value: true}
     }
 
     return normalizationSettings
