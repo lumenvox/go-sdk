@@ -1,17 +1,17 @@
 package client
 
 import (
-    "github.com/lumenvox/go-sdk/connection"
-    "github.com/lumenvox/go-sdk/session"
-    "github.com/google/uuid"
-    "time"
+	"github.com/lumenvox/go-sdk/connection"
+	"github.com/lumenvox/go-sdk/session"
+	"github.com/google/uuid"
+	"time"
 )
 
 // SdkClient represents a client object with knowledge of API connectivity. It
 // is primarily used to create session objects and settings objects.
 type SdkClient struct {
-    Connection   *connection.GrpcConnection
-    DeploymentId string
+	Connection   *connection.GrpcConnection
+	DeploymentId string
 }
 
 // CreateSdkClient attempts to create a client object with the provided
@@ -25,24 +25,24 @@ type SdkClient struct {
 //
 // If you have an OAuth token, you should provide it here.
 func CreateSdkClient(apiEndpoint string, tlsEnabled bool, certificatePath string,
-    allowInsecureTls bool, deploymentId string, authToken string) (client *SdkClient, err error) {
+	allowInsecureTls bool, deploymentId string, authToken string) (client *SdkClient, err error) {
 
-    client = &SdkClient{
-        Connection:   nil,
-        DeploymentId: deploymentId,
-    }
+	client = &SdkClient{
+		Connection:   nil,
+		DeploymentId: deploymentId,
+	}
 
-    connectionConfig := connection.GrpcConnectionConfig{
-        TlsEnabled:       tlsEnabled,
-        ApiEndpoint:      apiEndpoint,
-        CertificatePath:  certificatePath,
-        AllowInsecureTls: allowInsecureTls,
-        AuthToken:        authToken,
-    }
+	connectionConfig := connection.GrpcConnectionConfig{
+		TlsEnabled:       tlsEnabled,
+		ApiEndpoint:      apiEndpoint,
+		CertificatePath:  certificatePath,
+		AllowInsecureTls: allowInsecureTls,
+		AuthToken:        authToken,
+	}
 
-    client.Connection, err = connection.CreateNewConnection(connectionConfig)
+	client.Connection, err = connection.CreateNewConnection(connectionConfig)
 
-    return client, err
+	return client, err
 }
 
 // NewSession attempts to create a new session for the specified sdkClient. On
@@ -51,12 +51,12 @@ func CreateSdkClient(apiEndpoint string, tlsEnabled bool, certificatePath string
 // streamTimeout controls the maximum duration of the stream, and audioConfig
 // controls the audio configuration: streaming/batch, audio format, sample rate, etc.
 func (client *SdkClient) NewSession(streamTimeout time.Duration, audioConfig session.AudioConfig) (
-    newSession *session.SessionObject, err error) {
+	newSession *session.SessionObject, err error) {
 
-    operatorId := uuid.NewString()
+	operatorId := uuid.NewString()
 
-    newSession, err = session.CreateNewSession(client.Connection.ApiConnection, streamTimeout, client.DeploymentId,
-        audioConfig, operatorId)
+	newSession, err = session.CreateNewSession(client.Connection.ApiConnection, streamTimeout, client.DeploymentId,
+		audioConfig, operatorId)
 
-    return newSession, err
+	return newSession, err
 }

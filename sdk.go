@@ -1,7 +1,7 @@
 package lumenvox_go_sdk
 
 import (
-    "github.com/lumenvox/go-sdk/client"
+	"github.com/lumenvox/go-sdk/client"
 )
 
 // CreateClient returns an SDK client object which can be used to access other
