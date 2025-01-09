@@ -2,6 +2,7 @@ package client
 
 import (
 	"github.com/lumenvox/go-sdk/lumenvox/api"
+
 	"errors"
 )
 
@@ -26,6 +27,36 @@ func (client *SdkClient) GetAudioConsumeSettings(audioChannel int32,
 	}
 
 	return audioConsumeSettings, nil
+}
+
+// GetNluSettings returns an api.NluSettings object
+// populated with the specified parameters.
+func (client *SdkClient) GetNluSettings(summarizationBulletPoints int32,
+	summarizationWords int32,
+	translateFromLanguage string,
+	translateToLanguage string,
+	enableLanguageDetect bool,
+	enableTopicDetect bool,
+	detectOutcomeType api.NluSettings_DetectOutcomeType,
+	enableSentimentAnalysis bool,
+	requestTimeoutMs *api.OptionalInt32) (nluSettings *api.NluSettings) {
+
+	nluSettings = &api.NluSettings{
+		SummarizationBulletPoints: summarizationBulletPoints,
+		SummarizationWords:        summarizationWords,
+		TranslateFromLanguage:     translateFromLanguage,
+		TranslateToLanguage:       translateToLanguage,
+		EnableLanguageDetect:      enableLanguageDetect,
+		EnableTopicDetect:         enableTopicDetect,
+		DetectOutcomeType:         detectOutcomeType,
+		EnableSentimentAnalysis:   enableSentimentAnalysis,
+		RequestTimeoutMs:          nil,
+	}
+	if requestTimeoutMs != nil {
+		nluSettings.RequestTimeoutMs = requestTimeoutMs
+	}
+
+	return nluSettings
 }
 
 // GetNormalizationSettings returns an api.NormalizationSettings object,

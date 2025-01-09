@@ -10,10 +10,10 @@
 package api
 
 import (
-    context "context"
-    grpc "google.golang.org/grpc"
-    codes "google.golang.org/grpc/codes"
-    status "google.golang.org/grpc/status"
+	context "context"
+	grpc "google.golang.org/grpc"
+	codes "google.golang.org/grpc/codes"
+	status "google.golang.org/grpc/status"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -22,8 +22,8 @@ import (
 const _ = grpc.SupportPackageIsVersion8
 
 const (
-    LumenVox_Session_FullMethodName = "/lumenvox.api.LumenVox/Session"
-    LumenVox_Global_FullMethodName  = "/lumenvox.api.LumenVox/Global"
+	LumenVox_Session_FullMethodName = "/lumenvox.api.LumenVox/Session"
+	LumenVox_Global_FullMethodName  = "/lumenvox.api.LumenVox/Global"
 )
 
 // LumenVoxClient is the client API for LumenVox service.
@@ -36,87 +36,87 @@ const (
 // such as Automatic Speech Recognition (ASR), Text-To-Speech (TTS),
 // Transcription, Call-Progress-Analysis (CPA), etc.
 type LumenVoxClient interface {
-    // Session
-    //
-    // Creates a new session and establishes a bidirectional stream, able to
-    // process all messages on this single bidirectional connection
-    Session(ctx context.Context, opts ...grpc.CallOption) (LumenVox_SessionClient, error)
-    // Global
-    //
-    // Manages globally defined (deployment-level) objects
-    Global(ctx context.Context, opts ...grpc.CallOption) (LumenVox_GlobalClient, error)
+	// Session
+	//
+	// Creates a new session and establishes a bidirectional stream, able to
+	// process all messages on this single bidirectional connection
+	Session(ctx context.Context, opts ...grpc.CallOption) (LumenVox_SessionClient, error)
+	// Global
+	//
+	// Manages globally defined (deployment-level) objects
+	Global(ctx context.Context, opts ...grpc.CallOption) (LumenVox_GlobalClient, error)
 }
 
 type lumenVoxClient struct {
-    cc grpc.ClientConnInterface
+	cc grpc.ClientConnInterface
 }
 
 func NewLumenVoxClient(cc grpc.ClientConnInterface) LumenVoxClient {
-    return &lumenVoxClient{cc}
+	return &lumenVoxClient{cc}
 }
 
 func (c *lumenVoxClient) Session(ctx context.Context, opts ...grpc.CallOption) (LumenVox_SessionClient, error) {
-    cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-    stream, err := c.cc.NewStream(ctx, &LumenVox_ServiceDesc.Streams[0], LumenVox_Session_FullMethodName, cOpts...)
-    if err != nil {
-        return nil, err
-    }
-    x := &lumenVoxSessionClient{ClientStream: stream}
-    return x, nil
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &LumenVox_ServiceDesc.Streams[0], LumenVox_Session_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &lumenVoxSessionClient{ClientStream: stream}
+	return x, nil
 }
 
 type LumenVox_SessionClient interface {
-    Send(*SessionRequest) error
-    Recv() (*SessionResponse, error)
-    grpc.ClientStream
+	Send(*SessionRequest) error
+	Recv() (*SessionResponse, error)
+	grpc.ClientStream
 }
 
 type lumenVoxSessionClient struct {
-    grpc.ClientStream
+	grpc.ClientStream
 }
 
 func (x *lumenVoxSessionClient) Send(m *SessionRequest) error {
-    return x.ClientStream.SendMsg(m)
+	return x.ClientStream.SendMsg(m)
 }
 
 func (x *lumenVoxSessionClient) Recv() (*SessionResponse, error) {
-    m := new(SessionResponse)
-    if err := x.ClientStream.RecvMsg(m); err != nil {
-        return nil, err
-    }
-    return m, nil
+	m := new(SessionResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 func (c *lumenVoxClient) Global(ctx context.Context, opts ...grpc.CallOption) (LumenVox_GlobalClient, error) {
-    cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-    stream, err := c.cc.NewStream(ctx, &LumenVox_ServiceDesc.Streams[1], LumenVox_Global_FullMethodName, cOpts...)
-    if err != nil {
-        return nil, err
-    }
-    x := &lumenVoxGlobalClient{ClientStream: stream}
-    return x, nil
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &LumenVox_ServiceDesc.Streams[1], LumenVox_Global_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &lumenVoxGlobalClient{ClientStream: stream}
+	return x, nil
 }
 
 type LumenVox_GlobalClient interface {
-    Send(*GlobalRequest) error
-    Recv() (*GlobalResponse, error)
-    grpc.ClientStream
+	Send(*GlobalRequest) error
+	Recv() (*GlobalResponse, error)
+	grpc.ClientStream
 }
 
 type lumenVoxGlobalClient struct {
-    grpc.ClientStream
+	grpc.ClientStream
 }
 
 func (x *lumenVoxGlobalClient) Send(m *GlobalRequest) error {
-    return x.ClientStream.SendMsg(m)
+	return x.ClientStream.SendMsg(m)
 }
 
 func (x *lumenVoxGlobalClient) Recv() (*GlobalResponse, error) {
-    m := new(GlobalResponse)
-    if err := x.ClientStream.RecvMsg(m); err != nil {
-        return nil, err
-    }
-    return m, nil
+	m := new(GlobalResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 // LumenVoxServer is the server API for LumenVox service.
@@ -129,16 +129,16 @@ func (x *lumenVoxGlobalClient) Recv() (*GlobalResponse, error) {
 // such as Automatic Speech Recognition (ASR), Text-To-Speech (TTS),
 // Transcription, Call-Progress-Analysis (CPA), etc.
 type LumenVoxServer interface {
-    // Session
-    //
-    // Creates a new session and establishes a bidirectional stream, able to
-    // process all messages on this single bidirectional connection
-    Session(LumenVox_SessionServer) error
-    // Global
-    //
-    // Manages globally defined (deployment-level) objects
-    Global(LumenVox_GlobalServer) error
-    mustEmbedUnimplementedLumenVoxServer()
+	// Session
+	//
+	// Creates a new session and establishes a bidirectional stream, able to
+	// process all messages on this single bidirectional connection
+	Session(LumenVox_SessionServer) error
+	// Global
+	//
+	// Manages globally defined (deployment-level) objects
+	Global(LumenVox_GlobalServer) error
+	mustEmbedUnimplementedLumenVoxServer()
 }
 
 // UnimplementedLumenVoxServer must be embedded to have forward compatible implementations.
@@ -146,10 +146,10 @@ type UnimplementedLumenVoxServer struct {
 }
 
 func (UnimplementedLumenVoxServer) Session(LumenVox_SessionServer) error {
-    return status.Errorf(codes.Unimplemented, "method Session not implemented")
+	return status.Errorf(codes.Unimplemented, "method Session not implemented")
 }
 func (UnimplementedLumenVoxServer) Global(LumenVox_GlobalServer) error {
-    return status.Errorf(codes.Unimplemented, "method Global not implemented")
+	return status.Errorf(codes.Unimplemented, "method Global not implemented")
 }
 func (UnimplementedLumenVoxServer) mustEmbedUnimplementedLumenVoxServer() {}
 
@@ -157,85 +157,85 @@ func (UnimplementedLumenVoxServer) mustEmbedUnimplementedLumenVoxServer() {}
 // Use of this interface is not recommended, as added methods to LumenVoxServer will
 // result in compilation errors.
 type UnsafeLumenVoxServer interface {
-    mustEmbedUnimplementedLumenVoxServer()
+	mustEmbedUnimplementedLumenVoxServer()
 }
 
 func RegisterLumenVoxServer(s grpc.ServiceRegistrar, srv LumenVoxServer) {
-    s.RegisterService(&LumenVox_ServiceDesc, srv)
+	s.RegisterService(&LumenVox_ServiceDesc, srv)
 }
 
 func _LumenVox_Session_Handler(srv interface{}, stream grpc.ServerStream) error {
-    return srv.(LumenVoxServer).Session(&lumenVoxSessionServer{ServerStream: stream})
+	return srv.(LumenVoxServer).Session(&lumenVoxSessionServer{ServerStream: stream})
 }
 
 type LumenVox_SessionServer interface {
-    Send(*SessionResponse) error
-    Recv() (*SessionRequest, error)
-    grpc.ServerStream
+	Send(*SessionResponse) error
+	Recv() (*SessionRequest, error)
+	grpc.ServerStream
 }
 
 type lumenVoxSessionServer struct {
-    grpc.ServerStream
+	grpc.ServerStream
 }
 
 func (x *lumenVoxSessionServer) Send(m *SessionResponse) error {
-    return x.ServerStream.SendMsg(m)
+	return x.ServerStream.SendMsg(m)
 }
 
 func (x *lumenVoxSessionServer) Recv() (*SessionRequest, error) {
-    m := new(SessionRequest)
-    if err := x.ServerStream.RecvMsg(m); err != nil {
-        return nil, err
-    }
-    return m, nil
+	m := new(SessionRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 func _LumenVox_Global_Handler(srv interface{}, stream grpc.ServerStream) error {
-    return srv.(LumenVoxServer).Global(&lumenVoxGlobalServer{ServerStream: stream})
+	return srv.(LumenVoxServer).Global(&lumenVoxGlobalServer{ServerStream: stream})
 }
 
 type LumenVox_GlobalServer interface {
-    Send(*GlobalResponse) error
-    Recv() (*GlobalRequest, error)
-    grpc.ServerStream
+	Send(*GlobalResponse) error
+	Recv() (*GlobalRequest, error)
+	grpc.ServerStream
 }
 
 type lumenVoxGlobalServer struct {
-    grpc.ServerStream
+	grpc.ServerStream
 }
 
 func (x *lumenVoxGlobalServer) Send(m *GlobalResponse) error {
-    return x.ServerStream.SendMsg(m)
+	return x.ServerStream.SendMsg(m)
 }
 
 func (x *lumenVoxGlobalServer) Recv() (*GlobalRequest, error) {
-    m := new(GlobalRequest)
-    if err := x.ServerStream.RecvMsg(m); err != nil {
-        return nil, err
-    }
-    return m, nil
+	m := new(GlobalRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 // LumenVox_ServiceDesc is the grpc.ServiceDesc for LumenVox service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var LumenVox_ServiceDesc = grpc.ServiceDesc{
-    ServiceName: "lumenvox.api.LumenVox",
-    HandlerType: (*LumenVoxServer)(nil),
-    Methods:     []grpc.MethodDesc{},
-    Streams: []grpc.StreamDesc{
-        {
-            StreamName:    "Session",
-            Handler:       _LumenVox_Session_Handler,
-            ServerStreams: true,
-            ClientStreams: true,
-        },
-        {
-            StreamName:    "Global",
-            Handler:       _LumenVox_Global_Handler,
-            ServerStreams: true,
-            ClientStreams: true,
-        },
-    },
-    Metadata: "lumenvox/api/lumenvox.proto",
+	ServiceName: "lumenvox.api.LumenVox",
+	HandlerType: (*LumenVoxServer)(nil),
+	Methods:     []grpc.MethodDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "Session",
+			Handler:       _LumenVox_Session_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "Global",
+			Handler:       _LumenVox_Global_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+	},
+	Metadata: "lumenvox/api/lumenvox.proto",
 }

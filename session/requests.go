@@ -2,6 +2,7 @@ package session
 
 import (
 	"github.com/lumenvox/go-sdk/lumenvox/api"
+
 	"github.com/google/uuid"
 )
 
@@ -187,6 +188,40 @@ func getNormalizationRequest(
 	}
 
 	return normalizationRequest
+}
+
+// getNluRequest returns an NLU interaction request. The specified
+// correlationId will be used if nonempty. Otherwise, one will be auto-generated.
+func getNluRequest(
+	correlationId string,
+	language string,
+	inputText string,
+	nluSettings *api.NluSettings,
+	generalInteractionSettings *api.GeneralInteractionSettings,
+) (nluRequest *api.SessionRequest) {
+
+	if correlationId == "" {
+		// Create a new correlationId if one is not specified
+		correlationId = uuid.NewString()
+	}
+
+	nluRequest = &api.SessionRequest{
+		CorrelationId: &api.OptionalString{Value: correlationId},
+		RequestType: &api.SessionRequest_InteractionRequest{
+			InteractionRequest: &api.InteractionRequestMessage{
+				InteractionRequest: &api.InteractionRequestMessage_InteractionCreateNlu{
+					InteractionCreateNlu: &api.InteractionCreateNluRequest{
+						Language:                   language,
+						InputText:                  inputText,
+						NluSettings:                nluSettings,
+						GeneralInteractionSettings: generalInteractionSettings,
+					},
+				},
+			},
+		},
+	}
+
+	return nluRequest
 }
 
 // getInlineTtsRequest returns an inline TTS interaction request. The specified

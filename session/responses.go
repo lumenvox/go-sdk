@@ -2,6 +2,7 @@ package session
 
 import (
 	"github.com/lumenvox/go-sdk/lumenvox/api"
+
 	"fmt"
 	"io"
 	"log"
@@ -100,6 +101,14 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			}
 
 			session.createdTranscriptionChannel <- response.GetInteractionCreateTranscription()
+
+		} else if response.GetInteractionCreateNlu() != nil {
+
+			if EnableVerboseLogging {
+				log.Printf("Recv GetInteractionCreateNlu: %+v", response.GetInteractionCreateNlu())
+			}
+
+			session.createdNluChannel <- response.GetInteractionCreateNlu()
 
 		} else if response.GetInteractionCreateNormalizeText() != nil {
 
@@ -428,6 +437,13 @@ func handleFinalResult(session *SessionObject, response *api.SessionResponse) {
 
 		// This is a transcription interaction.
 		interactionObject.finalResults = response.GetFinalResult().GetFinalResult().GetTranscriptionInteractionResult()
+		interactionObject.finalResultsReceived = true
+		close(interactionObject.resultsReadyChannel)
+
+	} else if interactionObject, ok := session.nluInteractionsMap[interactionId]; ok {
+
+		// This is an NLU interaction.
+		interactionObject.finalResults = response.GetFinalResult().GetFinalResult().GetNluInteractionResult()
 		interactionObject.finalResultsReceived = true
 		close(interactionObject.resultsReadyChannel)
 

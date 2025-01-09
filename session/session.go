@@ -1,8 +1,9 @@
 package session
 
 import (
-	"context"
 	"github.com/lumenvox/go-sdk/lumenvox/api"
+
+	"context"
 	"errors"
 	"fmt"
 	"google.golang.org/grpc"
@@ -57,6 +58,7 @@ type SessionObject struct {
 	createdAsrChannel           chan *api.InteractionCreateAsrResponse
 	createdTranscriptionChannel chan *api.InteractionCreateTranscriptionResponse
 	createdNormalizeChannel     chan *api.InteractionCreateNormalizeTextResponse
+	createdNluChannel           chan *api.InteractionCreateNluResponse
 	createdGrammarParseChannel  chan *api.InteractionCreateGrammarParseResponse
 	createdTtsChannel           chan *api.InteractionCreateTtsResponse
 	grammarErrorChannel         chan *api.SessionEvent
@@ -66,6 +68,7 @@ type SessionObject struct {
 	// maps to store all active interactions
 	asrInteractionsMap           map[string]*AsrInteractionObject
 	transcriptionInteractionsMap map[string]*TranscriptionInteractionObject
+	nluInteractionsMap           map[string]*NluInteractionObject
 	normalizationInteractionsMap map[string]*NormalizationInteractionObject
 	ttsInteractionsMap           map[string]*TtsInteractionObject
 
@@ -108,6 +111,7 @@ func newSessionObject(
 		SessionCloseChannel:         make(chan struct{}, 1),
 		createdAsrChannel:           make(chan *api.InteractionCreateAsrResponse, 100),
 		createdTranscriptionChannel: make(chan *api.InteractionCreateTranscriptionResponse, 100),
+		createdNluChannel:           make(chan *api.InteractionCreateNluResponse, 100),
 		createdNormalizeChannel:     make(chan *api.InteractionCreateNormalizeTextResponse, 100),
 		createdGrammarParseChannel:  make(chan *api.InteractionCreateGrammarParseResponse, 100),
 		createdTtsChannel:           make(chan *api.InteractionCreateTtsResponse, 100),
@@ -119,6 +123,7 @@ func newSessionObject(
 		// interaction maps
 		asrInteractionsMap:           make(map[string]*AsrInteractionObject),
 		transcriptionInteractionsMap: make(map[string]*TranscriptionInteractionObject),
+		nluInteractionsMap:           make(map[string]*NluInteractionObject),
 		normalizationInteractionsMap: make(map[string]*NormalizationInteractionObject),
 		ttsInteractionsMap:           make(map[string]*TtsInteractionObject),
 	}

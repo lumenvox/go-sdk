@@ -4,6 +4,7 @@ import (
 	lumenvoxSdk "github.com/lumenvox/go-sdk"
 	"github.com/lumenvox/go-sdk/lumenvox/api"
 	"github.com/lumenvox/go-sdk/session"
+
 	"fmt"
 	"log"
 	"os"
@@ -42,7 +43,7 @@ func main() {
 	audioConfig := session.AudioConfig{
 		Format:     api.AudioFormat_STANDARD_AUDIO_FORMAT_ULAW,
 		SampleRate: 8000,
-        IsBatch:    false,
+		IsBatch:    false,
 	}
 
 	// Create a new session.
