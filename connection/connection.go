@@ -8,6 +8,8 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/oauth"
+	"google.golang.org/grpc/keepalive"
+	"time"
 )
 
 // GrpcConnectionConfig contains configuration options for the gRPC connection.
@@ -53,6 +55,11 @@ func CreateNewConnection(connectionConfig GrpcConnectionConfig) (newConnection *
 		creds = insecure.NewCredentials()
 	}
 	opts = append(opts, grpc.WithTransportCredentials(creds))
+
+	// send a keepalive ping every 5 minutes
+	opts = append(opts, grpc.WithKeepaliveParams(keepalive.ClientParameters{
+		Time: 5 * time.Minute,
+	}))
 
 	// Next, if an OAuth token was provided, append that to our list
 	// of dial options.

@@ -4,14 +4,11 @@ import (
 	lumenvoxSdk "github.com/lumenvox/go-sdk"
 	"github.com/lumenvox/go-sdk/lumenvox/api"
 	"github.com/lumenvox/go-sdk/session"
-	"fmt"
 	"log"
 	"time"
 )
 
 func main() {
-
-	fmt.Println("")
 
 	///////////////////////
 	// Client creation
@@ -50,6 +47,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create session: %v", err.Error())
 	}
+	log.Printf("Session ID: %s", sessionObject.SessionId)
 
 	///////////////////////
 	// Session close

@@ -52,9 +52,9 @@ func main() {
 	language := "en-US"
 
 	// Configure NLU settings.
-	nluSettings := client.GetNluSettings(3, 0, "",
+	nluSettings := client.GetNluSettings(0, 0, "",
 		"", false, false,
-		api.NluSettings_UNDEFINED, false, nil)
+		api.NluSettings_UNDEFINED, true, nil)
 
 	inputText := "LumenVox is a company specializing in speech recognition and voice biometrics technology. Their" +
 		" solutions are designed to enhance customer interactions by enabling automated speech recognition (ASR) and" +

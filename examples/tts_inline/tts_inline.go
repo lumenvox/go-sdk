@@ -4,6 +4,7 @@ import (
 	lumenvoxSdk "github.com/lumenvox/go-sdk"
 	"github.com/lumenvox/go-sdk/lumenvox/api"
 	"github.com/lumenvox/go-sdk/session"
+
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -15,8 +16,6 @@ import (
 )
 
 func main() {
-
-	fmt.Println("")
 
 	///////////////////////
 	// Client creation

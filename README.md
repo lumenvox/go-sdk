@@ -147,7 +147,7 @@ as a member function of the session object.
 
 #### TranscriptionInteractionObject
 
-The `TranscriptionInteractionObject` represents an transcription interaction. The
+The `TranscriptionInteractionObject` represents a transcription interaction. The
 following functions are available:
 - `WaitForBeginProcessing`
 - `WaitForBargeIn`
@@ -164,7 +164,7 @@ available as a member function of the session object.
 
 #### NormalizationInteractionObject
 
-The `NormalizationInteractionObject` represents an normalization interaction. The
+The `NormalizationInteractionObject` represents a normalization interaction. The
 following functions are available:
 - `WaitForFinalResults`
 - `GetFinalResults`

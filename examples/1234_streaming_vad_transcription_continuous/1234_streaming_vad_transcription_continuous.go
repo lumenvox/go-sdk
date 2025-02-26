@@ -13,8 +13,6 @@ import (
 
 func main() {
 
-	fmt.Println("")
-
 	///////////////////////
 	// Client creation
 	///////////////////////
@@ -99,7 +97,7 @@ func main() {
 	enableContinuousTranscription := &api.OptionalBool{Value: true}
 
 	// Create interaction.
-	transcriptionInteraction, err := sessionObject.NewTranscription(language, audioConsumeSettings, nil,
+	transcriptionInteraction, err := sessionObject.NewTranscription(language, nil, audioConsumeSettings, nil,
 		vadSettings, recognitionSettings, "", "", "", enableContinuousTranscription)
 	if err != nil {
 		log.Printf("failed to create interaction: %v", err)

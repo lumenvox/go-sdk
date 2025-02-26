@@ -2,6 +2,7 @@ package session
 
 import (
 	"github.com/lumenvox/go-sdk/lumenvox/api"
+
 	"errors"
 	"fmt"
 	"log"
@@ -42,6 +43,7 @@ type TranscriptionInteractionObject struct {
 // If successful, a new interaction object will be returned.
 func (session *SessionObject) NewTranscription(
 	language string,
+	embeddedGrammars []*api.Grammar,
 	audioConsumeSettings *api.AudioConsumeSettings,
 	normalizationSettings *api.NormalizationSettings,
 	vadSettings *api.VadSettings,
@@ -54,7 +56,7 @@ func (session *SessionObject) NewTranscription(
 	// Create transcription interaction, adding parameters such as VAD and recognition settings
 
 	session.streamSendLock.Lock()
-	err = session.SessionStream.Send(getTranscriptionRequest("", language,
+	err = session.SessionStream.Send(getTranscriptionRequest("", language, embeddedGrammars,
 		vadSettings, audioConsumeSettings, normalizationSettings, recognitionSettings,
 		languageModelName, acousticModelName, enablePostProcessing, enableContinuousTranscription))
 	session.streamSendLock.Unlock()

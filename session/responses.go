@@ -3,11 +3,9 @@ package session
 import (
 	"github.com/lumenvox/go-sdk/lumenvox/api"
 
-	"fmt"
 	"io"
 	"log"
 	"strings"
-	"time"
 )
 
 // sessionResponseListener handles all responses from the specified session.
@@ -30,7 +28,7 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			break
 		}
 		if err != nil {
-			fmt.Printf("%s: sessionStream.Recv() failed: %v", time.Now().String(), err)
+			log.Printf("sessionStream.Recv() failed: %v", err)
 			if waitingOnSessionId {
 				sessionIdChan <- ""
 			}

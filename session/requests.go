@@ -107,6 +107,7 @@ func getAsrRequest(
 func getTranscriptionRequest(
 	correlationId string,
 	language string,
+	embeddedGrammars []*api.Grammar,
 	vadSettings *api.VadSettings,
 	audioConsumeSettings *api.AudioConsumeSettings,
 	normalizationSettings *api.NormalizationSettings,
@@ -123,6 +124,7 @@ func getTranscriptionRequest(
 
 	interactionCreateTranscriptionRequest := &api.InteractionCreateTranscriptionRequest{
 		Language:              language,
+		EmbeddedGrammars:      embeddedGrammars,
 		VadSettings:           vadSettings,
 		AudioConsumeSettings:  audioConsumeSettings,
 		NormalizationSettings: normalizationSettings,

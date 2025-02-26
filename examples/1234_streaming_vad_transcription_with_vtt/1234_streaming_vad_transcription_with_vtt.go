@@ -4,6 +4,7 @@ import (
 	lumenvoxSdk "github.com/lumenvox/go-sdk"
 	"github.com/lumenvox/go-sdk/lumenvox/api"
 	"github.com/lumenvox/go-sdk/session"
+
 	"fmt"
 	"log"
 	"os"
@@ -11,8 +12,6 @@ import (
 )
 
 func main() {
-
-	fmt.Println("")
 
 	///////////////////////
 	// Client creation
@@ -97,7 +96,7 @@ func main() {
 	normalizationSettings := client.GetNormalizationSettings(false, false, false, false, true, nil)
 
 	// Create interaction.
-	transcriptionInteraction, err := sessionObject.NewTranscription(language, audioConsumeSettings, normalizationSettings,
+	transcriptionInteraction, err := sessionObject.NewTranscription(language, nil, audioConsumeSettings, normalizationSettings,
 		vadSettings, recognitionSettings, "", "", "", nil)
 	if err != nil {
 		log.Printf("failed to create interaction: %v", err)
