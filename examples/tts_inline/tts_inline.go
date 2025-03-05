@@ -2,6 +2,7 @@ package main
 
 import (
 	lumenvoxSdk "github.com/lumenvox/go-sdk"
+	"github.com/lumenvox/go-sdk/config"
 	"github.com/lumenvox/go-sdk/lumenvox/api"
 	"github.com/lumenvox/go-sdk/session"
 
@@ -21,12 +22,22 @@ func main() {
 	// Client creation
 	///////////////////////
 
-	// Set variables for connection to lumenvox API.
-	defaultDeploymentId := "00000000-0000-0000-0000-000000000000"
+	// Get SDK configuration
+	cfg, err := config.GetConfigValues("./config_values.ini")
+	if err != nil {
+		log.Fatalf("Unable to get config: %v\n", err)
+		return
+	}
 
 	// Create client and open connection.
-	client, err := lumenvoxSdk.CreateClient("localhost:8280", false, "",
-		false, defaultDeploymentId, "")
+	client, err := lumenvoxSdk.CreateClient(
+		cfg.ApiEndpoint,
+		cfg.EnableTls,
+		cfg.CertificatePath,
+		cfg.AllowInsecureTls,
+		cfg.DeploymentId,
+		"", // Auth token unused
+	)
 
 	// Catch error from client creation.
 	if err != nil {

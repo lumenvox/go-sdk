@@ -192,6 +192,74 @@ func getNormalizationRequest(
 	return normalizationRequest
 }
 
+// getAmdRequest returns an AMD interaction request. The specified
+// correlationId will be used if nonempty. Otherwise, one will be
+// auto-generated.
+func getAmdRequest(
+	correlationId string,
+	amdSettings *api.AmdSettings,
+	audioConsumeSettings *api.AudioConsumeSettings,
+	vadSettings *api.VadSettings,
+	generalInteractionSettings *api.GeneralInteractionSettings) (amdRequest *api.SessionRequest) {
+
+	if correlationId == "" {
+		// Create a new correlationId if one is not specified
+		correlationId = uuid.NewString()
+	}
+
+	amdRequest = &api.SessionRequest{
+		CorrelationId: &api.OptionalString{Value: correlationId},
+		RequestType: &api.SessionRequest_InteractionRequest{
+			InteractionRequest: &api.InteractionRequestMessage{
+				InteractionRequest: &api.InteractionRequestMessage_InteractionCreateAmd{
+					InteractionCreateAmd: &api.InteractionCreateAmdRequest{
+						AmdSettings:                amdSettings,
+						AudioConsumeSettings:       audioConsumeSettings,
+						VadSettings:                vadSettings,
+						GeneralInteractionSettings: generalInteractionSettings,
+					},
+				},
+			},
+		},
+	}
+
+	return amdRequest
+}
+
+// getCpaRequest returns an CPA interaction request. The specified
+// correlationId will be used if nonempty. Otherwise, one will be
+// auto-generated.
+func getCpaRequest(
+	correlationId string,
+	cpaSettings *api.CpaSettings,
+	audioConsumeSettings *api.AudioConsumeSettings,
+	vadSettings *api.VadSettings,
+	generalInteractionSettings *api.GeneralInteractionSettings) (cpaRequest *api.SessionRequest) {
+
+	if correlationId == "" {
+		// Create a new correlationId if one is not specified
+		correlationId = uuid.NewString()
+	}
+
+	cpaRequest = &api.SessionRequest{
+		CorrelationId: &api.OptionalString{Value: correlationId},
+		RequestType: &api.SessionRequest_InteractionRequest{
+			InteractionRequest: &api.InteractionRequestMessage{
+				InteractionRequest: &api.InteractionRequestMessage_InteractionCreateCpa{
+					InteractionCreateCpa: &api.InteractionCreateCpaRequest{
+						CpaSettings:                cpaSettings,
+						AudioConsumeSettings:       audioConsumeSettings,
+						VadSettings:                vadSettings,
+						GeneralInteractionSettings: generalInteractionSettings,
+					},
+				},
+			},
+		},
+	}
+
+	return cpaRequest
+}
+
 // getNluRequest returns an NLU interaction request. The specified
 // correlationId will be used if nonempty. Otherwise, one will be auto-generated.
 func getNluRequest(

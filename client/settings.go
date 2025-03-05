@@ -95,7 +95,7 @@ func (client *SdkClient) GetNormalizationSettings(enableInverseText bool, enable
 
 // GetVadSettings returns an api.VadSettings object, populated with the
 // specified parameters.
-func (client *SdkClient) GetVadSettings(useVad bool, bargeInTimeout int32, eosDelay int32,
+func (client *SdkClient) GetVadSettings(useVad bool, bargeInTimeoutMs int32, eosDelay int32,
 	endOfSpeechTimeoutMs *api.OptionalInt32,
 	noiseReductionMode api.VadSettings_NoiseReductionMode,
 	bargeInThreshold *api.OptionalInt32,
@@ -107,7 +107,7 @@ func (client *SdkClient) GetVadSettings(useVad bool, bargeInTimeout int32, eosDe
 
 	vadSettings = &api.VadSettings{
 		UseVad:               &api.OptionalBool{Value: useVad},
-		BargeInTimeoutMs:     &api.OptionalInt32{Value: bargeInTimeout},
+		BargeInTimeoutMs:     &api.OptionalInt32{Value: bargeInTimeoutMs},
 		EndOfSpeechTimeoutMs: endOfSpeechTimeoutMs,
 		NoiseReductionMode:   noiseReductionMode,
 		BargeinThreshold:     bargeInThreshold,
@@ -119,6 +119,65 @@ func (client *SdkClient) GetVadSettings(useVad bool, bargeInTimeout int32, eosDe
 	}
 
 	return vadSettings
+}
+
+// GetAmdSettings returns an api.AmdSettings object, populated with the
+// specified parameters.
+func (client *SdkClient) GetAmdSettings(useAmd bool,
+	amdInputText *api.OptionalString,
+	faxEnable *api.OptionalBool,
+	faxInputText *api.OptionalString,
+	sitEnable *api.OptionalBool,
+	SitReorderLocalText *api.OptionalString,
+	sitVacantCodeInputText *api.OptionalString,
+	sitNoCircuitLocalInputText *api.OptionalString,
+	sitInterceptInputText *api.OptionalString,
+	sitReorderDistantInputText *api.OptionalString,
+	sitNoCircuitDistantInputText *api.OptionalString,
+	sitOtherInputText *api.OptionalString,
+	busyEnable *api.OptionalBool,
+	BusyInputText *api.OptionalString,
+	toneDetectTimeoutMs *api.OptionalInt32,
+) (amdSettings *api.AmdSettings) {
+
+	amdSettings = &api.AmdSettings{
+		AmdEnable:                    &api.OptionalBool{Value: useAmd},
+		AmdInputText:                 amdInputText,
+		FaxEnable:                    faxEnable,
+		FaxInputText:                 faxInputText,
+		SitEnable:                    sitEnable,
+		SitReorderLocalInputText:     SitReorderLocalText,
+		SitVacantCodeInputText:       sitVacantCodeInputText,
+		SitNoCircuitLocalInputText:   sitNoCircuitLocalInputText,
+		SitInterceptInputText:        sitInterceptInputText,
+		SitReorderDistantInputText:   sitReorderDistantInputText,
+		SitNoCircuitDistantInputText: sitNoCircuitDistantInputText,
+		SitOtherInputText:            sitOtherInputText,
+		BusyEnable:                   busyEnable,
+		BusyInputText:                BusyInputText,
+		ToneDetectTimeoutMs:          toneDetectTimeoutMs,
+	}
+
+	return amdSettings
+}
+
+// GetCpaSettings returns an api.CpaSettings object, populated with the
+// specified parameters.
+func (client *SdkClient) GetCpaSettings(
+	humanResidenceTimeMs *api.OptionalInt32,
+	humanBusinessTimeMs *api.OptionalInt32,
+	unknownSilenceTimeoutMs *api.OptionalInt32,
+	maxTimeFromConnectMs *api.OptionalInt32,
+) (cpaSettings *api.CpaSettings) {
+
+	cpaSettings = &api.CpaSettings{
+		HumanResidenceTimeMs:    humanResidenceTimeMs,
+		HumanBusinessTimeMs:     humanBusinessTimeMs,
+		UnknownSilenceTimeoutMs: unknownSilenceTimeoutMs,
+		MaxTimeFromConnectMs:    maxTimeFromConnectMs,
+	}
+
+	return cpaSettings
 }
 
 // GetRecognitionSettings returns an api.RecognitionSettings object, populated

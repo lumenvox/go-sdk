@@ -100,6 +100,22 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 
 			session.createdTranscriptionChannel <- response.GetInteractionCreateTranscription()
 
+		} else if response.GetInteractionCreateAmd() != nil {
+
+			if EnableVerboseLogging {
+				log.Printf("Recv InteractionCreateAmdResponse: %+v", response.GetInteractionCreateAmd())
+			}
+
+			session.createdAmdChannel <- response.GetInteractionCreateAmd()
+
+		} else if response.GetInteractionCreateCpa() != nil {
+
+			if EnableVerboseLogging {
+				log.Printf("Recv InteractionCreateCpaResponse: %+v", response.GetInteractionCreateCpa())
+			}
+
+			session.createdCpaChannel <- response.GetInteractionCreateCpa()
+
 		} else if response.GetInteractionCreateNlu() != nil {
 
 			if EnableVerboseLogging {
@@ -411,6 +427,32 @@ func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
 		}
 		interactionObject.vadEventsLock.Unlock()
 
+	} else if interactionObject, ok := session.amdInteractionsMap[interactionId]; ok {
+		// This is an ASR interaction.
+		switch response.GetVadEvent().VadEventType {
+		case api.VadEvent_VAD_EVENT_TYPE_BEGIN_PROCESSING:
+			interactionObject.vadBeginProcessingReceived = true
+			interactionObject.vadBeginProcessingChannel <- struct{}{}
+		case api.VadEvent_VAD_EVENT_TYPE_BARGE_IN:
+			bargeInAudioOffset := response.GetVadEvent().AudioOffset
+			var bargeInTime int
+			if bargeInAudioOffset == nil {
+				bargeInTime = 0
+				log.Printf("warning: VAD BARGE-IN event detected with empty AudioOffset. Using 0.")
+			} else {
+				bargeInTime = int(bargeInAudioOffset.Value)
+			}
+			interactionObject.vadBargeInReceived = bargeInTime
+			interactionObject.vadBargeInChannel <- bargeInTime
+		case api.VadEvent_VAD_EVENT_TYPE_END_OF_SPEECH:
+			bargeOutTime := int(response.GetVadEvent().AudioOffset.Value)
+			interactionObject.vadBargeOutReceived = bargeOutTime
+			interactionObject.vadBargeOutChannel <- bargeOutTime
+		case api.VadEvent_VAD_EVENT_TYPE_BARGE_IN_TIMEOUT:
+			interactionObject.vadBargeInTimeoutReceived = true
+			close(interactionObject.vadBargeInTimeoutChannel)
+		}
+
 	} else {
 
 		// We did not find the interaction.
@@ -442,6 +484,20 @@ func handleFinalResult(session *SessionObject, response *api.SessionResponse) {
 
 		// This is an NLU interaction.
 		interactionObject.finalResults = response.GetFinalResult().GetFinalResult().GetNluInteractionResult()
+		interactionObject.finalResultsReceived = true
+		close(interactionObject.resultsReadyChannel)
+
+	} else if interactionObject, ok := session.amdInteractionsMap[interactionId]; ok {
+
+		// This is an AMD interaction.
+		interactionObject.finalResults = response.GetFinalResult().GetFinalResult().GetAmdInteractionResult()
+		interactionObject.finalResultsReceived = true
+		close(interactionObject.resultsReadyChannel)
+
+	} else if interactionObject, ok := session.cpaInteractionsMap[interactionId]; ok {
+
+		// This is an CPA interaction.
+		interactionObject.finalResults = response.GetFinalResult().GetFinalResult().GetCpaInteractionResult()
 		interactionObject.finalResultsReceived = true
 		close(interactionObject.resultsReadyChannel)
 

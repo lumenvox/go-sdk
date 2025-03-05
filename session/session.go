@@ -58,6 +58,8 @@ type SessionObject struct {
 	createdAsrChannel           chan *api.InteractionCreateAsrResponse
 	createdTranscriptionChannel chan *api.InteractionCreateTranscriptionResponse
 	createdNormalizeChannel     chan *api.InteractionCreateNormalizeTextResponse
+	createdAmdChannel           chan *api.InteractionCreateAmdResponse
+	createdCpaChannel           chan *api.InteractionCreateCpaResponse
 	createdNluChannel           chan *api.InteractionCreateNluResponse
 	createdGrammarParseChannel  chan *api.InteractionCreateGrammarParseResponse
 	createdTtsChannel           chan *api.InteractionCreateTtsResponse
@@ -68,6 +70,8 @@ type SessionObject struct {
 	// maps to store all active interactions
 	asrInteractionsMap           map[string]*AsrInteractionObject
 	transcriptionInteractionsMap map[string]*TranscriptionInteractionObject
+	amdInteractionsMap           map[string]*AmdInteractionObject
+	cpaInteractionsMap           map[string]*CpaInteractionObject
 	nluInteractionsMap           map[string]*NluInteractionObject
 	normalizationInteractionsMap map[string]*NormalizationInteractionObject
 	ttsInteractionsMap           map[string]*TtsInteractionObject
@@ -111,6 +115,8 @@ func newSessionObject(
 		SessionCloseChannel:         make(chan struct{}, 1),
 		createdAsrChannel:           make(chan *api.InteractionCreateAsrResponse, 100),
 		createdTranscriptionChannel: make(chan *api.InteractionCreateTranscriptionResponse, 100),
+		createdAmdChannel:           make(chan *api.InteractionCreateAmdResponse, 100),
+		createdCpaChannel:           make(chan *api.InteractionCreateCpaResponse, 100),
 		createdNluChannel:           make(chan *api.InteractionCreateNluResponse, 100),
 		createdNormalizeChannel:     make(chan *api.InteractionCreateNormalizeTextResponse, 100),
 		createdGrammarParseChannel:  make(chan *api.InteractionCreateGrammarParseResponse, 100),
@@ -123,6 +129,8 @@ func newSessionObject(
 		// interaction maps
 		asrInteractionsMap:           make(map[string]*AsrInteractionObject),
 		transcriptionInteractionsMap: make(map[string]*TranscriptionInteractionObject),
+		amdInteractionsMap:           make(map[string]*AmdInteractionObject),
+		cpaInteractionsMap:           make(map[string]*CpaInteractionObject),
 		nluInteractionsMap:           make(map[string]*NluInteractionObject),
 		normalizationInteractionsMap: make(map[string]*NormalizationInteractionObject),
 		ttsInteractionsMap:           make(map[string]*TtsInteractionObject),

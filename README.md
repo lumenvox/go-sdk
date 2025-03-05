@@ -44,21 +44,68 @@ Sessions are implemented as gRPC streams, so each session is the child of a
 
 ## Writing an Application
 
+### Configuration Values
+
+Helper functions are included to allow the use of a configuration file. An
+example file named `config_values.ini` has been provided. In your own
+environment, this may be moved or renamed as needed.
+
+Any values in the `.ini` file will override the default values. Additionally,
+the values from the `.ini` file can be overridden with the use of environment
+variables.
+
+The list of supported values is shown in the `config_values.ini` file. The
+environment variables have the same name with the addition of a prefix, as
+described below.
+
+> Note: environment variable names should have a `LUMENVOX_GO_SDK__` prefix
+> to avoid conflict with other environment variables. For example, to
+> specify the API_ENDPOINT, use the `LUMENVOX_GO_SDK__API_ENDPOINT`
+> environment variable.
+
+Users may choose to use the .ini file, environment variables, defaults, or
+simply use hard-coded values in their files. We recommend either file-based
+or environment-variable-based approaches.
+
 ### Client Creation
 
 The first step in using the SDK is to create a connection to the API. This is
-handled with the `CreateClient` function.
+handled with the `CreateClient` function, as shown here (using the config
+helpers).
 ```go
-apiEndpoint := "localhost:8280"
-tlsEnabled := false
-certificatePath := ""
-allowInsecureTls := false
-deploymentId := "00000000-0000-0000-0000-000000000000"
-client, err := lumenvoxSdk.CreateClient(apiEndpoint, tlsEnabled, certificatePath,
-    allowInsecureTls, deploymentId)
+// Get SDK configuration
+cfg, err := config.GetConfigValues("./config_values.ini")
+if err != nil {
+    log.Fatalf("Unable to get config: %v\n", err)
+    return
+}
+
+// Create client and open connection.
+client, err := lumenvoxSdk.CreateClient(
+    cfg.ApiEndpoint,
+    cfg.EnableTls,
+    cfg.CertificatePath,
+    cfg.AllowInsecureTls,
+    cfg.DeploymentId,
+    "", // Auth token unused
+)
 ```
 
 This is where connection details can be configured, including TLS options.
+
+#### Authentication Token Handling
+An additional parameter `authToken` is available for the user to provide an OAuth
+string if required. For example:
+```go
+apiEndpoint := "lumenvox-api.lumenvox.com"
+tlsEnabled := true
+certificatePath := ""
+allowInsecureTls := false
+deploymentId := "00000000-0000-0000-0000-000000000000"
+authToken := "eyJraWQiO..."     // Provide full auth. token here. 
+client, err := lumenvoxSdk.CreateClient(apiEndpoint, tlsEnabled, certificatePath,
+    allowInsecureTls, deploymentId, authToken)
+```
 
 ### Session Creation
 

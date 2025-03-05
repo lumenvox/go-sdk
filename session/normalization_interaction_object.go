@@ -2,6 +2,7 @@ package session
 
 import (
 	"github.com/lumenvox/go-sdk/lumenvox/api"
+
 	"errors"
 	"fmt"
 	"log"

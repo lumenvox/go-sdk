@@ -1,8 +1,9 @@
 package session
 
 import (
-	"context"
 	"github.com/lumenvox/go-sdk/lumenvox/api"
+
+	"context"
 	"errors"
 	"log"
 	"time"
