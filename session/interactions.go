@@ -2,7 +2,6 @@ package session
 
 import (
 	"fmt"
-	"log"
 )
 
 // vadInteractionRecord records the data from a single VAD interaction.
@@ -29,6 +28,8 @@ func createEmptyVadInteractionRecord() *vadInteractionRecord {
 func (session *SessionObject) PullTtsAudio(interactionId string, audioChannel int32, audioStartMs int32,
 	audioLengthMs int32) (audioData []byte, err error) {
 
+	logger := getLogger()
+
 	// Send audio pull request using the provided interactionId, adding specified parameters
 
 	session.streamSendLock.Lock()
@@ -36,7 +37,8 @@ func (session *SessionObject) PullTtsAudio(interactionId string, audioChannel in
 	session.streamSendLock.Unlock()
 	if err != nil {
 		session.errorChan <- fmt.Errorf("sending AudioPullRequest error: %v", err)
-		log.Printf("error sending audio pull request: %v", err.Error())
+		logger.Error("sending audio pull request",
+			"error", err.Error())
 		return nil, err
 	}
 
@@ -50,6 +52,8 @@ func (session *SessionObject) PullTtsAudio(interactionId string, audioChannel in
 // single interaction type.
 func (session *SessionObject) FinalizeInteraction(interactionId string) (err error) {
 
+	logger := getLogger()
+
 	// Send finalize request using the provided interactionId, adding specified parameters
 
 	session.streamSendLock.Lock()
@@ -57,7 +61,8 @@ func (session *SessionObject) FinalizeInteraction(interactionId string) (err err
 	session.streamSendLock.Unlock()
 	if err != nil {
 		session.errorChan <- fmt.Errorf("sending InteractionFinalizeProcessingRequest error: %v", err)
-		log.Printf("error sending finalize processing request: %v", err.Error())
+		logger.Error("sending finalize processing request",
+			"error", err.Error())
 		return err
 	}
 

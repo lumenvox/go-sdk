@@ -5,7 +5,6 @@ import (
 
 	"errors"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 )
@@ -43,6 +42,7 @@ type TranscriptionInteractionObject struct {
 // If successful, a new interaction object will be returned.
 func (session *SessionObject) NewTranscription(
 	language string,
+	phrases []*api.TranscriptionPhraseList,
 	embeddedGrammars []*api.Grammar,
 	audioConsumeSettings *api.AudioConsumeSettings,
 	normalizationSettings *api.NormalizationSettings,
@@ -53,16 +53,19 @@ func (session *SessionObject) NewTranscription(
 	enablePostProcessing string,
 	enableContinuousTranscription *api.OptionalBool) (interactionObject *TranscriptionInteractionObject, err error) {
 
+	logger := getLogger()
+
 	// Create transcription interaction, adding parameters such as VAD and recognition settings
 
 	session.streamSendLock.Lock()
-	err = session.SessionStream.Send(getTranscriptionRequest("", language, embeddedGrammars,
+	err = session.SessionStream.Send(getTranscriptionRequest("", language, phrases, embeddedGrammars,
 		vadSettings, audioConsumeSettings, normalizationSettings, recognitionSettings,
 		languageModelName, acousticModelName, enablePostProcessing, enableContinuousTranscription))
 	session.streamSendLock.Unlock()
 	if err != nil {
 		session.errorChan <- fmt.Errorf("sending InteractionCreateTranscriptionRequest error: %v", err)
-		log.Printf("error sending transcription create request: %v", err.Error())
+		logger.Error("sending transcription create request",
+			"error", err.Error())
 		return nil, err
 	}
 
@@ -70,7 +73,8 @@ func (session *SessionObject) NewTranscription(
 	transcriptionResponse := <-session.createdTranscriptionChannel
 	interactionId := transcriptionResponse.InteractionId
 	if EnableVerboseLogging {
-		log.Printf("created new transcription interaction: %s", interactionId)
+		logger.Debug("created new transcription interaction",
+			"interactionId", interactionId)
 	}
 
 	// determine if this is a continuous interaction

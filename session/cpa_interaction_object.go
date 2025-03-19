@@ -5,7 +5,6 @@ import (
 
 	"errors"
 	"fmt"
-	"log"
 	"time"
 )
 
@@ -43,6 +42,8 @@ func (session *SessionObject) NewCpa(
 	vadSettings *api.VadSettings,
 	generalInteractionSettings *api.GeneralInteractionSettings) (interactionObject *CpaInteractionObject, err error) {
 
+	logger := getLogger()
+
 	// Create CPA interaction, adding parameters such as VAD and recognition settings
 
 	session.streamSendLock.Lock()
@@ -51,7 +52,8 @@ func (session *SessionObject) NewCpa(
 	session.streamSendLock.Unlock()
 	if err != nil {
 		session.errorChan <- fmt.Errorf("sending InteractionCreateCpaRequest error: %v", err)
-		log.Printf("error sending CPA create request: %v", err.Error())
+		logger.Error("sending CPA create request",
+			"error", err.Error())
 		return nil, err
 	}
 
@@ -59,7 +61,8 @@ func (session *SessionObject) NewCpa(
 	cpaResponse := <-session.createdCpaChannel
 	interactionId := cpaResponse.InteractionId
 	if EnableVerboseLogging {
-		log.Printf("created new CPA interaction: %s", interactionId)
+		logger.Debug("created new CPA interaction",
+			"interactionId", interactionId)
 	}
 
 	// Create the interaction object.

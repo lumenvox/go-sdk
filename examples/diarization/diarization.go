@@ -11,14 +11,6 @@ import (
 	"time"
 )
 
-var phrases = []*api.TranscriptionPhraseList{&api.TranscriptionPhraseList{
-	Phrases: []string{
-		"F. Scott Fitzgerald",
-		"Frank Muller",
-		"Great Gatsby",
-	},
-}}
-
 func main() {
 
 	///////////////////////
@@ -85,7 +77,7 @@ func main() {
 	var audioData []byte
 
 	// Read data from disk.
-	audioFilePath := "./examples/test_data/the_great_gatsby_1_minute.ulaw"
+	audioFilePath := "./examples/test_data/Capacity-AI-Powered-Support-Automation-Platform-English-1min.ulaw"
 	audioData, err = os.ReadFile(audioFilePath)
 	if err != nil {
 		logger.Error("reading audio file",
@@ -97,22 +89,10 @@ func main() {
 	sessionObject.AddAudio(audioData)
 
 	///////////////////////
-	// Create transcription interaction
+	// Create diarization interaction
 	///////////////////////
 
 	language := "en-US"
-
-	// Configure VAD settings.
-	useVad := false
-	bargeInTimeout := int32(30000) // 30 second default
-	eosDelay := int32(1000)
-	vadSettings := client.GetVadSettings(useVad, bargeInTimeout, eosDelay, nil,
-		api.VadSettings_NOISE_REDUCTION_MODE_DISABLED, nil, nil, nil, nil, nil)
-
-	// Configure recognition settings.
-	decodeTimeout := int32(10000)
-	enablePartialResults := false
-	recognitionSettings := client.GetRecognitionSettings(decodeTimeout, enablePartialResults, nil, nil, nil)
 
 	// Configure audio consume settings.
 	audioConsumeSettings, err := client.GetAudioConsumeSettings(0,
@@ -123,8 +103,9 @@ func main() {
 	)
 
 	// Create interaction.
-	transcriptionInteraction, err := sessionObject.NewTranscription(language, phrases, nil, audioConsumeSettings, nil,
-		vadSettings, recognitionSettings, "", "", "", nil)
+	diarizationInteraction, err := sessionObject.NewDiarization(language, 2, nil,
+		nil, audioConsumeSettings)
+
 	if err != nil {
 		logger.Error("failed to create interaction",
 			"error", err)
@@ -133,7 +114,7 @@ func main() {
 		return
 	}
 
-	interactionId := transcriptionInteraction.InteractionId
+	interactionId := diarizationInteraction.InteractionId
 	logger.Info("received interactionId",
 		"interactionId", interactionId)
 
@@ -141,8 +122,8 @@ func main() {
 	// Get results
 	///////////////////////
 
-	// Now that we have waited for the end of speech, wait for the final results to become available.
-	finalResults, err := transcriptionInteraction.GetFinalResults(10 * time.Second)
+	// Wait for the final results to arrive.
+	finalResults, err := diarizationInteraction.GetFinalResults(10 * time.Second)
 	if err != nil {
 		logger.Error("waiting for final results",
 			"error", err)

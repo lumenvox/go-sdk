@@ -2,7 +2,6 @@ package client
 
 import (
 	"github.com/lumenvox/go-sdk/lumenvox/api"
-	"log"
 )
 
 // GetTtsInlineSynthesisSettings returns an api.TtsInlineSynthesisSettings
@@ -16,6 +15,8 @@ func (client *SdkClient) GetTtsInlineSynthesisSettings(
 	voiceVolume string,
 ) (inlineSettings *api.TtsInlineSynthesisSettings) {
 
+	logger := getLogger()
+
 	synthSettings := &api.TtsInlineSynthesisSettings{
 		Voice:                nil,
 		SynthEmphasisLevel:   nil,
@@ -27,6 +28,7 @@ func (client *SdkClient) GetTtsInlineSynthesisSettings(
 		SynthVoiceAge:        nil, // not currently supported
 		SynthVoiceGender:     nil,
 	}
+
 	if voiceName != "" {
 		synthSettings.Voice = &api.OptionalString{Value: voiceName}
 	} else {
@@ -36,7 +38,8 @@ func (client *SdkClient) GetTtsInlineSynthesisSettings(
 				synthSettings.SynthVoiceGender = &api.OptionalString{Value: voiceGender}
 			} else {
 				// Some unsupported value. Warn, but do not return an error.
-				log.Printf("warning: invalid voiceGender \"%s\" (should be \"neutral\", \"male\", or \"female\")", voiceGender)
+				logger.Warn("invalid voiceGender (should be \"neutral\", \"male\", or \"female\")",
+					"voiceGender", voiceGender)
 			}
 		}
 	}

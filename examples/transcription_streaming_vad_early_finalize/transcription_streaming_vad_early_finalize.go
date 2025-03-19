@@ -3,11 +3,10 @@ package main
 import (
 	lumenvoxSdk "github.com/lumenvox/go-sdk"
 	"github.com/lumenvox/go-sdk/config"
+	"github.com/lumenvox/go-sdk/logging"
 	"github.com/lumenvox/go-sdk/lumenvox/api"
 	"github.com/lumenvox/go-sdk/session"
 
-	"fmt"
-	"log"
 	"os"
 	"time"
 )
@@ -21,27 +20,35 @@ func main() {
 	// Get SDK configuration
 	cfg, err := config.GetConfigValues("./config_values.ini")
 	if err != nil {
-		log.Fatalf("Unable to get config: %v\n", err)
-		return
+		tmpLogger, _ := logging.GetLogger() // get default logger
+		tmpLogger.Error("unable to get config",
+			"error", err)
+		os.Exit(1)
 	}
 
-	// Create client and open connection.
-	client, err := lumenvoxSdk.CreateClient(
+	logger := logging.CreateLogger(cfg.LogLevel, "lumenvox-go-sdk")
+
+	var accessToken string // Not assigned for now
+
+	// Create connection. The connection should generally be reused when
+	// you are creating multiple clients.
+	conn, err := lumenvoxSdk.CreateConnection(
 		cfg.ApiEndpoint,
 		cfg.EnableTls,
 		cfg.CertificatePath,
 		cfg.AllowInsecureTls,
-		cfg.DeploymentId,
-		"", // Auth token unused
+		accessToken,
 	)
-
-	// Catch error from client creation.
 	if err != nil {
-		log.Fatalf("Failed to create connection: %v\n", err)
-		return
-	} else {
-		log.Printf("Successfully created connection to LumenVox API!")
+		logger.Error("failed to create connection",
+			"error", err)
+		os.Exit(1)
 	}
+
+	// Create the client
+	client := lumenvoxSdk.CreateClient(conn, cfg.DeploymentId)
+
+	logger.Info("successfully created connection to LumenVox API!")
 
 	///////////////////////
 	// Session creation
@@ -58,7 +65,9 @@ func main() {
 	streamTimeout := 5 * time.Minute
 	sessionObject, err := client.NewSession(streamTimeout, audioConfig)
 	if err != nil {
-		log.Fatalf("Failed to create session: %v", err.Error())
+		logger.Error("failed to create session",
+			"error", err.Error())
+		os.Exit(1)
 	}
 
 	///////////////////////
@@ -71,7 +80,9 @@ func main() {
 	audioFilePath := "./examples/test_data/1234.ulaw"
 	audioData, err = os.ReadFile(audioFilePath)
 	if err != nil {
-		log.Fatalf("Error reading audio file: %v", err.Error())
+		logger.Error("reading audio file",
+			"error", err.Error())
+		os.Exit(1)
 	}
 
 	// Queue the audio for the internal streamer.
@@ -104,17 +115,19 @@ func main() {
 	)
 
 	// Create interaction.
-	transcriptionInteraction, err := sessionObject.NewTranscription(language, nil, audioConsumeSettings, nil,
+	transcriptionInteraction, err := sessionObject.NewTranscription(language, nil, nil, audioConsumeSettings, nil,
 		vadSettings, recognitionSettings, "", "", "", nil)
 	if err != nil {
-		log.Printf("failed to create interaction: %v", err)
+		logger.Error("failed to create interaction",
+			"error", err)
 		sessionObject.CloseSession()
 		time.Sleep(500 * time.Millisecond) // Delay a little to get any residual messages
 		return
 	}
 
 	interactionId := transcriptionInteraction.InteractionId
-	log.Printf("received interaction ID: %s", interactionId)
+	logger.Info("received interactionId",
+		"interactionId", interactionId)
 
 	///////////////////////
 	// Get results
@@ -122,38 +135,43 @@ func main() {
 
 	err = transcriptionInteraction.WaitForBeginProcessing(0, 10*time.Second)
 	if err != nil {
-		log.Printf("error while waiting for begin processing: %v", err.Error())
+		logger.Error("waiting for begin processing",
+			"error", err.Error())
 		sessionObject.CloseSession()
 		return
 	}
-	fmt.Println("got begin processing")
+	logger.Debug("got begin processing")
 
 	err = transcriptionInteraction.WaitForBargeIn(0, 10*time.Second)
 	if err != nil {
-		log.Printf("error while waiting for barge in: %v", err.Error())
+		logger.Error("waiting for barge in",
+			"error", err.Error())
 		sessionObject.CloseSession()
 		return
 	}
-	fmt.Println("got barge in")
+	logger.Debug("got barge in")
 
 	// For an example of a manual finalize request, we can wait 1 second after barge-in
 	// and then send a finalize request. When we do this, we might not get an end-of-speech
 	// message from VAD, so don't wait for one.
-	fmt.Println("waiting 1 second before finalizing...")
+	logger.Debug("waiting 1 second before finalizing...")
 	time.Sleep(1 * time.Second)
 	err = sessionObject.FinalizeInteraction(interactionId)
 	if err != nil {
-		log.Printf("failed to finalize interaction: %v", err.Error())
+		logger.Error("failed to finalize interaction",
+			"error", err.Error())
 	} else {
-		fmt.Println("finalized interaction")
+		logger.Debug("finalized interaction")
 	}
 
 	// Now that we have called finalize, wait for the final results to become available.
 	finalResults, err := transcriptionInteraction.GetFinalResults(10 * time.Second)
 	if err != nil {
-		fmt.Printf("error while waiting for final results: %v\n", err)
+		logger.Error("waiting for final results",
+			"error", err)
 	} else {
-		fmt.Printf("got final results: %v\n", finalResults)
+		logger.Info("got final results",
+			"finalResults", finalResults)
 	}
 
 	///////////////////////

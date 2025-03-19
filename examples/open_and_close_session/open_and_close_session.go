@@ -3,10 +3,11 @@ package main
 import (
 	lumenvoxSdk "github.com/lumenvox/go-sdk"
 	"github.com/lumenvox/go-sdk/config"
+	"github.com/lumenvox/go-sdk/logging"
 	"github.com/lumenvox/go-sdk/lumenvox/api"
 	"github.com/lumenvox/go-sdk/session"
 
-	"log"
+	"os"
 	"time"
 )
 
@@ -19,27 +20,35 @@ func main() {
 	// Get SDK configuration
 	cfg, err := config.GetConfigValues("./config_values.ini")
 	if err != nil {
-		log.Fatalf("Unable to get config: %v\n", err)
-		return
+		tmpLogger, _ := logging.GetLogger() // get default logger
+		tmpLogger.Error("unable to get config",
+			"error", err)
+		os.Exit(1)
 	}
 
-	// Create client and open connection.
-	client, err := lumenvoxSdk.CreateClient(
+	logger := logging.CreateLogger(cfg.LogLevel, "lumenvox-go-sdk")
+
+	var accessToken string // Not assigned for now
+
+	// Create connection. The connection should generally be reused when
+	// you are creating multiple clients.
+	conn, err := lumenvoxSdk.CreateConnection(
 		cfg.ApiEndpoint,
 		cfg.EnableTls,
 		cfg.CertificatePath,
 		cfg.AllowInsecureTls,
-		cfg.DeploymentId,
-		"", // Auth token unused
+		accessToken,
 	)
-
-	// Catch error from client creation.
 	if err != nil {
-		log.Fatalf("Failed to create connection: %v\n", err)
-		return
-	} else {
-		log.Printf("Successfully created connection to LumenVox API!")
+		logger.Error("failed to create connection",
+			"error", err)
+		os.Exit(1)
 	}
+
+	// Create the client
+	client := lumenvoxSdk.CreateClient(conn, cfg.DeploymentId)
+
+	logger.Info("successfully created connection to LumenVox API!")
 
 	///////////////////////
 	// Session creation
@@ -57,9 +66,13 @@ func main() {
 	streamTimeout := 5 * time.Minute
 	sessionObject, err := client.NewSession(streamTimeout, audioConfig)
 	if err != nil {
-		log.Fatalf("Failed to create session: %v", err.Error())
+		logger.Error("failed to create session",
+			"error", err.Error())
+		os.Exit(1)
 	}
-	log.Printf("Session ID: %s", sessionObject.SessionId)
+
+	logger.Info("received session response",
+		"SessionId", sessionObject.SessionId)
 
 	///////////////////////
 	// Session close

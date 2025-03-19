@@ -5,7 +5,6 @@ import (
 
 	"errors"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 )
@@ -53,6 +52,8 @@ func (session *SessionObject) NewAsr(
 	audioConsumeSettings *api.AudioConsumeSettings,
 	generalInteractionSettings *api.GeneralInteractionSettings) (interactionObject *AsrInteractionObject, err error) {
 
+	logger := getLogger()
+
 	// Create ASR interaction, adding parameters such as VAD and recognition settings
 
 	session.streamSendLock.Lock()
@@ -61,7 +62,8 @@ func (session *SessionObject) NewAsr(
 	session.streamSendLock.Unlock()
 	if err != nil {
 		session.errorChan <- fmt.Errorf("sending InteractionCreateAsrRequest error: %v", err)
-		log.Printf("error sending ASR create request: %v", err.Error())
+		logger.Error("sending ASR create request",
+			"error", err.Error())
 		return nil, err
 	}
 
@@ -69,7 +71,8 @@ func (session *SessionObject) NewAsr(
 	asrResponse := <-session.createdAsrChannel
 	interactionId := asrResponse.InteractionId
 	if EnableVerboseLogging {
-		log.Printf("created new ASR interaction: %s", interactionId)
+		logger.Debug("created new ASR interaction",
+			"interactionId", interactionId)
 	}
 
 	// Create the interaction object.

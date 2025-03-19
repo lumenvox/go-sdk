@@ -340,7 +340,7 @@ type isGlobalRequest_Request interface {
 }
 
 type GlobalRequest_GlobalLoadGrammarRequest struct {
-	// Load a globally defined grammar
+	// Load a globally defined grammar. This feature is not currently available.
 	GlobalLoadGrammarRequest *GlobalLoadGrammarRequest `protobuf:"bytes,4,opt,name=global_load_grammar_request,json=globalLoadGrammarRequest,proto3,oneof"`
 }
 
@@ -587,6 +587,7 @@ func (*GlobalResponse_GlobalGrammar) isGlobalResponse_Response() {}
 
 func (*GlobalResponse_GlobalPhraseList) isGlobalResponse_Response() {}
 
+// Not currently available
 type GlobalLoadGrammarRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache

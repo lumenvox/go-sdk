@@ -3,17 +3,21 @@ package session
 import (
 	"github.com/lumenvox/go-sdk/lumenvox/api"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"io"
-	"log"
 	"strings"
 )
 
 // sessionResponseListener handles all responses from the specified session.
 func sessionResponseListener(session *SessionObject, sessionIdChan chan string) {
 
+	logger := getLogger()
+
 	if EnableVerboseLogging {
 		defer func() {
-			log.Printf("exiting responseHandler for session: %s", session.SessionId)
+			logger.Debug("exiting responseHandler",
+				"session", session.SessionId)
 		}()
 	}
 
@@ -21,6 +25,15 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 
 	for {
 		response, err := session.SessionStream.Recv()
+		if status.Code(err) == codes.Unauthenticated {
+			// Token expiration detected. Handle it accordingly:
+			logger.Error("sessionStream.Recv() failed with gRPC error: Unauthenticated",
+				"error", err)
+			if waitingOnSessionId {
+				sessionIdChan <- ""
+			}
+			break
+		}
 		if err == io.EOF {
 			if waitingOnSessionId {
 				sessionIdChan <- ""
@@ -28,7 +41,15 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			break
 		}
 		if err != nil {
-			log.Printf("sessionStream.Recv() failed: %v", err)
+			if statusErr, ok := status.FromError(err); ok {
+				// Error type is status, so unpack it, for clearer reporting
+				logger.Error("sessionStream.Recv() failed with status",
+					"error", statusErr.Message())
+			} else {
+				logger.Error("sessionStream.Recv() failed",
+					"error", err)
+			}
+
 			if waitingOnSessionId {
 				sessionIdChan <- ""
 			}
@@ -36,13 +57,15 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 		}
 
 		if EnableVerboseLogging {
-			log.Printf("####>>>> sessionStream.Recv() received: %v", response)
+			logger.Debug("sessionStream.Recv() received",
+				"response", response)
 		}
 
 		if response.SessionId != nil && response.SessionId.Value != "" {
 			if response.SessionId.Value != "" {
 				if EnableVerboseLogging {
-					log.Printf("Recv SessionId: %s", response.SessionId.Value)
+					logger.Debug("Recv response",
+						"SessionId", response.SessionId.Value)
 				}
 				if waitingOnSessionId {
 					sessionIdChan <- response.SessionId.Value
@@ -50,10 +73,10 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 				} else {
 					// if we weren't waiting on a session ID but got one anyway,
 					// log a warning.
-					log.Printf("warning: received extra session ID")
+					logger.Warn("received extra session ID")
 				}
 			} else {
-				log.Printf("Recv empty SessionId")
+				logger.Error("Recv empty SessionId")
 				if waitingOnSessionId {
 					sessionIdChan <- ""
 				}
@@ -63,7 +86,8 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 		} else if response.GetVadEvent() != nil {
 
 			if EnableVerboseLogging {
-				log.Printf("Recv VadEvent: %+v", response.GetVadEvent())
+				logger.Debug("Recv VadEvent",
+					"responseType", response.GetVadEvent())
 			}
 
 			handleVadEvent(session, response)
@@ -71,7 +95,7 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 		} else if response.GetPartialResult() != nil {
 
 			if EnableVerboseLogging {
-				log.Printf("Recv PartialResult")
+				logger.Debug("Recv PartialResult")
 			}
 
 			handlePartialResult(session, response)
@@ -79,7 +103,8 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 		} else if response.GetFinalResult() != nil {
 
 			if EnableVerboseLogging {
-				log.Printf("Recv FinalResult:\n%+v", response)
+				logger.Debug("Recv FinalResult",
+					"response", response)
 			}
 
 			handleFinalResult(session, response)
@@ -87,7 +112,8 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 		} else if response.GetInteractionCreateAsr() != nil {
 
 			if EnableVerboseLogging {
-				log.Printf("Recv InteractionCreateAsrResponse: %+v", response.GetInteractionCreateAsr())
+				logger.Debug("Recv InteractionCreateAsrResponse",
+					"response", response.GetInteractionCreateAsr())
 			}
 
 			session.createdAsrChannel <- response.GetInteractionCreateAsr()
@@ -95,7 +121,8 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 		} else if response.GetInteractionCreateTranscription() != nil {
 
 			if EnableVerboseLogging {
-				log.Printf("Recv GetInteractionCreateTranscription: %+v", response.GetInteractionCreateTranscription())
+				logger.Debug("Recv GetInteractionCreateTranscription",
+					"response", response.GetInteractionCreateTranscription())
 			}
 
 			session.createdTranscriptionChannel <- response.GetInteractionCreateTranscription()
@@ -103,7 +130,8 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 		} else if response.GetInteractionCreateAmd() != nil {
 
 			if EnableVerboseLogging {
-				log.Printf("Recv InteractionCreateAmdResponse: %+v", response.GetInteractionCreateAmd())
+				logger.Debug("Recv InteractionCreateAmdResponse",
+					"response", response.GetInteractionCreateAmd())
 			}
 
 			session.createdAmdChannel <- response.GetInteractionCreateAmd()
@@ -111,7 +139,8 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 		} else if response.GetInteractionCreateCpa() != nil {
 
 			if EnableVerboseLogging {
-				log.Printf("Recv InteractionCreateCpaResponse: %+v", response.GetInteractionCreateCpa())
+				logger.Debug("Recv InteractionCreateCpaResponse",
+					"response", response.GetInteractionCreateCpa())
 			}
 
 			session.createdCpaChannel <- response.GetInteractionCreateCpa()
@@ -119,7 +148,8 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 		} else if response.GetInteractionCreateNlu() != nil {
 
 			if EnableVerboseLogging {
-				log.Printf("Recv GetInteractionCreateNlu: %+v", response.GetInteractionCreateNlu())
+				logger.Debug("Recv GetInteractionCreateNlu",
+					"response", response.GetInteractionCreateNlu())
 			}
 
 			session.createdNluChannel <- response.GetInteractionCreateNlu()
@@ -127,7 +157,8 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 		} else if response.GetInteractionCreateNormalizeText() != nil {
 
 			if EnableVerboseLogging {
-				log.Printf("Recv GetInteractionCreateNormalizeText: %+v", response.GetInteractionCreateNormalizeText())
+				logger.Debug("Recv GetInteractionCreateNormalizeText",
+					"response", response.GetInteractionCreateNormalizeText())
 			}
 
 			session.createdNormalizeChannel <- response.GetInteractionCreateNormalizeText()
@@ -135,7 +166,8 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 		} else if response.GetInteractionCreateGrammarParse() != nil {
 
 			if EnableVerboseLogging {
-				log.Printf("Recv InteractionCreateGrammarParseResponse: %+v", response)
+				logger.Debug("Recv InteractionCreateGrammarParseResponse",
+					"response", response)
 			}
 
 			session.createdGrammarParseChannel <- response.GetInteractionCreateGrammarParse()
@@ -143,15 +175,26 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 		} else if response.GetInteractionCreateTts() != nil {
 
 			if EnableVerboseLogging {
-				log.Printf("Recv GetInteractionCreateTts: %+v", response)
+				logger.Debug("Recv GetInteractionCreateTts",
+					"response", response)
 			}
 
 			session.createdTtsChannel <- response.GetInteractionCreateTts()
 
+		} else if response.GetInteractionCreateDiarization() != nil {
+
+			if EnableVerboseLogging {
+				logger.Debug("Recv GetInteractionCreateDiarization",
+					"response", response)
+			}
+
+			session.createdDiarizationChannel <- response.GetInteractionCreateDiarization()
+
 		} else if response.GetAudioPull() != nil {
 
 			if EnableVerboseLogging {
-				log.Printf("Recv GetAudioPull numBytes: %d", len(response.GetAudioPull().GetAudioData()))
+				logger.Debug("Recv GetAudioPull",
+					"numBytes", len(response.GetAudioPull().GetAudioData()))
 			}
 
 			session.audioPullChannel <- response.GetAudioPull()
@@ -159,7 +202,8 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 		} else if response.GetSessionGrammar() != nil {
 
 			if EnableVerboseLogging {
-				log.Printf("Recv SessionLoadGrammarResponse: %+v", response)
+				logger.Debug("Recv SessionLoadGrammarResponse",
+					"response", response)
 			}
 
 			session.sessionLoadChannel <- response.GetSessionGrammar()
@@ -167,7 +211,8 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 		} else if response.GetSessionGetSettings() != nil {
 
 			if EnableVerboseLogging {
-				log.Printf("Recv SessionGetSettings: %+v", response)
+				logger.Debug("Recv SessionGetSettings",
+					"response", response)
 			}
 
 			session.sessionSettingsChannel <- response.GetSessionGetSettings()
@@ -177,7 +222,8 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			if response.GetSessionClose() != nil {
 
 				if EnableVerboseLogging {
-					log.Printf("Recv SessionCloseResponse: %+v", response)
+					logger.Debug("Recv SessionCloseResponse",
+						"response", response)
 				}
 				session.SessionCloseChannel <- struct{}{}
 				break
@@ -185,23 +231,28 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			} else if response.GetSessionEvent() != nil {
 
 				if EnableVerboseLogging {
-					log.Printf("Recv session event: %+v", response.GetSessionEvent())
+					logger.Debug("Recv session event",
+						"response", response.GetSessionEvent())
 				}
 				if response.GetSessionEvent().StatusMessage != nil {
 					if strings.Contains(response.GetSessionEvent().StatusMessage.Message, "grammar failed to load") {
-						log.Printf("Recv grammar error: %+v", response)
+						logger.Error("Recv grammar error",
+							"response", response)
 						session.grammarErrorChannel <- response.GetSessionEvent()
 					}
 				}
 
 			} else {
-				log.Printf("Recv unexpected response type: %+v", response)
+				logger.Error("Recv unexpected response type",
+					"response", response)
 			}
 		}
 	}
 }
 
 func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
+
+	logger := getLogger()
 
 	// Get the interaction id, to find the interaction object.
 	interactionId := response.GetVadEvent().GetInteractionId()
@@ -218,7 +269,7 @@ func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
 			var bargeInTime int
 			if bargeInAudioOffset == nil {
 				bargeInTime = 0
-				log.Printf("warning: VAD BARGE-IN event detected with empty AudioOffset. Using 0.")
+				logger.Warn("VAD BARGE-IN event detected with empty AudioOffset. Using 0.")
 			} else {
 				bargeInTime = int(bargeInAudioOffset.Value)
 			}
@@ -271,7 +322,8 @@ func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
 				// We got something other than a BEGIN_PROCESSING event. For now, the SDK
 				// expects a BEGIN_PROCESSING event to start every new VAD interaction, so
 				// we have received an invalid transition. Log a warning.
-				log.Printf("warning: received VAD event before BEGIN_PROCESSING: %v", response.GetVadEvent().VadEventType.String())
+				logger.Warn("received VAD event before BEGIN_PROCESSING",
+					"response", response.GetVadEvent().VadEventType.String())
 			}
 
 		case api.VadEvent_VAD_EVENT_TYPE_BEGIN_PROCESSING:
@@ -290,7 +342,7 @@ func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
 				var bargeInTime int
 				if bargeInAudioOffset == nil {
 					bargeInTime = 1
-					log.Printf("warning: VAD BARGE-IN event detected with empty AudioOffset. Using 1.")
+					logger.Warn("VAD BARGE-IN event detected with empty AudioOffset. Using 1.")
 				} else {
 					bargeInTime = int(bargeInAudioOffset.Value)
 				}
@@ -316,9 +368,9 @@ func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
 			default:
 				// We received something that doesn't make sense after a BEGIN_PROCESSING.
 				// In other words, an invalid transition. Log a warning.
-				log.Printf("warning: ignoring invalid VAD state transition: %v -> %v",
-					currentVadInteractionState.String(),
-					response.GetVadEvent().VadEventType.String())
+				logger.Warn("ignoring invalid VAD state transition",
+					"fromState", currentVadInteractionState.String(),
+					"toState", response.GetVadEvent().VadEventType.String())
 			}
 
 		case api.VadEvent_VAD_EVENT_TYPE_BARGE_IN:
@@ -337,7 +389,7 @@ func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
 				var bargeOutTime int
 				if bargeOutAudioOffset == nil {
 					bargeOutTime = 1
-					log.Printf("warning: VAD END_OF_SPEECH event detected with empty AudioOffset. Using 1.")
+					logger.Warn("VAD END_OF_SPEECH event detected with empty AudioOffset. Using 1.")
 				} else {
 					bargeOutTime = int(bargeOutAudioOffset.Value)
 				}
@@ -353,9 +405,9 @@ func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
 			default:
 				// We received something that doesn't make sense after a BARGE_IN. In other
 				// words, an invalid transition. Log a warning.
-				log.Printf("warning: ignoring invalid VAD state transition: %v -> %v",
-					currentVadInteractionState.String(),
-					response.GetVadEvent().VadEventType.String())
+				logger.Warn("ignoring invalid VAD state transition",
+					"fromState", currentVadInteractionState.String(),
+					"toState", response.GetVadEvent().VadEventType.String())
 			}
 
 		case api.VadEvent_VAD_EVENT_TYPE_END_OF_SPEECH:
@@ -384,9 +436,9 @@ func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
 			default:
 				// We received something that doesn't make sense after an END_OF_SPEECH. In
 				// other words, an invalid transition. Log a warning.
-				log.Printf("warning: ignoring invalid VAD state transition: %v -> %v",
-					currentVadInteractionState.String(),
-					response.GetVadEvent().VadEventType.String())
+				logger.Warn("ignoring invalid VAD state transition",
+					"fromState", currentVadInteractionState.String(),
+					"toState", response.GetVadEvent().VadEventType.String())
 			}
 
 		case api.VadEvent_VAD_EVENT_TYPE_BARGE_IN_TIMEOUT:
@@ -415,15 +467,15 @@ func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
 			default:
 				// We received something that doesn't make sense after a BARGE_IN_TIMEOUT. In
 				// other words, an invalid transition. Log a warning.
-				log.Printf("warning: ignoring invalid VAD state transition: %v -> %v",
-					currentVadInteractionState.String(),
-					response.GetVadEvent().VadEventType.String())
+				logger.Warn("ignoring invalid VAD state transition",
+					"fromState", currentVadInteractionState.String(),
+					"toState", response.GetVadEvent().VadEventType.String())
 			}
 
 		default:
 			// Unexpected current state. Should never happen, but just in case, log a warning
-			log.Printf("warning: unexpected VAD current state: %v",
-				currentVadInteractionState.String())
+			logger.Warn("unexpected VAD",
+				"current state", currentVadInteractionState.String())
 		}
 		interactionObject.vadEventsLock.Unlock()
 
@@ -438,7 +490,7 @@ func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
 			var bargeInTime int
 			if bargeInAudioOffset == nil {
 				bargeInTime = 0
-				log.Printf("warning: VAD BARGE-IN event detected with empty AudioOffset. Using 0.")
+				logger.Warn("VAD BARGE-IN event detected with empty AudioOffset. Using 0.")
 			} else {
 				bargeInTime = int(bargeInAudioOffset.Value)
 			}
@@ -456,12 +508,15 @@ func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
 	} else {
 
 		// We did not find the interaction.
-		log.Printf("Recv VadEvent: interaction not found: %s", interactionId)
+		logger.Error("Recv VadEvent: interaction not found",
+			"interactionId", interactionId)
 
 	}
 }
 
 func handleFinalResult(session *SessionObject, response *api.SessionResponse) {
+
+	logger := getLogger()
 
 	// Get the interaction id, to find the interaction object.
 	interactionId := response.GetFinalResult().GetInteractionId()
@@ -515,13 +570,23 @@ func handleFinalResult(session *SessionObject, response *api.SessionResponse) {
 		interactionObject.finalResultsReceived = true
 		close(interactionObject.resultsReadyChannel)
 
+	} else if interactionObject, ok := session.diarizationInteractionsMap[interactionId]; ok {
+
+		// This is a diarization interaction.
+		interactionObject.finalResults = response.GetFinalResult().GetFinalResult().GetDiarizationInteractionResult()
+		interactionObject.finalResultsReceived = true
+		close(interactionObject.resultsReadyChannel)
+
 	} else {
 		// We did not find the interaction.
-		log.Printf("Recv FinalResult: interaction not found: %s", interactionId)
+		logger.Error("Recv FinalResult: interaction not found",
+			"interactionId", interactionId)
 	}
 }
 
 func handlePartialResult(session *SessionObject, response *api.SessionResponse) {
+
+	logger := getLogger()
 
 	// Get the interaction id, to find the interaction object.
 	interactionId := response.GetPartialResult().GetInteractionId()
@@ -568,6 +633,7 @@ func handlePartialResult(session *SessionObject, response *api.SessionResponse) 
 
 	} else {
 		// We did not find the interaction.
-		log.Printf("Recv PartialResult: interaction not found: %s", interactionId)
+		logger.Error("Recv PartialResult: interaction not found",
+			"interactionId", interactionId)
 	}
 }

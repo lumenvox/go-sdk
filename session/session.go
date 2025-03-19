@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"google.golang.org/grpc"
-	"log"
 	"os"
 	"sync"
 	"time"
@@ -63,6 +62,7 @@ type SessionObject struct {
 	createdNluChannel           chan *api.InteractionCreateNluResponse
 	createdGrammarParseChannel  chan *api.InteractionCreateGrammarParseResponse
 	createdTtsChannel           chan *api.InteractionCreateTtsResponse
+	createdDiarizationChannel   chan *api.InteractionCreateDiarizationResponse
 	grammarErrorChannel         chan *api.SessionEvent
 	errorChan                   chan error
 	stopStreamingAudio          chan struct{}
@@ -75,6 +75,7 @@ type SessionObject struct {
 	nluInteractionsMap           map[string]*NluInteractionObject
 	normalizationInteractionsMap map[string]*NormalizationInteractionObject
 	ttsInteractionsMap           map[string]*TtsInteractionObject
+	diarizationInteractionsMap   map[string]*DiarizationInteractionObject
 
 	// settings
 	sessionSettingsChannel chan *api.SessionSettings
@@ -121,6 +122,7 @@ func newSessionObject(
 		createdNormalizeChannel:     make(chan *api.InteractionCreateNormalizeTextResponse, 100),
 		createdGrammarParseChannel:  make(chan *api.InteractionCreateGrammarParseResponse, 100),
 		createdTtsChannel:           make(chan *api.InteractionCreateTtsResponse, 100),
+		createdDiarizationChannel:   make(chan *api.InteractionCreateDiarizationResponse, 100),
 		grammarErrorChannel:         make(chan *api.SessionEvent, 100),
 		errorChan:                   make(chan error, 10),
 		stopStreamingAudio:          make(chan struct{}, 1),
@@ -134,6 +136,7 @@ func newSessionObject(
 		nluInteractionsMap:           make(map[string]*NluInteractionObject),
 		normalizationInteractionsMap: make(map[string]*NormalizationInteractionObject),
 		ttsInteractionsMap:           make(map[string]*TtsInteractionObject),
+		diarizationInteractionsMap:   make(map[string]*DiarizationInteractionObject),
 	}
 }
 
@@ -145,6 +148,8 @@ func CreateNewSession(
 	audioConfig AudioConfig,
 	operatorId string,
 ) (newSession *SessionObject, err error) {
+
+	logger := getLogger()
 
 	// Set up the stream.
 	grpcClient := api.NewLumenVoxClient(clientConn)
@@ -179,9 +184,10 @@ func CreateNewSession(
 	if err != nil {
 		// If we failed to send the request, log an error, cancel the stream,
 		// and return.
-		log.Printf("stream.Send failed sending session request: %v\n", err)
+		logger.Error("stream.Send failed sending session request",
+			"error", err)
 		streamCancel()
-		return nil, err
+		return nil, errors.New("failed to send session request")
 	}
 
 	// Get session id from channel (should be populated by the response
@@ -191,7 +197,7 @@ func CreateNewSession(
 	case newSessionId = <-sessionIdChan:
 	case <-time.After(10 * time.Second):
 		// No session ID for 10 seconds, give up.
-		log.Printf("no session ID for 10 seconds")
+		logger.Error("no session ID for 10 seconds")
 		streamCancel()
 		return nil, errors.New("timeout waiting for session ID")
 	}
@@ -208,7 +214,7 @@ func CreateNewSession(
 		activeSessionsMap.Unlock()
 	} else {
 		// We got an empty session ID. clean up.
-		log.Printf("empty session ID")
+		logger.Error("empty session ID")
 		streamCancel()
 		return nil, errors.New("empty session ID")
 	}
@@ -220,7 +226,8 @@ func CreateNewSession(
 		newSession.streamSendLock.Unlock()
 		if err != nil {
 			newSession.errorChan <- fmt.Errorf("sending SessionInboundAudioFormatRequest error: %v", err)
-			log.Printf("stream.Send failed setting audio format: %v\n", err)
+			logger.Error("stream.Send failed setting audio format",
+				"error", err)
 			newSession.SessionCancel()
 			return nil, err
 		}
@@ -231,6 +238,8 @@ func CreateNewSession(
 
 // CloseSession closes the specified session object and releases its resources.
 func (session *SessionObject) CloseSession() {
+
+	logger := getLogger()
 
 	sessionId := session.SessionId
 
@@ -250,7 +259,9 @@ func (session *SessionObject) CloseSession() {
 	err := session.SessionStream.Send(getSessionCloseRequest(""))
 	session.streamSendLock.Unlock()
 	if err != nil {
-		log.Printf("error sending session close request (sessionId %s): %v", sessionId, err.Error())
+		logger.Error("sending session close request",
+			"sessionId", sessionId,
+			"error", err.Error())
 	}
 
 	// Pause to allow the close session message to be sent.

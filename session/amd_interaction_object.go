@@ -5,7 +5,6 @@ import (
 
 	"errors"
 	"fmt"
-	"log"
 	"time"
 )
 
@@ -43,6 +42,8 @@ func (session *SessionObject) NewAmd(
 	vadSettings *api.VadSettings,
 	generalInteractionSettings *api.GeneralInteractionSettings) (interactionObject *AmdInteractionObject, err error) {
 
+	logger := getLogger()
+
 	// Create AMD interaction, adding parameters such as VAD and recognition settings
 
 	session.streamSendLock.Lock()
@@ -51,7 +52,8 @@ func (session *SessionObject) NewAmd(
 	session.streamSendLock.Unlock()
 	if err != nil {
 		session.errorChan <- fmt.Errorf("sending InteractionCreateAmdRequest error: %v", err)
-		log.Printf("error sending AMD create request: %v", err.Error())
+		logger.Error("sending AMD create request",
+			"error", err.Error())
 		return nil, err
 	}
 
@@ -59,7 +61,8 @@ func (session *SessionObject) NewAmd(
 	amdResponse := <-session.createdAmdChannel
 	interactionId := amdResponse.InteractionId
 	if EnableVerboseLogging {
-		log.Printf("created new AMD interaction: %s", interactionId)
+		logger.Debug("created new AMD interaction",
+			"interactionId", interactionId)
 	}
 
 	// Create the interaction object.

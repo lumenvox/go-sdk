@@ -5,7 +5,6 @@ import (
 
 	"context"
 	"errors"
-	"log"
 	"time"
 )
 
@@ -72,20 +71,24 @@ func streamBatchAudio(session *SessionObject, producerCtx context.Context, audio
 		return
 	}
 
+	logger := getLogger()
+
 	// Get audio chunk parameters from the audio config
 	chunkSize := session.audioConfig.BatchChunkSize
 	chunkDelayMs := session.audioConfig.BatchChunkDelayMs
 
 	// Catch invalid chunk parameters
 	if chunkSize < 0 {
-		log.Printf("warning: invalid BatchChunkSize %d (should be non-negative). Using default (%d)",
-			chunkSize, defaultBatchChunkSize)
-		chunkSize = 0
+		logger.Warn("invalid BatchChunkSize (should be non-negative) - using default",
+			"chunkSpecified", chunkSize,
+			"default", defaultBatchChunkSize)
+		chunkSize = 0 // value assigned below
 	}
 	if chunkDelayMs < 0 {
-		log.Printf("warning: invalid BatchChunkDelayMs %d (should be non-negative). Using default (%d)",
-			chunkDelayMs, defaultBatchChunkDelayMs)
-		chunkDelayMs = 0
+		logger.Warn("invalid BatchChunkDelayMs (should be non-negative) - using default",
+			"chunkDelayMsSpecified", chunkDelayMs,
+			"default", defaultBatchChunkDelayMs)
+		chunkDelayMs = 0 // value assigned below
 	}
 
 	// Use defaults if necessary
@@ -105,7 +108,8 @@ func streamBatchAudio(session *SessionObject, producerCtx context.Context, audio
 	err := session.SessionStream.Send(getAudioPushRequest("", audioData[:firstChunkSize]))
 	session.streamSendLock.Unlock()
 	if err != nil {
-		log.Printf("error sending audio to API: %+v", err)
+		logger.Error("sending audio to API",
+			"error", err)
 	}
 	remainingAudioData := audioData[firstChunkSize:]
 
@@ -135,7 +139,8 @@ audioStreamLoop:
 			err := session.SessionStream.Send(getAudioPushRequest("", remainingAudioData[:nextChunkSize]))
 			session.streamSendLock.Unlock()
 			if err != nil {
-				log.Printf("error sending audio to API: %+v", err)
+				logger.Error("sending audio to API",
+					"error", err)
 			}
 
 			// Update the remaining audio
@@ -161,6 +166,8 @@ func (session *SessionObject) handleInternalStream(producerCtx context.Context, 
 
 	// Set up a ticker to handle audio streaming
 	ticker := time.NewTicker(time.Duration(chunkSizeMs) * time.Millisecond)
+
+	logger := getLogger()
 
 audioStreamLoop:
 	for {
@@ -193,7 +200,8 @@ audioStreamLoop:
 			err := session.SessionStream.Send(getAudioPushRequest("", nextChunkData))
 			session.streamSendLock.Unlock()
 			if err != nil {
-				log.Printf("error sending audio to API: %+v", err)
+				logger.Error("sending audio to API",
+					"error", err)
 			}
 
 		case <-session.stopStreamingAudio:
@@ -227,6 +235,8 @@ func streamStreamAudio(session *SessionObject, producerCtx context.Context, prod
 		return nil
 	}
 
+	logger := getLogger()
+
 	// Check if we have initialized the audio streaming goroutine. If we haven't,
 	// initialize it.
 	session.audioStreamerLock.Lock()
@@ -235,8 +245,9 @@ func streamStreamAudio(session *SessionObject, producerCtx context.Context, prod
 		// Get the chunk size in milliseconds
 		chunkSizeMs := session.audioConfig.StreamingChunkSizeMs
 		if chunkSizeMs < 0 {
-			log.Printf("warning: invalid StreamingChunkSizeMs %d (should be non-negative). Using default (%d)",
-				chunkSizeMs, defaultStreamingChunkSizeMs)
+			logger.Warn("invalid StreamingChunkSizeMs (should be non-negative) - using default",
+				"chunkSizeMs", chunkSizeMs,
+				"default", defaultStreamingChunkSizeMs)
 			chunkSizeMs = 0
 		}
 		if chunkSizeMs == 0 {

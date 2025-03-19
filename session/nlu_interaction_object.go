@@ -5,7 +5,6 @@ import (
 
 	"errors"
 	"fmt"
-	"log"
 	"time"
 )
 
@@ -26,6 +25,8 @@ func (session *SessionObject) NewNlu(language string,
 	nluSettings *api.NluSettings,
 	generalInteractionSettings *api.GeneralInteractionSettings) (interactionObject *NluInteractionObject, err error) {
 
+	logger := getLogger()
+
 	// Create NLU interaction, adding specified parameters
 
 	session.streamSendLock.Lock()
@@ -34,7 +35,8 @@ func (session *SessionObject) NewNlu(language string,
 	session.streamSendLock.Unlock()
 	if err != nil {
 		session.errorChan <- fmt.Errorf("sending InteractionCreateNluRequest error: %v", err)
-		log.Printf("error sending NLU create request: %v", err.Error())
+		logger.Error("sending NLU create request",
+			"error", err.Error())
 		return nil, err
 	}
 
@@ -42,7 +44,8 @@ func (session *SessionObject) NewNlu(language string,
 	nluResponse := <-session.createdNluChannel
 	interactionId := nluResponse.InteractionId
 	if EnableVerboseLogging {
-		log.Printf("created new NLU interaction: %s", interactionId)
+		logger.Debug("created new NLU interaction",
+			"interactionId", interactionId)
 	}
 
 	// Create the interaction object.

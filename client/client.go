@@ -3,6 +3,7 @@ package client
 import (
 	"github.com/lumenvox/go-sdk/connection"
 	"github.com/lumenvox/go-sdk/session"
+
 	"github.com/google/uuid"
 	"time"
 )
@@ -14,9 +15,9 @@ type SdkClient struct {
 	DeploymentId string
 }
 
-// CreateSdkClient attempts to create a client object with the provided
-// connection settings. apiEndpoint should contain the address of the
-// lumenvox-api, and deploymentId should contain your deployment ID.
+// CreateConnection attempts to create a grpc connection object with
+// the provided connection settings. apiEndpoint should contain the
+// address of the lumenvox-api.
 //
 // Most users will want to enable TLS. To do this, tlsEnabled must be true.
 // Depending on your environment, you may need to provide a root certificate
@@ -24,13 +25,8 @@ type SdkClient struct {
 // requirement, but this setting should not be used in production.
 //
 // If you have an OAuth token, you should provide it here.
-func CreateSdkClient(apiEndpoint string, tlsEnabled bool, certificatePath string,
-	allowInsecureTls bool, deploymentId string, authToken string) (client *SdkClient, err error) {
-
-	client = &SdkClient{
-		Connection:   nil,
-		DeploymentId: deploymentId,
-	}
+func CreateConnection(apiEndpoint string, tlsEnabled bool, certificatePath string,
+	allowInsecureTls bool, authToken string) (conn *connection.GrpcConnection, err error) {
 
 	connectionConfig := connection.GrpcConnectionConfig{
 		TlsEnabled:       tlsEnabled,
@@ -40,9 +36,18 @@ func CreateSdkClient(apiEndpoint string, tlsEnabled bool, certificatePath string
 		AuthToken:        authToken,
 	}
 
-	client.Connection, err = connection.CreateNewConnection(connectionConfig)
+	return connection.CreateNewConnection(connectionConfig)
+}
 
-	return client, err
+// CreateSdkClient creates a client object with the provided
+// connection. Note that multiple clients can share the same
+// connection.
+func CreateSdkClient(conn *connection.GrpcConnection, deploymentId string) (client *SdkClient) {
+
+	return &SdkClient{
+		Connection:   conn,
+		DeploymentId: deploymentId,
+	}
 }
 
 // NewSession attempts to create a new session for the specified sdkClient. On

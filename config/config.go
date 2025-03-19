@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
-	"log"
 	"os"
 	"reflect"
 	"strings"
@@ -65,11 +64,15 @@ func GetConfigValues(iniFilepath string) (cfg *ConfigValues, err error) {
 // be used to override any file-based or default values.
 func (configValues *ConfigValues) Load(iniFilepath string) (err error) {
 
+	logger := getLogger()
+
 	if iniFilepath != "" {
 		// Attempt to load the ini file
 		configFromFile, err := ini.Load(iniFilepath)
 		if err != nil {
-			log.Printf("Failed to load settings from file (%s): %v\n", iniFilepath, err)
+			logger.Error("failed to load settings from file",
+				"iniFilepath", iniFilepath,
+				"error", err)
 		} else {
 			configValues.loadedFile = iniFilepath
 
@@ -92,7 +95,8 @@ func (configValues *ConfigValues) Load(iniFilepath string) (err error) {
 							field.SetString(value)
 						}
 					} else {
-						log.Printf("Warning: Configuration key '%s' not found in struct. Ignoring.", key)
+						logger.Warn("configuration key not found in struct - ignoring.",
+							"key_name", key)
 					}
 				}
 			}
@@ -138,17 +142,21 @@ func (configValues *ConfigValues) Load(iniFilepath string) (err error) {
 					field.SetString(shortKey)
 				}
 			} else {
-				log.Printf("Warning: Configuration key '%s' not found in struct. Ignoring.", key)
+				logger.Warn("configuration key not found in struct - ignoring.",
+					"key_name", key)
 			}
 		}
 	}
 
 	err = configValues.Validate()
+
 	return err
 }
 
 // parseHeadersString parses a comma-delimited string of key=value pairs into the headers map.
 func (configValues *ConfigValues) parseHeadersString(headersString string) {
+
+	logger := getLogger()
 
 	headerPairs := strings.Split(headersString, ",")
 	for _, pair := range headerPairs {
@@ -159,7 +167,8 @@ func (configValues *ConfigValues) parseHeadersString(headersString string) {
 
 		parts := strings.SplitN(pair, "=", 2)
 		if len(parts) != 2 {
-			log.Printf("Invalid header pair: %s", pair)
+			logger.Error("invalid header pair",
+				"pair", pair)
 			continue
 		}
 

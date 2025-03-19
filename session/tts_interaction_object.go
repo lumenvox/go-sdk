@@ -2,9 +2,9 @@ package session
 
 import (
 	"github.com/lumenvox/go-sdk/lumenvox/api"
+
 	"errors"
 	"fmt"
-	"log"
 	"time"
 )
 
@@ -27,6 +27,8 @@ func (session *SessionObject) NewInlineTts(language string,
 	synthesisTimeoutMs *api.OptionalInt32,
 	generalInteractionSettings *api.GeneralInteractionSettings) (interactionObject *TtsInteractionObject, err error) {
 
+	logger := getLogger()
+
 	// Create TTS interaction, adding specified parameters
 
 	session.streamSendLock.Lock()
@@ -35,7 +37,8 @@ func (session *SessionObject) NewInlineTts(language string,
 	session.streamSendLock.Unlock()
 	if err != nil {
 		session.errorChan <- fmt.Errorf("sending InteractionCreateTtsRequest error: %v", err)
-		log.Printf("error sending tts create request: %v", err.Error())
+		logger.Error("sending tts create request",
+			"error", err.Error())
 		return nil, err
 	}
 
@@ -43,7 +46,8 @@ func (session *SessionObject) NewInlineTts(language string,
 	ttsResponse := <-session.createdTtsChannel
 	interactionId := ttsResponse.InteractionId
 	if EnableVerboseLogging {
-		log.Printf("created new TTS interaction: %s", interactionId)
+		logger.Debug("created new TTS interaction",
+			"interactionId", interactionId)
 	}
 
 	// Create the interaction object.
@@ -69,6 +73,8 @@ func (session *SessionObject) NewUrlTts(language string,
 	synthesisTimeoutMs *api.OptionalInt32,
 	generalInteractionSettings *api.GeneralInteractionSettings) (interactionObject *TtsInteractionObject, err error) {
 
+	logger := getLogger()
+
 	// Create TTS interaction, adding specified parameters
 
 	session.streamSendLock.Lock()
@@ -77,7 +83,8 @@ func (session *SessionObject) NewUrlTts(language string,
 	session.streamSendLock.Unlock()
 	if err != nil {
 		session.errorChan <- fmt.Errorf("sending InteractionCreateTtsRequest error: %v", err)
-		log.Printf("error sending tts create request: %v", err.Error())
+		logger.Error("sending tts create request",
+			"error", err.Error())
 		return nil, err
 	}
 
@@ -85,7 +92,8 @@ func (session *SessionObject) NewUrlTts(language string,
 	ttsResponse := <-session.createdTtsChannel
 	interactionId := ttsResponse.InteractionId
 	if EnableVerboseLogging {
-		log.Printf("created new TTS interaction: %s", interactionId)
+		logger.Debug("created new TTS interaction",
+			"interactionId", interactionId)
 	}
 
 	// Create the interaction object.

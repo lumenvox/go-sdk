@@ -5,7 +5,6 @@ import (
 
 	"errors"
 	"fmt"
-	"log"
 	"time"
 )
 
@@ -26,6 +25,8 @@ func (session *SessionObject) NewNormalization(language string,
 	normalizationSettings *api.NormalizationSettings,
 	generalInteractionSettings *api.GeneralInteractionSettings) (interactionObject *NormalizationInteractionObject, err error) {
 
+	logger := getLogger()
+
 	// Create normalization interaction, adding specified parameters
 
 	session.streamSendLock.Lock()
@@ -34,7 +35,8 @@ func (session *SessionObject) NewNormalization(language string,
 	session.streamSendLock.Unlock()
 	if err != nil {
 		session.errorChan <- fmt.Errorf("sending InteractionCreateNormalizationRequest error: %v", err)
-		log.Printf("error sending normalization create request: %v", err.Error())
+		logger.Error("sending normalization create request",
+			"error", err.Error())
 		return nil, err
 	}
 
@@ -42,7 +44,8 @@ func (session *SessionObject) NewNormalization(language string,
 	normalizationResponse := <-session.createdNormalizeChannel
 	interactionId := normalizationResponse.InteractionId
 	if EnableVerboseLogging {
-		log.Printf("created new ITN interaction: %s", interactionId)
+		logger.Debug("created new ITN interaction",
+			"interactionId", interactionId)
 	}
 
 	// Create the interaction object.

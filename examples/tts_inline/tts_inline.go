@@ -3,15 +3,14 @@ package main
 import (
 	lumenvoxSdk "github.com/lumenvox/go-sdk"
 	"github.com/lumenvox/go-sdk/config"
+	"github.com/lumenvox/go-sdk/logging"
 	"github.com/lumenvox/go-sdk/lumenvox/api"
 	"github.com/lumenvox/go-sdk/session"
 
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"github.com/go-audio/audio"
 	"github.com/go-audio/wav"
-	"log"
 	"os"
 	"time"
 )
@@ -25,27 +24,35 @@ func main() {
 	// Get SDK configuration
 	cfg, err := config.GetConfigValues("./config_values.ini")
 	if err != nil {
-		log.Fatalf("Unable to get config: %v\n", err)
-		return
+		tmpLogger, _ := logging.GetLogger() // get default logger
+		tmpLogger.Error("unable to get config",
+			"error", err)
+		os.Exit(1)
 	}
 
-	// Create client and open connection.
-	client, err := lumenvoxSdk.CreateClient(
+	logger := logging.CreateLogger(cfg.LogLevel, "lumenvox-go-sdk")
+
+	var accessToken string // Not assigned for now
+
+	// Create connection. The connection should generally be reused when
+	// you are creating multiple clients.
+	conn, err := lumenvoxSdk.CreateConnection(
 		cfg.ApiEndpoint,
 		cfg.EnableTls,
 		cfg.CertificatePath,
 		cfg.AllowInsecureTls,
-		cfg.DeploymentId,
-		"", // Auth token unused
+		accessToken,
 	)
-
-	// Catch error from client creation.
 	if err != nil {
-		log.Fatalf("Failed to create connection: %v\n", err)
-		return
-	} else {
-		log.Printf("Successfully created connection to LumenVox API!")
+		logger.Error("failed to create connection",
+			"error", err)
+		os.Exit(1)
 	}
+
+	// Create the client
+	client := lumenvoxSdk.CreateClient(conn, cfg.DeploymentId)
+
+	logger.Info("successfully created connection to LumenVox API!")
 
 	///////////////////////
 	// Session creation
@@ -59,7 +66,9 @@ func main() {
 	streamTimeout := 5 * time.Minute
 	sessionObject, err := client.NewSession(streamTimeout, audioConfig)
 	if err != nil {
-		log.Fatalf("Failed to create session: %v", err.Error())
+		logger.Error("failed to create session",
+			"error", err.Error())
+		os.Exit(1)
 	}
 
 	///////////////////////
@@ -82,14 +91,16 @@ func main() {
 	// Create interaction.
 	ttsInteraction, err := sessionObject.NewInlineTts(language, textToSynthesize, inlineSettings, synthesizedAudioFormat, nil, nil)
 	if err != nil {
-		log.Printf("failed to create interaction: %v", err)
+		logger.Error("failed to create interaction",
+			"error", err)
 		sessionObject.CloseSession()
 		time.Sleep(500 * time.Millisecond) // Delay a little to get any residual messages
 		return
 	}
 
 	interactionId := ttsInteraction.InteractionId
-	log.Printf("received interaction ID: %s", interactionId)
+	logger.Info("received interactionId",
+		"interactionId", interactionId)
 
 	///////////////////////
 	// Get results
@@ -98,12 +109,14 @@ func main() {
 	// Wait for the final results to arrive.
 	finalResults, err := ttsInteraction.GetFinalResults(10 * time.Second)
 	if err != nil {
-		fmt.Printf("error while waiting for final results: %v\n", err)
+		logger.Error("waiting for final results",
+			"error", err)
 		sessionObject.CloseSession()
 		time.Sleep(500 * time.Millisecond) // Delay a little to get any residual messages
 		return
 	} else {
-		fmt.Printf("got final results: %v\n", finalResults)
+		logger.Info("got final results",
+			"finalResults", finalResults)
 	}
 
 	///////////////////////
@@ -119,7 +132,8 @@ func main() {
 	// Pull the audio from the synthesis.
 	synthesizedAudioData, err := sessionObject.PullTtsAudio(interactionId, 0, 0, 0)
 	if err != nil {
-		fmt.Printf("error pulling audio: %v\n", err)
+		logger.Error("pulling audio",
+			"error", err)
 		sessionObject.CloseSession()
 		time.Sleep(500 * time.Millisecond) // Delay a little to get any residual messages.
 		return
@@ -130,13 +144,16 @@ func main() {
 	intData = twoByteDataToIntSlice(synthesizedAudioData)
 	err = saveWavFile(synthesisFilename, audioSampleRate, intData)
 	if err != nil {
-		log.Printf("Failed to save audio: %v", err.Error())
+		logger.Error("failed to save audio",
+			"error", err.Error())
 		sessionObject.CloseSession()
 		time.Sleep(500 * time.Millisecond) // Delay a little to get any residual messages.
 		return
 	}
 
-	log.Printf("TTS file [%s] generated with bytes: [%d]", synthesisFilename, len(synthesizedAudioData))
+	logger.Info("TTS file generated",
+		"synthesisFilename", synthesisFilename,
+		"bytesGenerated", len(synthesizedAudioData))
 
 	///////////////////////
 	// Session close

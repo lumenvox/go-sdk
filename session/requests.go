@@ -107,6 +107,7 @@ func getAsrRequest(
 func getTranscriptionRequest(
 	correlationId string,
 	language string,
+	phrases []*api.TranscriptionPhraseList,
 	embeddedGrammars []*api.Grammar,
 	vadSettings *api.VadSettings,
 	audioConsumeSettings *api.AudioConsumeSettings,
@@ -129,6 +130,7 @@ func getTranscriptionRequest(
 		AudioConsumeSettings:  audioConsumeSettings,
 		NormalizationSettings: normalizationSettings,
 		RecognitionSettings:   recognitionSettings,
+		Phrases:               phrases,
 	}
 
 	if languageModelName != "" {
@@ -380,6 +382,45 @@ func getUrlTtsRequest(
 	}
 
 	return ttsRequest
+}
+
+// getDiarizationRequest returns a diarization request. The specified
+// correlationId will be used if nonempty. Otherwise, one will be
+// auto-generated.
+func getDiarizationRequest(
+	correlationId string,
+	language string,
+	maxSpeakers int32,
+	requestTimeoutMs *api.OptionalInt32,
+	generalInteractionSettings *api.GeneralInteractionSettings,
+	audioConsumeSettings *api.AudioConsumeSettings,
+) (diarizationRequest *api.SessionRequest) {
+
+	if correlationId == "" {
+		// Create a new correlationId if one is not specified
+		correlationId = uuid.NewString()
+	}
+
+	requestBody := &api.InteractionCreateDiarizationRequest{
+		Language:                   language,
+		MaxNumSpeakers:             maxSpeakers,
+		RequestTimeoutMs:           requestTimeoutMs,
+		GeneralInteractionSettings: generalInteractionSettings,
+		AudioConsumeSettings:       audioConsumeSettings,
+	}
+
+	diarizationRequest = &api.SessionRequest{
+		CorrelationId: &api.OptionalString{Value: correlationId},
+		RequestType: &api.SessionRequest_InteractionRequest{
+			InteractionRequest: &api.InteractionRequestMessage{
+				InteractionRequest: &api.InteractionRequestMessage_InteractionCreateDiarization{
+					InteractionCreateDiarization: requestBody,
+				},
+			},
+		},
+	}
+
+	return diarizationRequest
 }
 
 // getAudioPushRequest returns an audio push request. The specified
