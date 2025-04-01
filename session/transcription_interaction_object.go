@@ -5,6 +5,7 @@ import (
 
 	"errors"
 	"fmt"
+	"google.golang.org/genproto/googleapis/rpc/status"
 	"sync"
 	"time"
 )
@@ -32,6 +33,8 @@ type TranscriptionInteractionObject struct {
 	// Final result tracking
 	finalResultsReceived bool
 	finalResults         *api.TranscriptionInteractionResult
+	FinalStatus          *status.Status
+	FinalResultStatus    api.FinalResultStatus
 	resultsReadyChannel  chan struct{}
 
 	// For special result handling
@@ -101,7 +104,12 @@ func (session *SessionObject) NewTranscription(
 	interactionObject.vadRecordLog = append(interactionObject.vadRecordLog, createEmptyVadInteractionRecord())
 
 	// Add the interaction object to the session
-	session.transcriptionInteractionsMap[interactionId] = interactionObject
+	{
+		session.Lock() // Protect concurrent map access
+		defer session.Unlock()
+
+		session.transcriptionInteractionsMap[interactionId] = interactionObject
+	}
 
 	return interactionObject, err
 }
@@ -343,17 +351,26 @@ func (transcriptionInteraction *TranscriptionInteractionObject) GetPartialResult
 //
 // If the interaction does not end before the specified timeout, an error will
 // be returned.
-func (transcriptionInteraction *TranscriptionInteractionObject) GetFinalResults(timeout time.Duration) (*api.TranscriptionInteractionResult, error) {
+func (transcriptionInteraction *TranscriptionInteractionObject) GetFinalResults(timeout time.Duration) (result *api.TranscriptionInteractionResult, err error) {
 
 	// Wait for the end of the interaction.
-	err := transcriptionInteraction.WaitForFinalResults(timeout)
+	err = transcriptionInteraction.WaitForFinalResults(timeout)
 	if err != nil {
 		return nil, err
 	}
 
 	if transcriptionInteraction.finalResultsReceived {
-		// If we received final results, return them.
-		return transcriptionInteraction.finalResults, nil
+		// If we received final results, verify the status.
+		if transcriptionInteraction.FinalResultStatus == api.FinalResultStatus_FINAL_RESULT_STATUS_TRANSCRIPTION_CONTINUOUS_MATCH ||
+			transcriptionInteraction.FinalResultStatus == api.FinalResultStatus_FINAL_RESULT_STATUS_TRANSCRIPTION_MATCH ||
+			transcriptionInteraction.FinalResultStatus == api.FinalResultStatus_FINAL_RESULT_STATUS_TRANSCRIPTION_GRAMMAR_MATCHES {
+			// Successful interaction, return result
+			return transcriptionInteraction.finalResults, nil
+		} else {
+			// Unsuccessful interaction, return error
+			errorString := fmt.Sprintf("%v: %v", transcriptionInteraction.FinalResultStatus, transcriptionInteraction.FinalStatus.Message)
+			return nil, errors.New(errorString)
+		}
 	} else if transcriptionInteraction.isContinuousTranscription == false && transcriptionInteraction.vadRecordLog[0].bargeInTimeoutReceived {
 		// If we received a barge-in timeout, return an error.
 		return nil, errors.New("barge-in timeout")

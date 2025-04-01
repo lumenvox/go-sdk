@@ -3,6 +3,8 @@ package session
 import (
 	"github.com/lumenvox/go-sdk/lumenvox/api"
 
+	"errors"
+	"fmt"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"io"
@@ -22,9 +24,11 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 	}
 
 	waitingOnSessionId := true
+	var err error
+	var response *api.SessionResponse
 
 	for {
-		response, err := session.SessionStream.Recv()
+		response, err = session.SessionStream.Recv()
 		if status.Code(err) == codes.Unauthenticated {
 			// Token expiration detected. Handle it accordingly:
 			logger.Error("sessionStream.Recv() failed with gRPC error: Unauthenticated",
@@ -45,6 +49,7 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 				// Error type is status, so unpack it, for clearer reporting
 				logger.Error("sessionStream.Recv() failed with status",
 					"error", statusErr.Message())
+				err = errors.New(statusErr.Message())
 			} else {
 				logger.Error("sessionStream.Recv() failed",
 					"error", err)
@@ -80,6 +85,8 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 				if waitingOnSessionId {
 					sessionIdChan <- ""
 				}
+
+				err = fmt.Errorf("empty SessionId")
 				break
 			}
 
@@ -87,7 +94,8 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 
 			if EnableVerboseLogging {
 				logger.Debug("Recv VadEvent",
-					"responseType", response.GetVadEvent())
+					"interactionId", response.GetVadEvent().InteractionId,
+					"type", response.GetVadEvent().VadEventType.String())
 			}
 
 			handleVadEvent(session, response)
@@ -226,6 +234,7 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 						"response", response)
 				}
 				session.SessionCloseChannel <- struct{}{}
+				err = nil
 				break
 
 			} else if response.GetSessionEvent() != nil {
@@ -248,6 +257,10 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			}
 		}
 	}
+
+	// Signal to session object here that we're out of the listening loop
+	// and set the reason that loop exited (could be nil if no error)
+	session.StreamLoopExitErr.Store(&err)
 }
 
 func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
@@ -480,7 +493,7 @@ func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
 		interactionObject.vadEventsLock.Unlock()
 
 	} else if interactionObject, ok := session.amdInteractionsMap[interactionId]; ok {
-		// This is an ASR interaction.
+		// This is an AMD interaction.
 		switch response.GetVadEvent().VadEventType {
 		case api.VadEvent_VAD_EVENT_TYPE_BEGIN_PROCESSING:
 			interactionObject.vadBeginProcessingReceived = true
@@ -520,67 +533,90 @@ func handleFinalResult(session *SessionObject, response *api.SessionResponse) {
 
 	// Get the interaction id, to find the interaction object.
 	interactionId := response.GetFinalResult().GetInteractionId()
+	finalResult := response.GetFinalResult()
 
-	if interactionObject, ok := session.asrInteractionsMap[interactionId]; ok {
+	{
+		// Protect concurrent access to maps
+		session.Lock()
+		defer session.Unlock()
 
-		// This is an ASR interaction.
-		interactionObject.finalResults = response.GetFinalResult().GetFinalResult().GetAsrInteractionResult()
-		interactionObject.finalResultsReceived = true
-		close(interactionObject.resultsReadyChannel)
+		if interactionObject, interactionFound := session.asrInteractionsMap[interactionId]; interactionFound {
 
-	} else if interactionObject, ok := session.transcriptionInteractionsMap[interactionId]; ok {
+			// This is an ASR interaction.
+			interactionObject.finalResults = finalResult.GetFinalResult().GetAsrInteractionResult()
+			interactionObject.FinalStatus = finalResult.Status
+			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
+			interactionObject.finalResultsReceived = true
+			close(interactionObject.resultsReadyChannel)
 
-		// This is a transcription interaction.
-		interactionObject.finalResults = response.GetFinalResult().GetFinalResult().GetTranscriptionInteractionResult()
-		interactionObject.finalResultsReceived = true
-		close(interactionObject.resultsReadyChannel)
+		} else if interactionObject, interactionFound := session.transcriptionInteractionsMap[interactionId]; interactionFound {
 
-	} else if interactionObject, ok := session.nluInteractionsMap[interactionId]; ok {
+			// This is a transcription interaction.
+			interactionObject.finalResults = finalResult.GetFinalResult().GetTranscriptionInteractionResult()
+			interactionObject.FinalStatus = finalResult.Status
+			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
+			interactionObject.finalResultsReceived = true
+			close(interactionObject.resultsReadyChannel)
 
-		// This is an NLU interaction.
-		interactionObject.finalResults = response.GetFinalResult().GetFinalResult().GetNluInteractionResult()
-		interactionObject.finalResultsReceived = true
-		close(interactionObject.resultsReadyChannel)
+		} else if interactionObject, interactionFound := session.nluInteractionsMap[interactionId]; interactionFound {
 
-	} else if interactionObject, ok := session.amdInteractionsMap[interactionId]; ok {
+			// This is an NLU interaction.
+			interactionObject.finalResults = finalResult.GetFinalResult().GetNluInteractionResult()
+			interactionObject.FinalStatus = finalResult.Status
+			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
+			interactionObject.finalResultsReceived = true
+			close(interactionObject.resultsReadyChannel)
 
-		// This is an AMD interaction.
-		interactionObject.finalResults = response.GetFinalResult().GetFinalResult().GetAmdInteractionResult()
-		interactionObject.finalResultsReceived = true
-		close(interactionObject.resultsReadyChannel)
+		} else if interactionObject, interactionFound := session.amdInteractionsMap[interactionId]; interactionFound {
 
-	} else if interactionObject, ok := session.cpaInteractionsMap[interactionId]; ok {
+			// This is an AMD interaction.
+			interactionObject.finalResults = finalResult.GetFinalResult().GetAmdInteractionResult()
+			interactionObject.FinalStatus = finalResult.Status
+			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
+			interactionObject.finalResultsReceived = true
+			close(interactionObject.resultsReadyChannel)
 
-		// This is an CPA interaction.
-		interactionObject.finalResults = response.GetFinalResult().GetFinalResult().GetCpaInteractionResult()
-		interactionObject.finalResultsReceived = true
-		close(interactionObject.resultsReadyChannel)
+		} else if interactionObject, interactionFound := session.cpaInteractionsMap[interactionId]; interactionFound {
 
-	} else if interactionObject, ok := session.normalizationInteractionsMap[interactionId]; ok {
+			// This is a CPA interaction.
+			interactionObject.finalResults = finalResult.GetFinalResult().GetCpaInteractionResult()
+			interactionObject.FinalStatus = finalResult.Status
+			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
+			interactionObject.finalResultsReceived = true
+			close(interactionObject.resultsReadyChannel)
 
-		// This is a normalization interaction.
-		interactionObject.finalResults = response.GetFinalResult().GetFinalResult().GetNormalizeTextResult()
-		interactionObject.finalResultsReceived = true
-		close(interactionObject.resultsReadyChannel)
+		} else if interactionObject, interactionFound := session.normalizationInteractionsMap[interactionId]; interactionFound {
 
-	} else if interactionObject, ok := session.ttsInteractionsMap[interactionId]; ok {
+			// This is a normalization interaction.
+			interactionObject.finalResults = finalResult.GetFinalResult().GetNormalizeTextResult()
+			interactionObject.FinalStatus = finalResult.Status
+			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
+			interactionObject.finalResultsReceived = true
+			close(interactionObject.resultsReadyChannel)
 
-		// This is a TTS interaction.
-		interactionObject.finalResults = response.GetFinalResult().GetFinalResult().GetTtsInteractionResult()
-		interactionObject.finalResultsReceived = true
-		close(interactionObject.resultsReadyChannel)
+		} else if interactionObject, interactionFound := session.ttsInteractionsMap[interactionId]; interactionFound {
 
-	} else if interactionObject, ok := session.diarizationInteractionsMap[interactionId]; ok {
+			// This is a TTS interaction.
+			interactionObject.finalResults = finalResult.GetFinalResult().GetTtsInteractionResult()
+			interactionObject.FinalStatus = finalResult.Status
+			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
+			interactionObject.finalResultsReceived = true
+			close(interactionObject.resultsReadyChannel)
 
-		// This is a diarization interaction.
-		interactionObject.finalResults = response.GetFinalResult().GetFinalResult().GetDiarizationInteractionResult()
-		interactionObject.finalResultsReceived = true
-		close(interactionObject.resultsReadyChannel)
+		} else if interactionObject, interactionFound := session.diarizationInteractionsMap[interactionId]; interactionFound {
 
-	} else {
-		// We did not find the interaction.
-		logger.Error("Recv FinalResult: interaction not found",
-			"interactionId", interactionId)
+			// This is a diarization interaction.
+			interactionObject.finalResults = finalResult.GetFinalResult().GetDiarizationInteractionResult()
+			interactionObject.FinalStatus = finalResult.Status
+			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
+			interactionObject.finalResultsReceived = true
+			close(interactionObject.resultsReadyChannel)
+
+		} else {
+			// We did not find the interaction.
+			logger.Error("Recv FinalResult: interaction not found",
+				"interactionId", interactionId)
+		}
 	}
 }
 

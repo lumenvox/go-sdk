@@ -5,6 +5,7 @@ import (
 
 	"errors"
 	"fmt"
+	"google.golang.org/genproto/googleapis/rpc/status"
 	"time"
 )
 
@@ -15,6 +16,8 @@ type DiarizationInteractionObject struct {
 	// Final result tracking
 	finalResultsReceived bool
 	finalResults         *api.DiarizationInteractionResult
+	FinalStatus          *status.Status
+	FinalResultStatus    api.FinalResultStatus
 	resultsReadyChannel  chan struct{}
 }
 
@@ -60,7 +63,12 @@ func (session *SessionObject) NewDiarization(
 	}
 
 	// Add the interaction object to the session
-	session.diarizationInteractionsMap[interactionId] = interactionObject
+	{
+		session.Lock() // Protect concurrent map access
+		defer session.Unlock()
+
+		session.diarizationInteractionsMap[interactionId] = interactionObject
+	}
 
 	return interactionObject, err
 }
@@ -90,17 +98,24 @@ func (diarizationInteraction *DiarizationInteractionObject) WaitForFinalResults(
 //
 // If the interaction does not end before the specified timeout, an error will
 // be returned.
-func (diarizationInteraction *DiarizationInteractionObject) GetFinalResults(timeout time.Duration) (*api.DiarizationInteractionResult, error) {
+func (diarizationInteraction *DiarizationInteractionObject) GetFinalResults(timeout time.Duration) (result *api.DiarizationInteractionResult, err error) {
 
 	// Wait for the end of the interaction.
-	err := diarizationInteraction.WaitForFinalResults(timeout)
+	err = diarizationInteraction.WaitForFinalResults(timeout)
 	if err != nil {
 		return nil, err
 	}
 
 	if diarizationInteraction.finalResultsReceived {
-		// If we received final results, return them.
-		return diarizationInteraction.finalResults, nil
+		// If we received final results, verify the status.
+		if diarizationInteraction.FinalResultStatus == api.FinalResultStatus_FINAL_RESULT_STATUS_DIARIZATION_RESULT {
+			// Successful interaction, return result
+			return diarizationInteraction.finalResults, nil
+		} else {
+			// Unsuccessful interaction, return error
+			errorString := fmt.Sprintf("%v: %v", diarizationInteraction.FinalResultStatus, diarizationInteraction.FinalStatus.Message)
+			return nil, errors.New(errorString)
+		}
 	} else {
 		// This should never happen.
 		return nil, errors.New("unexpected end of diarization interaction")

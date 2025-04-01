@@ -5,6 +5,7 @@ import (
 
 	"errors"
 	"fmt"
+	"google.golang.org/genproto/googleapis/rpc/status"
 	"time"
 )
 
@@ -15,6 +16,8 @@ type NormalizationInteractionObject struct {
 	// Final result tracking
 	finalResultsReceived bool
 	finalResults         *api.NormalizeTextResult
+	FinalStatus          *status.Status
+	FinalResultStatus    api.FinalResultStatus
 	resultsReadyChannel  chan struct{}
 }
 
@@ -50,14 +53,20 @@ func (session *SessionObject) NewNormalization(language string,
 
 	// Create the interaction object.
 	interactionObject = &NormalizationInteractionObject{
-		interactionId,
-		false,
-		nil,
-		make(chan struct{}),
+		InteractionId:        interactionId,
+		finalResultsReceived: false,
+		finalResults:         nil,
+		FinalResultStatus:    api.FinalResultStatus_FINAL_RESULT_STATUS_UNSPECIFIED,
+		resultsReadyChannel:  make(chan struct{}),
 	}
 
 	// Add the interaction object to the session
-	session.normalizationInteractionsMap[interactionId] = interactionObject
+	{
+		session.Lock() // Protect concurrent map access
+		defer session.Unlock()
+
+		session.normalizationInteractionsMap[interactionId] = interactionObject
+	}
 
 	return interactionObject, err
 }
@@ -86,17 +95,24 @@ func (normalizationInteraction *NormalizationInteractionObject) WaitForFinalResu
 //
 // If the interaction does not end before the specified timeout, an error will
 // be returned.
-func (normalizationInteraction *NormalizationInteractionObject) GetFinalResults(timeout time.Duration) (*api.NormalizeTextResult, error) {
+func (normalizationInteraction *NormalizationInteractionObject) GetFinalResults(timeout time.Duration) (result *api.NormalizeTextResult, err error) {
 
 	// Wait for the end of the interaction.
-	err := normalizationInteraction.WaitForFinalResults(timeout)
+	err = normalizationInteraction.WaitForFinalResults(timeout)
 	if err != nil {
 		return nil, err
 	}
 
 	if normalizationInteraction.finalResultsReceived {
-		// If we received final results, return them.
-		return normalizationInteraction.finalResults, nil
+		// If we received final results, verify the status.
+		if normalizationInteraction.FinalResultStatus == api.FinalResultStatus_FINAL_RESULT_STATUS_TEXT_NORMALIZE_RESULT {
+			// Successful interaction, return result
+			return normalizationInteraction.finalResults, nil
+		} else {
+			// Unsuccessful interaction, return error
+			errorString := fmt.Sprintf("%v: %v", normalizationInteraction.FinalResultStatus, normalizationInteraction.FinalStatus.Message)
+			return nil, errors.New(errorString)
+		}
 	} else {
 		// This should never happen.
 		return nil, errors.New("unexpected end of normalization interaction")

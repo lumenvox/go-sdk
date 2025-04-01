@@ -5,6 +5,7 @@ import (
 
 	"errors"
 	"fmt"
+	"google.golang.org/genproto/googleapis/rpc/status"
 	"time"
 )
 
@@ -15,6 +16,8 @@ type TtsInteractionObject struct {
 	// Final result tracking
 	finalResultsReceived bool
 	finalResults         *api.TtsInteractionResult
+	FinalStatus          *status.Status
+	FinalResultStatus    api.FinalResultStatus
 	resultsReadyChannel  chan struct{}
 }
 
@@ -52,14 +55,20 @@ func (session *SessionObject) NewInlineTts(language string,
 
 	// Create the interaction object.
 	interactionObject = &TtsInteractionObject{
-		interactionId,
-		false,
-		nil,
-		make(chan struct{}),
+		InteractionId:        interactionId,
+		finalResultsReceived: false,
+		finalResults:         nil,
+		FinalResultStatus:    api.FinalResultStatus_FINAL_RESULT_STATUS_UNSPECIFIED,
+		resultsReadyChannel:  make(chan struct{}),
 	}
 
 	// Add the interaction object to the session
-	session.ttsInteractionsMap[interactionId] = interactionObject
+	{
+		session.Lock() // Protect concurrent map access
+		defer session.Unlock()
+
+		session.ttsInteractionsMap[interactionId] = interactionObject
+	}
 
 	return interactionObject, err
 }
@@ -98,14 +107,20 @@ func (session *SessionObject) NewUrlTts(language string,
 
 	// Create the interaction object.
 	interactionObject = &TtsInteractionObject{
-		interactionId,
-		false,
-		nil,
-		make(chan struct{}),
+		InteractionId:        interactionId,
+		finalResultsReceived: false,
+		finalResults:         nil,
+		FinalResultStatus:    api.FinalResultStatus_FINAL_RESULT_STATUS_UNSPECIFIED,
+		resultsReadyChannel:  make(chan struct{}),
 	}
 
 	// Add the interaction object to the session
-	session.ttsInteractionsMap[interactionId] = interactionObject
+	{
+		session.Lock() // Protect concurrent map access
+		defer session.Unlock()
+
+		session.ttsInteractionsMap[interactionId] = interactionObject
+	}
 
 	return interactionObject, err
 }
@@ -133,17 +148,24 @@ func (ttsInteraction *TtsInteractionObject) WaitForFinalResults(timeout time.Dur
 //
 // If the interaction does not end before the specified timeout, an error will
 // be returned.
-func (ttsInteraction *TtsInteractionObject) GetFinalResults(timeout time.Duration) (*api.TtsInteractionResult, error) {
+func (ttsInteraction *TtsInteractionObject) GetFinalResults(timeout time.Duration) (result *api.TtsInteractionResult, err error) {
 
 	// Wait for the end of the interaction.
-	err := ttsInteraction.WaitForFinalResults(timeout)
+	err = ttsInteraction.WaitForFinalResults(timeout)
 	if err != nil {
 		return nil, err
 	}
 
 	if ttsInteraction.finalResultsReceived {
-		// If we received final results, return them.
-		return ttsInteraction.finalResults, nil
+		// If we received final results, verify the status.
+		if ttsInteraction.FinalResultStatus == api.FinalResultStatus_FINAL_RESULT_STATUS_TTS_READY {
+			// Successful interaction, return result
+			return ttsInteraction.finalResults, nil
+		} else {
+			// Unsuccessful interaction, return error
+			errorString := fmt.Sprintf("%v: %v", ttsInteraction.FinalResultStatus, ttsInteraction.FinalStatus.Message)
+			return nil, errors.New(errorString)
+		}
 	} else {
 		// This should never happen.
 		return nil, errors.New("unexpected end of tts interaction")

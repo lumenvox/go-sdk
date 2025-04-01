@@ -1,6 +1,7 @@
 package client
 
 import (
+	"github.com/lumenvox/go-sdk/auth"
 	"github.com/lumenvox/go-sdk/connection"
 	"github.com/lumenvox/go-sdk/session"
 
@@ -13,6 +14,7 @@ import (
 type SdkClient struct {
 	Connection   *connection.GrpcConnection
 	DeploymentId string
+	AuthSettings *auth.AuthSettings
 }
 
 // CreateConnection attempts to create a grpc connection object with
@@ -23,17 +25,14 @@ type SdkClient struct {
 // Depending on your environment, you may need to provide a root certificate
 // using certificatePath. allowInsecureTls may be used to avoid this
 // requirement, but this setting should not be used in production.
-//
-// If you have an OAuth token, you should provide it here.
 func CreateConnection(apiEndpoint string, tlsEnabled bool, certificatePath string,
-	allowInsecureTls bool, authToken string) (conn *connection.GrpcConnection, err error) {
+	allowInsecureTls bool) (conn *connection.GrpcConnection, err error) {
 
 	connectionConfig := connection.GrpcConnectionConfig{
 		TlsEnabled:       tlsEnabled,
 		ApiEndpoint:      apiEndpoint,
 		CertificatePath:  certificatePath,
 		AllowInsecureTls: allowInsecureTls,
-		AuthToken:        authToken,
 	}
 
 	return connection.CreateNewConnection(connectionConfig)
@@ -42,11 +41,12 @@ func CreateConnection(apiEndpoint string, tlsEnabled bool, certificatePath strin
 // CreateSdkClient creates a client object with the provided
 // connection. Note that multiple clients can share the same
 // connection.
-func CreateSdkClient(conn *connection.GrpcConnection, deploymentId string) (client *SdkClient) {
+func CreateSdkClient(conn *connection.GrpcConnection, deploymentId string, authSettings *auth.AuthSettings) (client *SdkClient) {
 
 	return &SdkClient{
 		Connection:   conn,
 		DeploymentId: deploymentId,
+		AuthSettings: authSettings,
 	}
 }
 
@@ -61,7 +61,7 @@ func (client *SdkClient) NewSession(streamTimeout time.Duration, audioConfig ses
 	operatorId := uuid.NewString()
 
 	newSession, err = session.CreateNewSession(client.Connection.ApiConnection, streamTimeout, client.DeploymentId,
-		audioConfig, operatorId)
+		audioConfig, operatorId, client.AuthSettings)
 
 	return newSession, err
 }

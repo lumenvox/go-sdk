@@ -70,42 +70,107 @@ or environment-variable-based approaches.
 ### Client Creation
 
 The first step in using the SDK is to create a connection to the API. This is
-handled with the `CreateClient` function, as shown here (using the config
-helpers).
+handled with the `CreateClient` function, as shown below (using the config
+helpers). The connection can then be used to create the client you will use
+to manage sessions.
 ```go
 // Get SDK configuration
 cfg, err := config.GetConfigValues("./config_values.ini")
 if err != nil {
-    log.Fatalf("Unable to get config: %v\n", err)
-    return
+    tmpLogger, _ := logging.GetLogger() // get default logger
+    tmpLogger.Error("unable to get config",
+        "error", err)
+    os.Exit(1)
 }
 
-// Create client and open connection.
-client, err := lumenvoxSdk.CreateClient(
+logger := logging.CreateLogger(cfg.LogLevel, "lumenvox-go-sdk")
+
+// Create connection. The connection should generally be reused when
+// you are creating multiple clients.
+conn, err := lumenvoxSdk.CreateConnection(
     cfg.ApiEndpoint,
     cfg.EnableTls,
     cfg.CertificatePath,
     cfg.AllowInsecureTls,
-    cfg.DeploymentId,
-    "", // Auth token unused
 )
+if err != nil {
+    logger.Error("failed to create connection",
+        "error", err)
+    os.Exit(1)
+}
+
+// Create the client
+client := lumenvoxSdk.CreateClient(conn, cfg.DeploymentId, nil)
 ```
 
-This is where connection details can be configured, including TLS options.
+### Authentication Token Handling
 
-#### Authentication Token Handling
-An additional parameter `authToken` is available for the user to provide an OAuth
-string if required. For example:
+If connecting to LumenVox' SaaS APIs, you will be provided credentials allowing
+access to the services. These can be configured in the `config_values.ini` file
+as described here (or in corresponding environment variables):
+
+| Setting      | Value                                                                                                 |
+|--------------|-------------------------------------------------------------------------------------------------------|
+| USERNAME     | "<your-username>"                                                                                     |
+| PASSWORD     | "<your-password>"                                                                                     |
+| CLIENT_ID    | "<your-client-id>"                                                                                    |
+| SECRET_HASH  | "<your-secret-hash>"                                                                                  |
+| AUTH_HEADERS | "Content-Type=application/x-amz-json-1.1,X-Amz-Target=AWSCognitoIdentityProviderService.InitiateAuth" |
+| AUTH_URL     | "https://cognito-idp.us-east-1.amazonaws.com/"                                                        |
+
+These key/value pairs should be in the form of `<key> = <value>`, for example:
+
+```ini
+USERNAME = "testuser"
+```
+
+> NOTE: It is important to understand that these credentials are secret and
+> you should protect them and not share them with anyone. If you believe
+> these credentials may have become compromised at any time, please reach out
+> to our support team, who can generate new ones and revoke the compromised
+> one(s).
+
+Once you have defined these values, your code can then use them to acquire
+OAuth tokens automatically, when needed. There is a built-in caching mechanism
+to avoid making excessive calls to the OAuth service, and we encourage users
+to utilize this caching method (which is automatically enabled) 
+
+The `simple_oauth` example shows how these can be utilized, when needed. Also
+note that it is best practice to enable TLS when using OAuth tokens. This is
+a hard requirement when working with the LumenVox SaaS systems, but is in
+general good practice if you are implementing your own.
+
+Finally, the OAuth implementation was designed to work with the LumenVox
+SaaS systems, and make connectivity to those easy for users, however it was
+also written in a way in which users who wish to implement their own token
+authorization within their own managed systems, may be able to use much of
+the same code, however implementation of those methods is outside the scope
+of what is supported. There are many online references available that can
+offer better advise in how to implement your own authorization if needed. 
+
+In general, automated token acquisition and checking can easily be added
+by simply adding the definition shown below (from the `simple_oauth`
+example):
+
 ```go
-apiEndpoint := "lumenvox-api.lumenvox.com"
-tlsEnabled := true
-certificatePath := ""
-allowInsecureTls := false
-deploymentId := "00000000-0000-0000-0000-000000000000"
-authToken := "eyJraWQiO..."     // Provide full auth. token here. 
-client, err := lumenvoxSdk.CreateClient(apiEndpoint, tlsEnabled, certificatePath,
-    allowInsecureTls, deploymentId, authToken)
+authSettings := &auth.AuthSettings{
+    ClientId:    cfg.ClientId,
+    SecretHash:  cfg.SecretHash,
+    AuthHeaders: cfg.GetAuthHeaders(),
+    Username:    cfg.Username,
+    Password:    cfg.Password,
+    AuthUrl:     cfg.AuthUrl,
+}
+
+// Create the client
+client := lumenvoxSdk.CreateClient(conn, cfg.DeploymentId, authSettings)
 ```
+
+The SDK will attempt to obtain a valid token when connecting to the LumenVox
+SaaS system and will report any errors encountered. If the token expires
+after its expiration period (which may vary!) then a new token will be
+automatically requested and cached, allowing multiple clients to be created
+throughout the life of the application, if this is needed.
 
 ### Session Creation
 

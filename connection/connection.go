@@ -3,23 +3,21 @@ package connection
 import (
 	"crypto/tls"
 	"errors"
-	"golang.org/x/oauth2"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/credentials/oauth"
 	"google.golang.org/grpc/keepalive"
 	"time"
 )
 
 // GrpcConnectionConfig contains configuration options for the gRPC connection.
-// This is primarily used to manage TLS and OAuth settings.
+// This is primarily used to manage TLS and related settings.
 type GrpcConnectionConfig struct {
 	TlsEnabled       bool
 	ApiEndpoint      string
 	CertificatePath  string
 	AllowInsecureTls bool
-	AuthToken        string
+	MaxMessageMb     int
 }
 
 // GrpcConnection contains the actual client connection object along with its
@@ -61,12 +59,16 @@ func CreateNewConnection(connectionConfig GrpcConnectionConfig) (newConnection *
 		Time: 5 * time.Minute,
 	}))
 
-	// Next, if an OAuth token was provided, append that to our list
-	// of dial options.
-	if len(connectionConfig.AuthToken) > 0 {
-		perRPC := oauth.TokenSource{TokenSource: oauth2.StaticTokenSource(fetchToken(connectionConfig.AuthToken))}
-		opts = append(opts, grpc.WithPerRPCCredentials(perRPC))
+	if connectionConfig.MaxMessageMb < 1 {
+		// Use 4MB if not specified.
+		connectionConfig.MaxMessageMb = 4
 	}
+
+	// Add message size limits (default 4MB for both sending and receiving)
+	opts = append(opts, grpc.WithDefaultCallOptions(
+		grpc.MaxCallRecvMsgSize(connectionConfig.MaxMessageMb*1024*1024), // i.e. 4MB for receiving
+		grpc.MaxCallSendMsgSize(connectionConfig.MaxMessageMb*1024*1024), // i.e. 4MB for sending
+	))
 
 	newConnection.ApiConnection, err =
 		grpc.NewClient(connectionConfig.ApiEndpoint, opts...)
@@ -76,13 +78,4 @@ func CreateNewConnection(connectionConfig GrpcConnectionConfig) (newConnection *
 	}
 
 	return newConnection, nil
-}
-
-// fetchToken simulates a token lookup and omits the details of proper token
-// acquisition. For examples of how to acquire an OAuth2 token, see:
-// https://godoc.org/golang.org/x/oauth2
-func fetchToken(authToken string) *oauth2.Token {
-	return &oauth2.Token{
-		AccessToken: authToken,
-	}
 }

@@ -28,8 +28,6 @@ func main() {
 
 	logger := logging.CreateLogger(cfg.LogLevel, "lumenvox-go-sdk")
 
-	var accessToken string // Not assigned for now
-
 	// Create connection. The connection should generally be reused when
 	// you are creating multiple clients.
 	conn, err := lumenvoxSdk.CreateConnection(
@@ -37,7 +35,6 @@ func main() {
 		cfg.EnableTls,
 		cfg.CertificatePath,
 		cfg.AllowInsecureTls,
-		accessToken,
 	)
 	if err != nil {
 		logger.Error("failed to create connection",
@@ -46,7 +43,7 @@ func main() {
 	}
 
 	// Create the client
-	client := lumenvoxSdk.CreateClient(conn, cfg.DeploymentId)
+	client := lumenvoxSdk.CreateClient(conn, cfg.DeploymentId, nil)
 
 	logger.Info("successfully created connection to LumenVox API!")
 
@@ -136,12 +133,10 @@ func main() {
 	// Get results
 	///////////////////////
 
-	// declare a channel to signal to the result handler when we have finalized
-	// the interaction. In a production environment, you probably want some
-	// other mechanism to determine when to finalize the interaction and when
-	// you should stop listening for results. For the purposes of this example,
-	// we're just waiting for our outbound audio stream to complete.
-	finalizeChannel := make(chan struct{})
+	// Set up a goroutine to finalize the interaction once we have finished
+	// streaming all the audio. In a production environment, you will probably
+	// want some other mechanism to determine when you are done processing
+	// speech.
 	go func() {
 		// For this example, we'll wait for the audio to finish streaming before calling
 		// finalize. This is not a standard use case. Typically, you'd use batch for
@@ -158,8 +153,6 @@ func main() {
 		} else {
 			logger.Debug("finalized interaction")
 		}
-
-		close(finalizeChannel)
 	}()
 
 	err = transcriptionInteraction.WaitForBeginProcessing(0, 10*time.Second)
@@ -185,17 +178,6 @@ func main() {
 	resultIdx := 0
 	for finalResultReceived == false {
 
-		// detect if we have finalized the interaction
-		finalizedInteraction := false
-		select {
-		case <-finalizeChannel:
-			finalizedInteraction = true
-		default:
-		}
-		if finalizedInteraction {
-			break
-		}
-
 		// if we haven't finalized, wait for the next result
 		resultIdx, finalResultReceived, err = transcriptionInteraction.WaitForNextResult(20 * time.Second)
 		if err != nil {
@@ -212,7 +194,7 @@ func main() {
 				transcriptionResult := partialResult.PartialResult.GetTranscriptionInteractionResult()
 				if len(transcriptionResult.NBests) > 0 {
 					transcript := transcriptionResult.NBests[0].AsrResultMetaData.Transcript
-					logger.Debug("PARTIAL RESULT",
+					logger.Info("PARTIAL RESULT",
 						"resultIdx", resultIdx,
 						"transcript", transcript)
 				}

@@ -43,8 +43,6 @@ func main() {
 
 	logger := logging.CreateLogger(cfg.LogLevel, "lumenvox-go-sdk")
 
-	var accessToken string // Not assigned for now
-
 	// Create connection. The connection should generally be reused when
 	// you are creating multiple clients.
 	conn, err := lumenvoxSdk.CreateConnection(
@@ -52,7 +50,6 @@ func main() {
 		cfg.EnableTls,
 		cfg.CertificatePath,
 		cfg.AllowInsecureTls,
-		accessToken,
 	)
 	if err != nil {
 		logger.Error("failed to create connection",
@@ -61,7 +58,7 @@ func main() {
 	}
 
 	// Create the client
-	client := lumenvoxSdk.CreateClient(conn, cfg.DeploymentId)
+	client := lumenvoxSdk.CreateClient(conn, cfg.DeploymentId, nil)
 
 	logger.Info("successfully created connection to LumenVox API!")
 

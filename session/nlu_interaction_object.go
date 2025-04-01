@@ -5,6 +5,7 @@ import (
 
 	"errors"
 	"fmt"
+	"google.golang.org/genproto/googleapis/rpc/status"
 	"time"
 )
 
@@ -15,6 +16,8 @@ type NluInteractionObject struct {
 	// Final result tracking
 	finalResultsReceived bool
 	finalResults         *api.NluInteractionResult
+	FinalStatus          *status.Status
+	FinalResultStatus    api.FinalResultStatus
 	resultsReadyChannel  chan struct{}
 }
 
@@ -50,14 +53,20 @@ func (session *SessionObject) NewNlu(language string,
 
 	// Create the interaction object.
 	interactionObject = &NluInteractionObject{
-		interactionId,
-		false,
-		nil,
-		make(chan struct{}),
+		InteractionId:        interactionId,
+		finalResultsReceived: false,
+		finalResults:         nil,
+		FinalResultStatus:    api.FinalResultStatus_FINAL_RESULT_STATUS_UNSPECIFIED,
+		resultsReadyChannel:  make(chan struct{}),
 	}
 
 	// Add the interaction object to the session
-	session.nluInteractionsMap[interactionId] = interactionObject
+	{
+		session.Lock() // Protect concurrent map access
+		defer session.Unlock()
+
+		session.nluInteractionsMap[interactionId] = interactionObject
+	}
 
 	return interactionObject, err
 }
@@ -86,17 +95,24 @@ func (nluInteraction *NluInteractionObject) WaitForFinalResults(timeout time.Dur
 //
 // If the interaction does not end before the specified timeout, an error will
 // be returned.
-func (nluInteraction *NluInteractionObject) GetFinalResults(timeout time.Duration) (*api.NluInteractionResult, error) {
+func (nluInteraction *NluInteractionObject) GetFinalResults(timeout time.Duration) (result *api.NluInteractionResult, err error) {
 
 	// Wait for the end of the interaction.
-	err := nluInteraction.WaitForFinalResults(timeout)
+	err = nluInteraction.WaitForFinalResults(timeout)
 	if err != nil {
 		return nil, err
 	}
 
 	if nluInteraction.finalResultsReceived {
-		// If we received final results, return them.
-		return nluInteraction.finalResults, nil
+		// If we received final results, verify the status.
+		if nluInteraction.FinalResultStatus == api.FinalResultStatus_FINAL_RESULT_STATUS_NLU_RESULT {
+			// Successful interaction, return result
+			return nluInteraction.finalResults, nil
+		} else {
+			// Unsuccessful interaction, return error
+			errorString := fmt.Sprintf("%v: %v", nluInteraction.FinalResultStatus, nluInteraction.FinalStatus.Message)
+			return nil, errors.New(errorString)
+		}
 	} else {
 		// This should never happen.
 		return nil, errors.New("unexpected end of NLU interaction")

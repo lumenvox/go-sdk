@@ -5,6 +5,7 @@ import (
 
 	"errors"
 	"fmt"
+	"google.golang.org/genproto/googleapis/rpc/status"
 	"time"
 )
 
@@ -31,6 +32,8 @@ type CpaInteractionObject struct {
 	// Final result tracking
 	finalResultsReceived bool
 	finalResults         *api.CpaInteractionResult
+	FinalStatus          *status.Status
+	FinalResultStatus    api.FinalResultStatus
 	resultsReadyChannel  chan struct{}
 }
 
@@ -81,8 +84,12 @@ func (session *SessionObject) NewCpa(
 	}
 
 	// Add the interaction object to the session
-	session.cpaInteractionsMap[interactionId] = interactionObject
+	{
+		session.Lock() // Protect concurrent map access
+		defer session.Unlock()
 
+		session.cpaInteractionsMap[interactionId] = interactionObject
+	}
 	return interactionObject, err
 }
 
@@ -252,17 +259,24 @@ func (cpaInteraction *CpaInteractionObject) WaitForFinalResults(timeout time.Dur
 //
 // If the interaction does not end before the specified timeout, an error will
 // be returned.
-func (cpaInteraction *CpaInteractionObject) GetFinalResults(timeout time.Duration) (*api.CpaInteractionResult, error) {
+func (cpaInteraction *CpaInteractionObject) GetFinalResults(timeout time.Duration) (result *api.CpaInteractionResult, err error) {
 
 	// Wait for the end of the interaction.
-	err := cpaInteraction.WaitForFinalResults(timeout)
+	err = cpaInteraction.WaitForFinalResults(timeout)
 	if err != nil {
 		return nil, err
 	}
 
 	if cpaInteraction.finalResultsReceived {
-		// If we received final results, return them.
-		return cpaInteraction.finalResults, nil
+		// If we received final results, verify the status.
+		if cpaInteraction.FinalResultStatus == api.FinalResultStatus_FINAL_RESULT_STATUS_CPA_RESULT {
+			// Successful interaction, return result
+			return cpaInteraction.finalResults, nil
+		} else {
+			// Unsuccessful interaction, return error
+			errorString := fmt.Sprintf("%v: %v", cpaInteraction.FinalResultStatus, cpaInteraction.FinalStatus.Message)
+			return nil, errors.New(errorString)
+		}
 	} else if cpaInteraction.vadBargeInTimeoutReceived {
 		// If we received a barge-in timeout, return an error.
 		return nil, errors.New("barge-in timeout")

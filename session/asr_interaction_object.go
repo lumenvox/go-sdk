@@ -5,6 +5,7 @@ import (
 
 	"errors"
 	"fmt"
+	"google.golang.org/genproto/googleapis/rpc/status"
 	"sync"
 	"time"
 )
@@ -38,6 +39,8 @@ type AsrInteractionObject struct {
 	// Final result tracking
 	finalResultsReceived bool
 	finalResults         *api.AsrInteractionResult
+	FinalStatus          *status.Status
+	FinalResultStatus    api.FinalResultStatus
 	resultsReadyChannel  chan struct{}
 }
 
@@ -92,7 +95,12 @@ func (session *SessionObject) NewAsr(
 	interactionObject.partialResultsChannels = append(interactionObject.partialResultsChannels, make(chan struct{}))
 
 	// Add the interaction object to the session
-	session.asrInteractionsMap[interactionId] = interactionObject
+	{
+		session.Lock() // Protect concurrent map access
+		defer session.Unlock()
+
+		session.asrInteractionsMap[interactionId] = interactionObject
+	}
 
 	return interactionObject, err
 }
@@ -263,17 +271,24 @@ func (asrInteraction *AsrInteractionObject) GetPartialResult(resultIdx int) (*ap
 //
 // If the interaction does not end before the specified timeout, an error will
 // be returned.
-func (asrInteraction *AsrInteractionObject) GetFinalResults(timeout time.Duration) (*api.AsrInteractionResult, error) {
+func (asrInteraction *AsrInteractionObject) GetFinalResults(timeout time.Duration) (result *api.AsrInteractionResult, err error) {
 
 	// Wait for the end of the interaction.
-	err := asrInteraction.WaitForFinalResults(timeout)
+	err = asrInteraction.WaitForFinalResults(timeout)
 	if err != nil {
 		return nil, err
 	}
 
 	if asrInteraction.finalResultsReceived {
-		// If we received final results, return them.
-		return asrInteraction.finalResults, nil
+		// If we received final results, verify the status.
+		if asrInteraction.FinalResultStatus == api.FinalResultStatus_FINAL_RESULT_STATUS_GRAMMAR_MATCH {
+			// Successful interaction, return result
+			return asrInteraction.finalResults, nil
+		} else {
+			// Unsuccessful interaction, return error
+			errorString := fmt.Sprintf("%v: %v", asrInteraction.FinalResultStatus, asrInteraction.FinalStatus.Message)
+			return nil, errors.New(errorString)
+		}
 	} else if asrInteraction.vadBargeInTimeoutReceived {
 		// If we received a barge-in timeout, return an error.
 		return nil, errors.New("barge-in timeout")

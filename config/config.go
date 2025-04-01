@@ -24,7 +24,7 @@ type ConfigValues struct {
 	OperatorId       string `ini:"operator_id"`
 	Username         string `ini:"username"`
 	Password         string `ini:"password"`
-	IdpEndpoint      string `ini:"idp_endpoint"`
+	AuthUrl          string `ini:"auth_url"`
 	ClientId         string `ini:"client_id"`
 	SecretHash       string `ini:"secret_hash"`
 	AuthHeaders      string `ini:"auth_headers"`
@@ -112,13 +112,16 @@ func (configValues *ConfigValues) Load(iniFilepath string) (err error) {
 		// Note: clearing out an existing header values here (otherwise they would merge)
 		configValues.AuthHeaders = envAuthHeaders
 		configValues.authHeaders = make(map[string]string)
+
+		// The next line will add AUTH_HEADER strings to internally managed
+		// configValues.AuthHeaders
 		configValues.parseHeadersString(envAuthHeaders)
 	}
 
 	// Override from environment variables for other properties (these have LUMENVOX_GO_SDK__ prefixes)
 	configEnvVarNames := []string{"APP_NAME", "APP_VERSION", "LOG_LEVEL", "API_ENDPOINT", "ENABLE_TLS",
 		"ALLOW_INSECURE_TLS", "CERTIFICATE_PATH", "DEPLOYMENT_ID", "OPERATOR_ID",
-		"USERNAME", "PASSWORD", "IDP_ENDPOINT", "CLIENT_ID", "SECRET_HASH"}
+		"USERNAME", "PASSWORD", "AUTH_URL", "CLIENT_ID", "SECRET_HASH"}
 	for _, key := range configEnvVarNames {
 		envValue := os.Getenv("LUMENVOX_GO_SDK__" + key)
 		if envValue != "" {
@@ -194,29 +197,6 @@ func (configValues *ConfigValues) Validate() (err error) {
 
 	if configValues.DeploymentId == "" {
 		return fmt.Errorf("deployment_id is required")
-	}
-
-	if configValues.Username != "" {
-		// Auth enabled - validate other fields
-		if configValues.IdpEndpoint == "" {
-			return fmt.Errorf("idp_endpoint is required")
-		}
-
-		if configValues.ClientId == "" {
-			return fmt.Errorf("client_id is required")
-		}
-
-		if configValues.SecretHash == "" {
-			return fmt.Errorf("secret_hash is required")
-		}
-
-		if configValues.AuthHeaders == "" {
-			return fmt.Errorf("auth_headers is required")
-		}
-
-		if configValues.Password == "" {
-			return fmt.Errorf("password is required")
-		}
 	}
 
 	return nil

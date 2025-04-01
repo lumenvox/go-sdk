@@ -1,14 +1,17 @@
 package session
 
 import (
+	"github.com/lumenvox/go-sdk/auth"
 	"github.com/lumenvox/go-sdk/lumenvox/api"
 
 	"context"
 	"errors"
 	"fmt"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -49,6 +52,8 @@ type SessionObject struct {
 
 	audioLock      sync.Mutex
 	audioForStream []byte
+
+	StreamLoopExitErr atomic.Pointer[error] // indicates streaming loop exit status
 
 	// channels
 	audioPullChannel            chan *api.AudioPullResponse
@@ -147,16 +152,45 @@ func CreateNewSession(
 	deploymentId string,
 	audioConfig AudioConfig,
 	operatorId string,
+	authSettings *auth.AuthSettings,
 ) (newSession *SessionObject, err error) {
 
 	logger := getLogger()
+
+	var sessionStream api.LumenVox_SessionClient
+
+	// only used when auth enabled...
+	var authToken string
+	var metaAuth metadata.MD
+
+	// connectionContext will include auth if enabled
+	var connectionContext context.Context
 
 	// Set up the stream.
 	grpcClient := api.NewLumenVoxClient(clientConn)
 	streamContext, streamCancel := context.WithTimeout(context.Background(), streamTimeout)
 
+	if authSettings != nil {
+		// Authentication enabled
+
+		tokenProvider := auth.GetGlobalCognitoProvider(*authSettings)
+
+		authToken, err = tokenProvider.GetToken(streamContext)
+		if err != nil {
+			streamCancel()
+			return nil, err
+		}
+
+		// Add an Authorization header to the request
+		metaAuth = metadata.Pairs("Authorization", "Bearer "+authToken)
+
+		connectionContext = metadata.NewOutgoingContext(streamContext, metaAuth)
+	} else {
+		connectionContext = streamContext
+	}
+
 	// Create the sessionStream.
-	sessionStream, err := grpcClient.Session(streamContext)
+	sessionStream, err = grpcClient.Session(connectionContext)
 
 	// Catch any errors from the stream.
 	if err != nil {
@@ -273,4 +307,16 @@ func (session *SessionObject) CloseSession() {
 	delete(activeSessionsMap.OpenSessions, sessionId)
 	activeSessionsMap.Unlock()
 
+}
+
+// HasListeningLoopExited checks if the listening loop has exited and returns
+// its status along with any associated error.
+func (session *SessionObject) HasListeningLoopExited() (bool, error) {
+
+	errPtr := session.StreamLoopExitErr.Load()
+	if errPtr == nil {
+		return false, nil // loop hasn't exited yet
+	}
+
+	return true, *errPtr
 }
