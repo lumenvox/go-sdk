@@ -5,6 +5,7 @@ import (
 
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"google.golang.org/genproto/googleapis/rpc/status"
 	"time"
 )
@@ -32,10 +33,22 @@ func (session *SessionObject) NewInlineTts(language string,
 
 	logger := getLogger()
 
+	// Generate a correlation ID to track the response when it arrives
+	correlationId := uuid.NewString()
+
+	// Create a channel to wait for the response
+	interactionCreateChan, err := session.prepareInteractionCreate(correlationId)
+	if err != nil {
+		logger.Error(err.Error(),
+			"correlationId", correlationId,
+			"sessionId", session.SessionId)
+		return nil, err
+	}
+
 	// Create TTS interaction, adding specified parameters
 
 	session.streamSendLock.Lock()
-	err = session.SessionStream.Send(getInlineTtsRequest("", language, textToSynthesize,
+	err = session.SessionStream.Send(getInlineTtsRequest(correlationId, language, textToSynthesize,
 		synthesizedAudioFormat, synthesisTimeoutMs, inlineSettings, generalInteractionSettings))
 	session.streamSendLock.Unlock()
 	if err != nil {
@@ -46,7 +59,25 @@ func (session *SessionObject) NewInlineTts(language string,
 	}
 
 	// Get the interaction ID.
-	ttsResponse := <-session.createdTtsChannel
+	var response *api.SessionResponse
+	select {
+	case response = <-interactionCreateChan:
+	case <-time.After(20 * time.Second):
+		logger.Error("timed out waiting for interaction id",
+			"type", "tts",
+			"correlationId", correlationId,
+			"sessionId", session.SessionId)
+		return nil, errors.New("timed out waiting for interaction id")
+	}
+	ttsResponse := response.GetInteractionCreateTts()
+	if ttsResponse == nil {
+		logger.Error("received interactionCreate response with unexpected type",
+			"expected", "tts",
+			"response", response,
+			"correlationId", correlationId,
+			"sessionId", session.SessionId)
+		return nil, errors.New("received interactionCreate response with unexpected type")
+	}
 	interactionId := ttsResponse.InteractionId
 	if EnableVerboseLogging {
 		logger.Debug("created new TTS interaction",
@@ -84,10 +115,22 @@ func (session *SessionObject) NewUrlTts(language string,
 
 	logger := getLogger()
 
+	// Generate a correlation ID to track the response when it arrives
+	correlationId := uuid.NewString()
+
+	// Create a channel to wait for the response
+	interactionCreateChan, err := session.prepareInteractionCreate(correlationId)
+	if err != nil {
+		logger.Error(err.Error(),
+			"correlationId", correlationId,
+			"sessionId", session.SessionId)
+		return nil, err
+	}
+
 	// Create TTS interaction, adding specified parameters
 
 	session.streamSendLock.Lock()
-	err = session.SessionStream.Send(getUrlTtsRequest("", language, ssmlUrl,
+	err = session.SessionStream.Send(getUrlTtsRequest(correlationId, language, ssmlUrl,
 		synthesizedAudioFormat, synthesisTimeoutMs, sslVerifyPeer, generalInteractionSettings))
 	session.streamSendLock.Unlock()
 	if err != nil {
@@ -98,7 +141,25 @@ func (session *SessionObject) NewUrlTts(language string,
 	}
 
 	// Get the interaction ID.
-	ttsResponse := <-session.createdTtsChannel
+	var response *api.SessionResponse
+	select {
+	case response = <-interactionCreateChan:
+	case <-time.After(20 * time.Second):
+		logger.Error("timed out waiting for interaction id",
+			"type", "tts",
+			"correlationId", correlationId,
+			"sessionId", session.SessionId)
+		return nil, errors.New("timed out waiting for interaction id")
+	}
+	ttsResponse := response.GetInteractionCreateTts()
+	if ttsResponse == nil {
+		logger.Error("received interactionCreate response with unexpected type",
+			"expected", "tts",
+			"response", response,
+			"correlationId", correlationId,
+			"sessionId", session.SessionId)
+		return nil, errors.New("received interactionCreate response with unexpected type")
+	}
 	interactionId := ttsResponse.InteractionId
 	if EnableVerboseLogging {
 		logger.Debug("created new TTS interaction",

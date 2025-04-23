@@ -56,21 +56,16 @@ type SessionObject struct {
 	StreamLoopExitErr atomic.Pointer[error] // indicates streaming loop exit status
 
 	// channels
-	audioPullChannel            chan *api.AudioPullResponse
-	sessionLoadChannel          chan *api.SessionLoadGrammarResponse
-	SessionCloseChannel         chan struct{}
-	createdAsrChannel           chan *api.InteractionCreateAsrResponse
-	createdTranscriptionChannel chan *api.InteractionCreateTranscriptionResponse
-	createdNormalizeChannel     chan *api.InteractionCreateNormalizeTextResponse
-	createdAmdChannel           chan *api.InteractionCreateAmdResponse
-	createdCpaChannel           chan *api.InteractionCreateCpaResponse
-	createdNluChannel           chan *api.InteractionCreateNluResponse
-	createdGrammarParseChannel  chan *api.InteractionCreateGrammarParseResponse
-	createdTtsChannel           chan *api.InteractionCreateTtsResponse
-	createdDiarizationChannel   chan *api.InteractionCreateDiarizationResponse
-	grammarErrorChannel         chan *api.SessionEvent
-	errorChan                   chan error
-	stopStreamingAudio          chan struct{}
+	audioPullChannel    chan *api.AudioPullResponse
+	sessionLoadChannel  chan *api.SessionLoadGrammarResponse
+	SessionCloseChannel chan struct{}
+	grammarErrorChannel chan *api.SessionEvent
+	errorChan           chan error
+	stopStreamingAudio  chan struct{}
+
+	// map of channels to handle interactionCreate responses
+	interactionCreateMapLock sync.Mutex
+	interactionCreateMap     map[string]chan *api.SessionResponse
 
 	// maps to store all active interactions
 	asrInteractionsMap           map[string]*AsrInteractionObject
@@ -81,6 +76,7 @@ type SessionObject struct {
 	normalizationInteractionsMap map[string]*NormalizationInteractionObject
 	ttsInteractionsMap           map[string]*TtsInteractionObject
 	diarizationInteractionsMap   map[string]*DiarizationInteractionObject
+	languageIdInteractionsMap    map[string]*LanguageIdInteractionObject
 
 	// settings
 	sessionSettingsChannel chan *api.SessionSettings
@@ -116,22 +112,16 @@ func newSessionObject(
 		audioConfig:   audioConfig,
 
 		// channels
-		audioPullChannel:            make(chan *api.AudioPullResponse, 100),
-		sessionLoadChannel:          make(chan *api.SessionLoadGrammarResponse, 100),
-		SessionCloseChannel:         make(chan struct{}, 1),
-		createdAsrChannel:           make(chan *api.InteractionCreateAsrResponse, 100),
-		createdTranscriptionChannel: make(chan *api.InteractionCreateTranscriptionResponse, 100),
-		createdAmdChannel:           make(chan *api.InteractionCreateAmdResponse, 100),
-		createdCpaChannel:           make(chan *api.InteractionCreateCpaResponse, 100),
-		createdNluChannel:           make(chan *api.InteractionCreateNluResponse, 100),
-		createdNormalizeChannel:     make(chan *api.InteractionCreateNormalizeTextResponse, 100),
-		createdGrammarParseChannel:  make(chan *api.InteractionCreateGrammarParseResponse, 100),
-		createdTtsChannel:           make(chan *api.InteractionCreateTtsResponse, 100),
-		createdDiarizationChannel:   make(chan *api.InteractionCreateDiarizationResponse, 100),
-		grammarErrorChannel:         make(chan *api.SessionEvent, 100),
-		errorChan:                   make(chan error, 10),
-		stopStreamingAudio:          make(chan struct{}, 1),
-		sessionSettingsChannel:      make(chan *api.SessionSettings, 100),
+		audioPullChannel:       make(chan *api.AudioPullResponse, 100),
+		sessionLoadChannel:     make(chan *api.SessionLoadGrammarResponse, 100),
+		SessionCloseChannel:    make(chan struct{}, 1),
+		grammarErrorChannel:    make(chan *api.SessionEvent, 100),
+		errorChan:              make(chan error, 10),
+		stopStreamingAudio:     make(chan struct{}, 1),
+		sessionSettingsChannel: make(chan *api.SessionSettings, 100),
+
+		// map of channels to handle interactionCreate responses
+		interactionCreateMap: make(map[string]chan *api.SessionResponse),
 
 		// interaction maps
 		asrInteractionsMap:           make(map[string]*AsrInteractionObject),
@@ -142,6 +132,7 @@ func newSessionObject(
 		normalizationInteractionsMap: make(map[string]*NormalizationInteractionObject),
 		ttsInteractionsMap:           make(map[string]*TtsInteractionObject),
 		diarizationInteractionsMap:   make(map[string]*DiarizationInteractionObject),
+		languageIdInteractionsMap:    make(map[string]*LanguageIdInteractionObject),
 	}
 }
 
@@ -319,4 +310,61 @@ func (session *SessionObject) HasListeningLoopExited() (bool, error) {
 	}
 
 	return true, *errPtr
+}
+
+// prepareInteractionCreate creates a channel in an internal map to prepare
+// for an interactionCreate response. It expects the correlationId of the
+// relevant interactionCreate request, which is used to route the response. It
+// returns a receive-only channel, as the creating thread should not close the
+// channel.
+func (session *SessionObject) prepareInteractionCreate(correlationId string) (
+	interactionCreateChan <-chan *api.SessionResponse, err error) {
+
+	session.interactionCreateMapLock.Lock()
+	defer session.interactionCreateMapLock.Unlock()
+
+	// if the correlationId already has a channel, return an error
+	if _, ok := session.interactionCreateMap[correlationId]; ok {
+		return nil, errors.New("interaction create channel already exists")
+	}
+
+	// create the channel, put it in the map, and return it
+	createChannel := make(chan *api.SessionResponse, 1)
+	session.interactionCreateMap[correlationId] = createChannel
+	interactionCreateChan = createChannel
+
+	return
+}
+
+// signalInteractionCreate sends an interactionCreate response through
+// the relevant channel in the interactionCreateMap. If the channel is
+// not found or is empty, it returns an error.
+//
+// Each correlationId should only be used once, so if a map entry exists
+// for the provided correlationId, it will be deleted.
+func (session *SessionObject) signalInteractionCreate(correlationId string,
+	response *api.SessionResponse) (err error) {
+
+	session.interactionCreateMapLock.Lock()
+	defer session.interactionCreateMapLock.Unlock()
+
+	// attempt to fetch the channel from the map
+	createChannel, ok := session.interactionCreateMap[correlationId]
+	if ok == false {
+		return errors.New("interaction create channel does not exist")
+	}
+
+	// an entry in the map exists. each channel should only be used once,
+	// and we already have the channel, so delete the map entry.
+	delete(session.interactionCreateMap, correlationId)
+
+	// catch nil channel
+	if createChannel == nil {
+		return errors.New("interaction create channel is nil")
+	}
+
+	// if we got this far, the channel should be OK. Write the response.
+	createChannel <- response
+
+	return
 }

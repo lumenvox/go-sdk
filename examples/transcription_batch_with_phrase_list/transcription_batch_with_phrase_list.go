@@ -103,25 +103,47 @@ func main() {
 	useVad := false
 	bargeInTimeout := int32(30000) // 30 second default
 	eosDelay := int32(1000)
-	vadSettings := client.GetVadSettings(useVad, bargeInTimeout, eosDelay, nil,
-		api.VadSettings_NOISE_REDUCTION_MODE_DISABLED, nil, nil, nil, nil, nil)
+	var endOfSpeechTimeoutMs *api.OptionalInt32 = nil
+	noiseReductionMode := api.VadSettings_NOISE_REDUCTION_MODE_DISABLED
+	var bargeInThreshold *api.OptionalInt32 = nil
+	var snrSensitivity *api.OptionalInt32 = nil
+	var streamInitDelay *api.OptionalInt32 = nil
+	var volumeSensitivity *api.OptionalInt32 = nil
+	var windBackMs *api.OptionalInt32 = nil
+	vadSettings := client.GetVadSettings(useVad, bargeInTimeout, eosDelay, endOfSpeechTimeoutMs,
+		noiseReductionMode, bargeInThreshold, snrSensitivity, streamInitDelay, volumeSensitivity, windBackMs)
 
 	// Configure recognition settings.
 	decodeTimeout := int32(10000)
 	enablePartialResults := false
-	recognitionSettings := client.GetRecognitionSettings(decodeTimeout, enablePartialResults, nil, nil, nil)
+	var maxAlternatives *api.OptionalInt32 = nil
+	var trimSilence *api.OptionalInt32 = nil
+	var confidenceThreshold *api.OptionalInt32 = nil
+	recognitionSettings := client.GetRecognitionSettings(decodeTimeout, enablePartialResults,
+		maxAlternatives, trimSilence, confidenceThreshold)
 
 	// Configure audio consume settings.
-	audioConsumeSettings, err := client.GetAudioConsumeSettings(0,
-		api.AudioConsumeSettings_AUDIO_CONSUME_MODE_BATCH,
-		api.AudioConsumeSettings_STREAM_START_LOCATION_STREAM_BEGIN,
-		nil,
-		nil,
-	)
+	var audioChannel int32 = 0
+	audioConsumeMode := api.AudioConsumeSettings_AUDIO_CONSUME_MODE_BATCH
+	streamStartLocation := api.AudioConsumeSettings_STREAM_START_LOCATION_STREAM_BEGIN
+	var startOffsetMs *api.OptionalInt32 = nil
+	var audioConsumeMaxMs *api.OptionalInt32 = nil
+	audioConsumeSettings, err := client.GetAudioConsumeSettings(audioChannel,
+		audioConsumeMode, streamStartLocation, startOffsetMs, audioConsumeMaxMs)
+
+	// Other transcription settings
+	var embeddedGrammars []*api.Grammar = nil
+	var normalizationSettings *api.NormalizationSettings = nil
+	languageModelName := ""
+	acousticModelName := ""
+	enablePostProcessing := ""
+	var enableContinuousTranscription *api.OptionalBool = nil
 
 	// Create interaction.
-	transcriptionInteraction, err := sessionObject.NewTranscription(language, phrases, nil, audioConsumeSettings, nil,
-		vadSettings, recognitionSettings, "", "", "", nil)
+	transcriptionInteraction, err := sessionObject.NewTranscription(language, phrases,
+		embeddedGrammars, audioConsumeSettings, normalizationSettings, vadSettings,
+		recognitionSettings, languageModelName, acousticModelName, enablePostProcessing,
+		enableContinuousTranscription)
 	if err != nil {
 		logger.Error("failed to create interaction",
 			"error", err)

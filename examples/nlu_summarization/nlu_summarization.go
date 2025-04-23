@@ -70,9 +70,18 @@ func main() {
 	language := "en-US"
 
 	// Configure NLU settings.
-	nluSettings := client.GetNluSettings(3, 0, "",
-		"", false, false,
-		api.NluSettings_UNDEFINED, false, nil)
+	var summarizationBulletPoints int32 = 3
+	var summarizationWords int32 = 0
+	translateFromLanguage := ""
+	translateToLanguage := ""
+	enableLanguageDetect := false
+	enableTopicDetect := false
+	detectOutcomeType := api.NluSettings_UNDEFINED
+	enableSentimentAnalysis := false
+	var requestTimeoutMs *api.OptionalInt32 = nil
+	nluSettings := client.GetNluSettings(summarizationBulletPoints, summarizationWords,
+		translateFromLanguage, translateToLanguage, enableLanguageDetect, enableTopicDetect,
+		detectOutcomeType, enableSentimentAnalysis, requestTimeoutMs)
 
 	inputText := "LumenVox is a company specializing in speech recognition and voice biometrics technology. Their" +
 		" solutions are designed to enhance customer interactions by enabling automated speech recognition (ASR) and" +
@@ -83,7 +92,8 @@ func main() {
 		" interactions."
 
 	// Create interaction.
-	nluInteraction, err := sessionObject.NewNlu(language, inputText, nluSettings, nil)
+	var generalInteractionSettings *api.GeneralInteractionSettings = nil
+	nluInteraction, err := sessionObject.NewNlu(language, inputText, nluSettings, generalInteractionSettings)
 	if err != nil {
 		logger.Error("failed to create NLU interaction",
 			"error", err)

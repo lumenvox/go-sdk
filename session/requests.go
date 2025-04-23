@@ -423,6 +423,41 @@ func getDiarizationRequest(
 	return diarizationRequest
 }
 
+// getLanguageIdRequest returns a language id request. The specified
+// correlationId will be used if nonempty. Otherwise, one will be
+// auto-generated.
+func getLanguageIdRequest(
+	correlationId string,
+	requestTimeoutMs *api.OptionalInt32,
+	generalInteractionSettings *api.GeneralInteractionSettings,
+	audioConsumeSettings *api.AudioConsumeSettings,
+) (languageIdRequest *api.SessionRequest) {
+
+	if correlationId == "" {
+		// Create a new correlationId if one is not specified
+		correlationId = uuid.NewString()
+	}
+
+	requestBody := &api.InteractionCreateLanguageIdRequest{
+		RequestTimeoutMs:           requestTimeoutMs,
+		GeneralInteractionSettings: generalInteractionSettings,
+		AudioConsumeSettings:       audioConsumeSettings,
+	}
+
+	languageIdRequest = &api.SessionRequest{
+		CorrelationId: &api.OptionalString{Value: correlationId},
+		RequestType: &api.SessionRequest_InteractionRequest{
+			InteractionRequest: &api.InteractionRequestMessage{
+				InteractionRequest: &api.InteractionRequestMessage_InteractionCreateLanguageId{
+					InteractionCreateLanguageId: requestBody,
+				},
+			},
+		},
+	}
+
+	return languageIdRequest
+}
+
 // getAudioPushRequest returns an audio push request. The specified
 // correlationId will be used if nonempty. Otherwise, one will be
 // auto-generated.

@@ -53,7 +53,7 @@ func main() {
 
 	// Set audio configuration for session.
 	audioConfig := session.AudioConfig{
-		Format:     api.AudioFormat_STANDARD_AUDIO_FORMAT_ALAW,
+		Format:     api.AudioFormat_STANDARD_AUDIO_FORMAT_ULAW,
 		SampleRate: 8000,
 		IsBatch:    true,
 	}
@@ -74,7 +74,7 @@ func main() {
 	var audioData []byte
 
 	// Read data from disk.
-	audioFilePath := "./examples/test_data/en_phone_number.alaw"
+	audioFilePath := "./examples/test_data/Capacity-AI-Powered-Support-Automation-Platform-English-1min.ulaw"
 	audioData, err = os.ReadFile(audioFilePath)
 	if err != nil {
 		logger.Error("reading audio file",
@@ -86,33 +86,8 @@ func main() {
 	sessionObject.AddAudio(audioData)
 
 	///////////////////////
-	// Create transcription interaction
+	// Create language id interaction
 	///////////////////////
-
-	language := "en-US"
-
-	// Configure VAD settings.
-	useVad := false
-	bargeInTimeout := int32(30000) // 30 second default
-	eosDelay := int32(1000)
-	var endOfSpeechTimeoutMs *api.OptionalInt32 = nil
-	noiseReductionMode := api.VadSettings_NOISE_REDUCTION_MODE_DISABLED
-	var bargeInThreshold *api.OptionalInt32 = nil
-	var snrSensitivity *api.OptionalInt32 = nil
-	var streamInitDelay *api.OptionalInt32 = nil
-	var volumeSensitivity *api.OptionalInt32 = nil
-	var windBackMs *api.OptionalInt32 = nil
-	vadSettings := client.GetVadSettings(useVad, bargeInTimeout, eosDelay, endOfSpeechTimeoutMs,
-		noiseReductionMode, bargeInThreshold, snrSensitivity, streamInitDelay, volumeSensitivity, windBackMs)
-
-	// Configure recognition settings.
-	decodeTimeout := int32(10000)
-	enablePartialResults := false
-	var maxAlternatives *api.OptionalInt32 = nil
-	var trimSilence *api.OptionalInt32 = nil
-	var confidenceThreshold *api.OptionalInt32 = nil
-	recognitionSettings := client.GetRecognitionSettings(decodeTimeout, enablePartialResults,
-		maxAlternatives, trimSilence, confidenceThreshold)
 
 	// Configure audio consume settings.
 	var audioChannel int32 = 0
@@ -123,30 +98,12 @@ func main() {
 	audioConsumeSettings, err := client.GetAudioConsumeSettings(audioChannel,
 		audioConsumeMode, streamStartLocation, startOffsetMs, audioConsumeMaxMs)
 
-	// Configure normalization settings for redaction.
-	// Redaction will be seen in verbalized_redacted and final_redacted fields in the final result.
-	enableInverseText := true
-	enableCapitalization := false
-	enableRedaction := true
-	enableSrtGeneration := false
-	enableVttGeneration := false
-	var requestTimeoutMs *api.OptionalInt32 = nil
-	normalizationSettings := client.GetNormalizationSettings(enableInverseText, enableCapitalization,
-		enableRedaction, enableSrtGeneration, enableVttGeneration, requestTimeoutMs)
-
-	// Other transcription settings
-	var phrases []*api.TranscriptionPhraseList = nil
-	var embeddedGrammars []*api.Grammar = nil
-	languageModelName := ""
-	acousticModelName := ""
-	enablePostProcessing := ""
-	var enableContinuousTranscription *api.OptionalBool = nil
-
 	// Create interaction.
-	transcriptionInteraction, err := sessionObject.NewTranscription(language, phrases,
-		embeddedGrammars, audioConsumeSettings, normalizationSettings, vadSettings,
-		recognitionSettings, languageModelName, acousticModelName, enablePostProcessing,
-		enableContinuousTranscription)
+	var requestTimeoutMs *api.OptionalInt32 = nil
+	var generalInteractionSettings *api.GeneralInteractionSettings = nil
+	languageIdInteraction, err := sessionObject.NewLanguageId(requestTimeoutMs,
+		generalInteractionSettings, audioConsumeSettings)
+
 	if err != nil {
 		logger.Error("failed to create interaction",
 			"error", err)
@@ -155,7 +112,7 @@ func main() {
 		return
 	}
 
-	interactionId := transcriptionInteraction.InteractionId
+	interactionId := languageIdInteraction.InteractionId
 	logger.Info("received interactionId",
 		"interactionId", interactionId)
 
@@ -163,8 +120,8 @@ func main() {
 	// Get results
 	///////////////////////
 
-	// Now that we have waited for the end of speech, wait for the final results to become available.
-	finalResults, err := transcriptionInteraction.GetFinalResults(10 * time.Second)
+	// Wait for the final results to arrive.
+	finalResults, err := languageIdInteraction.GetFinalResults(10 * time.Second)
 	if err != nil {
 		logger.Error("waiting for final results",
 			"error", err)

@@ -117,86 +117,67 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 
 			handleFinalResult(session, response)
 
-		} else if response.GetInteractionCreateAsr() != nil {
+		} else if response.GetInteractionCreateAmd() != nil ||
+			response.GetInteractionCreateAsr() != nil ||
+			response.GetInteractionCreateCpa() != nil ||
+			response.GetInteractionCreateDiarization() != nil ||
+			response.GetInteractionCreateGrammarParse() != nil ||
+			response.GetInteractionCreateLanguageId() != nil ||
+			response.GetInteractionCreateNlu() != nil ||
+			response.GetInteractionCreateNormalizeText() != nil ||
+			response.GetInteractionCreateTranscription() != nil ||
+			response.GetInteractionCreateTts() != nil {
 
 			if EnableVerboseLogging {
-				logger.Debug("Recv InteractionCreateAsrResponse",
-					"response", response.GetInteractionCreateAsr())
-			}
-
-			session.createdAsrChannel <- response.GetInteractionCreateAsr()
-
-		} else if response.GetInteractionCreateTranscription() != nil {
-
-			if EnableVerboseLogging {
-				logger.Debug("Recv GetInteractionCreateTranscription",
-					"response", response.GetInteractionCreateTranscription())
-			}
-
-			session.createdTranscriptionChannel <- response.GetInteractionCreateTranscription()
-
-		} else if response.GetInteractionCreateAmd() != nil {
-
-			if EnableVerboseLogging {
-				logger.Debug("Recv InteractionCreateAmdResponse",
-					"response", response.GetInteractionCreateAmd())
-			}
-
-			session.createdAmdChannel <- response.GetInteractionCreateAmd()
-
-		} else if response.GetInteractionCreateCpa() != nil {
-
-			if EnableVerboseLogging {
-				logger.Debug("Recv InteractionCreateCpaResponse",
-					"response", response.GetInteractionCreateCpa())
-			}
-
-			session.createdCpaChannel <- response.GetInteractionCreateCpa()
-
-		} else if response.GetInteractionCreateNlu() != nil {
-
-			if EnableVerboseLogging {
-				logger.Debug("Recv GetInteractionCreateNlu",
-					"response", response.GetInteractionCreateNlu())
-			}
-
-			session.createdNluChannel <- response.GetInteractionCreateNlu()
-
-		} else if response.GetInteractionCreateNormalizeText() != nil {
-
-			if EnableVerboseLogging {
-				logger.Debug("Recv GetInteractionCreateNormalizeText",
-					"response", response.GetInteractionCreateNormalizeText())
-			}
-
-			session.createdNormalizeChannel <- response.GetInteractionCreateNormalizeText()
-
-		} else if response.GetInteractionCreateGrammarParse() != nil {
-
-			if EnableVerboseLogging {
-				logger.Debug("Recv InteractionCreateGrammarParseResponse",
+				interactionType := "unknown"
+				if response.GetInteractionCreateAmd() != nil {
+					interactionType = "InteractionCreateAmdResponse"
+				} else if response.GetInteractionCreateAsr() != nil {
+					interactionType = "InteractionCreateAsrResponse"
+				} else if response.GetInteractionCreateCpa() != nil {
+					interactionType = "InteractionCreateCpaResponse"
+				} else if response.GetInteractionCreateDiarization() != nil {
+					interactionType = "InteractionCreateDiarizationResponse"
+				} else if response.GetInteractionCreateGrammarParse() != nil {
+					interactionType = "InteractionCreateGrammarParseResponse"
+				} else if response.GetInteractionCreateLanguageId() != nil {
+					interactionType = "InteractionCreateLanguageIdResponse"
+				} else if response.GetInteractionCreateNlu() != nil {
+					interactionType = "InteractionCreateNluResponse"
+				} else if response.GetInteractionCreateNormalizeText() != nil {
+					interactionType = "InteractionCreateNormalizeTextResponse"
+				} else if response.GetInteractionCreateTranscription() != nil {
+					interactionType = "InteractionCreateTranscriptionResponse"
+				} else if response.GetInteractionCreateTts() != nil {
+					interactionType = "InteractionCreateTtsResponse"
+				}
+				logger.Debug("recv interaction create response",
+					"type", interactionType,
 					"response", response)
 			}
 
-			session.createdGrammarParseChannel <- response.GetInteractionCreateGrammarParse()
-
-		} else if response.GetInteractionCreateTts() != nil {
-
-			if EnableVerboseLogging {
-				logger.Debug("Recv GetInteractionCreateTts",
+			// validate the correlation ID
+			if response.CorrelationId == nil {
+				logger.Warn("error routing interaction create",
+					"error", "missing correlationId",
 					"response", response)
-			}
-
-			session.createdTtsChannel <- response.GetInteractionCreateTts()
-
-		} else if response.GetInteractionCreateDiarization() != nil {
-
-			if EnableVerboseLogging {
-				logger.Debug("Recv GetInteractionCreateDiarization",
+				continue
+			} else if response.CorrelationId.Value == "" {
+				logger.Warn("error routing interaction create",
+					"error", "empty correlationId",
 					"response", response)
+				continue
 			}
+			correlationId := response.CorrelationId.Value
 
-			session.createdDiarizationChannel <- response.GetInteractionCreateDiarization()
+			// attempt to send the response to the channel mapped by the correlationId
+			err := session.signalInteractionCreate(correlationId, response)
+			if err != nil {
+				logger.Warn("error routing interaction create",
+					"error", err.Error(),
+					"response", response)
+				continue
+			}
 
 		} else if response.GetAudioPull() != nil {
 
@@ -607,6 +588,15 @@ func handleFinalResult(session *SessionObject, response *api.SessionResponse) {
 
 			// This is a diarization interaction.
 			interactionObject.finalResults = finalResult.GetFinalResult().GetDiarizationInteractionResult()
+			interactionObject.FinalStatus = finalResult.Status
+			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
+			interactionObject.finalResultsReceived = true
+			close(interactionObject.resultsReadyChannel)
+
+		} else if interactionObject, interactionFound := session.languageIdInteractionsMap[interactionId]; interactionFound {
+
+			// This is a diarization interaction.
+			interactionObject.finalResults = finalResult.GetFinalResult().GetLanguageIdInteractionResult()
 			interactionObject.FinalStatus = finalResult.Status
 			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
 			interactionObject.finalResultsReceived = true

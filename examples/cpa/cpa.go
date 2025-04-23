@@ -90,23 +90,35 @@ func main() {
 	///////////////////////
 
 	// Configure CPA settings.
-	cpaSettings := client.GetCpaSettings(nil, nil,
-		nil, nil)
+	var humanResidenceTimeMs *api.OptionalInt32 = nil
+	var humanBusinessTimeMs *api.OptionalInt32 = nil
+	var humanSilenceTimeoutMs *api.OptionalInt32 = nil
+	var maxTimeFromConnectMs *api.OptionalInt32 = nil
+	cpaSettings := client.GetCpaSettings(humanResidenceTimeMs, humanBusinessTimeMs,
+		humanSilenceTimeoutMs, maxTimeFromConnectMs)
 
 	// Configure VAD settings.
 	useVad := false
 	bargeInTimeout := int32(30000) // 30 second default
 	eosDelay := int32(1000)
-	vadSettings := client.GetVadSettings(useVad, bargeInTimeout, eosDelay, nil,
-		api.VadSettings_NOISE_REDUCTION_MODE_DISABLED, nil, nil, nil, nil, nil)
+	var endOfSpeechTimeoutMs *api.OptionalInt32 = nil
+	noiseReductionMode := api.VadSettings_NOISE_REDUCTION_MODE_DISABLED
+	var bargeInThreshold *api.OptionalInt32 = nil
+	var snrSensitivity *api.OptionalInt32 = nil
+	var streamInitDelay *api.OptionalInt32 = nil
+	var volumeSensitivity *api.OptionalInt32 = nil
+	var windBackMs *api.OptionalInt32 = nil
+	vadSettings := client.GetVadSettings(useVad, bargeInTimeout, eosDelay, endOfSpeechTimeoutMs,
+		noiseReductionMode, bargeInThreshold, snrSensitivity, streamInitDelay, volumeSensitivity, windBackMs)
 
 	// Configure audio consume settings.
-	audioConsumeSettings, err := client.GetAudioConsumeSettings(0,
-		api.AudioConsumeSettings_AUDIO_CONSUME_MODE_BATCH,
-		api.AudioConsumeSettings_STREAM_START_LOCATION_STREAM_BEGIN,
-		nil,
-		nil,
-	)
+	var audioChannel int32 = 0
+	audioConsumeMode := api.AudioConsumeSettings_AUDIO_CONSUME_MODE_BATCH
+	streamStartLocation := api.AudioConsumeSettings_STREAM_START_LOCATION_STREAM_BEGIN
+	var startOffsetMs *api.OptionalInt32 = nil
+	var audioConsumeMaxMs *api.OptionalInt32 = nil
+	audioConsumeSettings, err := client.GetAudioConsumeSettings(audioChannel,
+		audioConsumeMode, streamStartLocation, startOffsetMs, audioConsumeMaxMs)
 
 	var generalInteractionSettings *api.GeneralInteractionSettings = nil
 

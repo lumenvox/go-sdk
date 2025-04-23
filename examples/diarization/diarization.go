@@ -92,16 +92,20 @@ func main() {
 	language := "en-US"
 
 	// Configure audio consume settings.
-	audioConsumeSettings, err := client.GetAudioConsumeSettings(0,
-		api.AudioConsumeSettings_AUDIO_CONSUME_MODE_BATCH,
-		api.AudioConsumeSettings_STREAM_START_LOCATION_STREAM_BEGIN,
-		nil,
-		nil,
-	)
+	var audioChannel int32 = 0
+	audioConsumeMode := api.AudioConsumeSettings_AUDIO_CONSUME_MODE_BATCH
+	streamStartLocation := api.AudioConsumeSettings_STREAM_START_LOCATION_STREAM_BEGIN
+	var startOffsetMs *api.OptionalInt32 = nil
+	var audioConsumeMaxMs *api.OptionalInt32 = nil
+	audioConsumeSettings, err := client.GetAudioConsumeSettings(audioChannel,
+		audioConsumeMode, streamStartLocation, startOffsetMs, audioConsumeMaxMs)
 
 	// Create interaction.
-	diarizationInteraction, err := sessionObject.NewDiarization(language, 2, nil,
-		nil, audioConsumeSettings)
+	var maxSpeakers int32 = 2
+	var requestTimeoutMs *api.OptionalInt32 = nil
+	var generalInteractionSettings *api.GeneralInteractionSettings = nil
+	diarizationInteraction, err := sessionObject.NewDiarization(language, maxSpeakers, requestTimeoutMs,
+		generalInteractionSettings, audioConsumeSettings)
 
 	if err != nil {
 		logger.Error("failed to create interaction",

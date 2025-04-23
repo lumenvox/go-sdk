@@ -5,6 +5,7 @@ import (
 
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"google.golang.org/genproto/googleapis/rpc/status"
 	"sync"
 	"time"
@@ -58,10 +59,22 @@ func (session *SessionObject) NewTranscription(
 
 	logger := getLogger()
 
+	// Generate a correlation ID to track the response when it arrives
+	correlationId := uuid.NewString()
+
+	// Create a channel to wait for the response
+	interactionCreateChan, err := session.prepareInteractionCreate(correlationId)
+	if err != nil {
+		logger.Error(err.Error(),
+			"correlationId", correlationId,
+			"sessionId", session.SessionId)
+		return nil, err
+	}
+
 	// Create transcription interaction, adding parameters such as VAD and recognition settings
 
 	session.streamSendLock.Lock()
-	err = session.SessionStream.Send(getTranscriptionRequest("", language, phrases, embeddedGrammars,
+	err = session.SessionStream.Send(getTranscriptionRequest(correlationId, language, phrases, embeddedGrammars,
 		vadSettings, audioConsumeSettings, normalizationSettings, recognitionSettings,
 		languageModelName, acousticModelName, enablePostProcessing, enableContinuousTranscription))
 	session.streamSendLock.Unlock()
@@ -73,7 +86,25 @@ func (session *SessionObject) NewTranscription(
 	}
 
 	// Get the interaction ID.
-	transcriptionResponse := <-session.createdTranscriptionChannel
+	var response *api.SessionResponse
+	select {
+	case response = <-interactionCreateChan:
+	case <-time.After(20 * time.Second):
+		logger.Error("timed out waiting for interaction id",
+			"type", "transcription",
+			"correlationId", correlationId,
+			"sessionId", session.SessionId)
+		return nil, errors.New("timed out waiting for interaction id")
+	}
+	transcriptionResponse := response.GetInteractionCreateTranscription()
+	if transcriptionResponse == nil {
+		logger.Error("received interactionCreate response with unexpected type",
+			"expected", "transcription",
+			"response", response,
+			"correlationId", correlationId,
+			"sessionId", session.SessionId)
+		return nil, errors.New("received interactionCreate response with unexpected type")
+	}
 	interactionId := transcriptionResponse.InteractionId
 	if EnableVerboseLogging {
 		logger.Debug("created new transcription interaction",

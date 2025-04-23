@@ -5,6 +5,7 @@ import (
 
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"google.golang.org/genproto/googleapis/rpc/status"
 	"time"
 )
@@ -47,10 +48,22 @@ func (session *SessionObject) NewAmd(
 
 	logger := getLogger()
 
+	// Generate a correlation ID to track the response when it arrives
+	correlationId := uuid.NewString()
+
+	// Create a channel to wait for the response
+	interactionCreateChan, err := session.prepareInteractionCreate(correlationId)
+	if err != nil {
+		logger.Error(err.Error(),
+			"correlationId", correlationId,
+			"sessionId", session.SessionId)
+		return nil, err
+	}
+
 	// Create AMD interaction, adding parameters such as VAD and recognition settings
 
 	session.streamSendLock.Lock()
-	err = session.SessionStream.Send(getAmdRequest("",
+	err = session.SessionStream.Send(getAmdRequest(correlationId,
 		amdSettings, audioConsumeSettings, vadSettings, generalInteractionSettings))
 	session.streamSendLock.Unlock()
 	if err != nil {
@@ -61,7 +74,25 @@ func (session *SessionObject) NewAmd(
 	}
 
 	// Get the interaction ID.
-	amdResponse := <-session.createdAmdChannel
+	var response *api.SessionResponse
+	select {
+	case response = <-interactionCreateChan:
+	case <-time.After(20 * time.Second):
+		logger.Error("timed out waiting for interaction id",
+			"type", "amd",
+			"correlationId", correlationId,
+			"sessionId", session.SessionId)
+		return nil, errors.New("timed out waiting for interaction id")
+	}
+	amdResponse := response.GetInteractionCreateAmd()
+	if amdResponse == nil {
+		logger.Error("received interactionCreate response with unexpected type",
+			"expected", "amd",
+			"response", response,
+			"correlationId", correlationId,
+			"sessionId", session.SessionId)
+		return nil, errors.New("received interactionCreate response with unexpected type")
+	}
 	interactionId := amdResponse.InteractionId
 	if EnableVerboseLogging {
 		logger.Debug("created new AMD interaction",

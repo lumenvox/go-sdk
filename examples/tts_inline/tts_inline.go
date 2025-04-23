@@ -76,7 +76,14 @@ func main() {
 	voiceName := "Chris"
 	textToSynthesize := "Hello World!"
 
-	inlineSettings := client.GetTtsInlineSynthesisSettings(voiceName, "", "", "", "", "")
+	// Configure settings for inline TTS
+	voiceGender := ""
+	voiceEmphasis := ""
+	voicePitch := ""
+	voiceRate := ""
+	voiceVolume := ""
+	inlineSettings := client.GetTtsInlineSynthesisSettings(voiceName, voiceGender,
+		voiceEmphasis, voicePitch, voiceRate, voiceVolume)
 
 	// Note: conversion to WAV format happens after we get the audio back
 	audioSampleRate := int32(16000)
@@ -86,7 +93,10 @@ func main() {
 	}
 
 	// Create interaction.
-	ttsInteraction, err := sessionObject.NewInlineTts(language, textToSynthesize, inlineSettings, synthesizedAudioFormat, nil, nil)
+	var synthesisTimeoutMs *api.OptionalInt32 = nil
+	var generalInteractionSettings *api.GeneralInteractionSettings = nil
+	ttsInteraction, err := sessionObject.NewInlineTts(language, textToSynthesize, inlineSettings,
+		synthesizedAudioFormat, synthesisTimeoutMs, generalInteractionSettings)
 	if err != nil {
 		logger.Error("failed to create interaction",
 			"error", err)

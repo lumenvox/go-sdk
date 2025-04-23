@@ -4,6 +4,7 @@ import (
 	lumenvoxSdk "github.com/lumenvox/go-sdk"
 	"github.com/lumenvox/go-sdk/config"
 	"github.com/lumenvox/go-sdk/logging"
+	"github.com/lumenvox/go-sdk/lumenvox/api"
 	"github.com/lumenvox/go-sdk/session"
 
 	"os"
@@ -69,8 +70,14 @@ func main() {
 	language := "en-US"
 
 	// Configure normalization settings.
+	enableInverseText := false
 	enableCapitalization := true
-	normalizationSettings := client.GetNormalizationSettings(false, enableCapitalization, false, false, false, nil)
+	enableRedaction := false
+	enableSrtGeneration := false
+	enableVttGeneration := false
+	var requestTimeoutMs *api.OptionalInt32 = nil
+	normalizationSettings := client.GetNormalizationSettings(enableInverseText, enableCapitalization,
+		enableRedaction, enableSrtGeneration, enableVttGeneration, requestTimeoutMs)
 
 	textToNormalize := "recorded books presents an unabridged recording of the great gatsby by f scott" +
 		" fitzgerald narrated by frank muller chapter one in my younger and more vulnerable years my father" +
@@ -82,8 +89,9 @@ func main() {
 		" wars the abnormal mind is quick to detect and detach itself to this quality when it appears in a normal person"
 
 	// Create interaction.
+	var generalInteractionSettings *api.GeneralInteractionSettings = nil
 	normalizationInteraction, err := sessionObject.NewNormalization(language, textToNormalize,
-		normalizationSettings, nil)
+		normalizationSettings, generalInteractionSettings)
 	if err != nil {
 		logger.Error("failed to create interaction",
 			"error", err)

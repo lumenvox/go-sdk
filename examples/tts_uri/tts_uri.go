@@ -85,7 +85,10 @@ func main() {
 	}
 
 	// Create interaction.
-	ttsInteraction, err := sessionObject.NewUrlTts(language, ssmlUrl, sslVerifyPeer, synthesizedAudioFormat, nil, nil)
+	var synthesisTimeoutMs *api.OptionalInt32 = nil
+	var generalInteractionSettings *api.GeneralInteractionSettings = nil
+	ttsInteraction, err := sessionObject.NewUrlTts(language, ssmlUrl, sslVerifyPeer,
+		synthesizedAudioFormat, synthesisTimeoutMs, generalInteractionSettings)
 	if err != nil {
 		logger.Error("failed to create interaction",
 			"error", err)
@@ -123,7 +126,7 @@ func main() {
 	audioOutputFolder := "./examples/synthesized_audio/"
 	_ = os.MkdirAll(audioOutputFolder, os.ModePerm)
 
-	synthesisFilename := audioOutputFolder + "ssml-Chris.wav"
+	synthesisFilename := audioOutputFolder + "uri-Chris.wav"
 
 	// Pull the audio from the synthesis.
 	synthesizedAudioData, err := sessionObject.PullTtsAudio(interactionId, 0, 0, 0)

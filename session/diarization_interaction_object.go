@@ -5,6 +5,7 @@ import (
 
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"google.golang.org/genproto/googleapis/rpc/status"
 	"time"
 )
@@ -33,10 +34,22 @@ func (session *SessionObject) NewDiarization(
 
 	logger := getLogger()
 
+	// Generate a correlation ID to track the response when it arrives
+	correlationId := uuid.NewString()
+
+	// Create a channel to wait for the response
+	interactionCreateChan, err := session.prepareInteractionCreate(correlationId)
+	if err != nil {
+		logger.Error(err.Error(),
+			"correlationId", correlationId,
+			"sessionId", session.SessionId)
+		return nil, err
+	}
+
 	// Create diarization interaction, adding parameters such as VAD and recognition settings
 
 	session.streamSendLock.Lock()
-	err = session.SessionStream.Send(getDiarizationRequest("", language, maxSpeakers,
+	err = session.SessionStream.Send(getDiarizationRequest(correlationId, language, maxSpeakers,
 		requestTimeoutMs, generalInteractionSettings, audioConsumeSettings))
 	session.streamSendLock.Unlock()
 	if err != nil {
@@ -47,7 +60,25 @@ func (session *SessionObject) NewDiarization(
 	}
 
 	// Get the interaction ID.
-	diarizationResponse := <-session.createdDiarizationChannel
+	var response *api.SessionResponse
+	select {
+	case response = <-interactionCreateChan:
+	case <-time.After(20 * time.Second):
+		logger.Error("timed out waiting for interaction id",
+			"type", "diarization",
+			"correlationId", correlationId,
+			"sessionId", session.SessionId)
+		return nil, errors.New("timed out waiting for interaction id")
+	}
+	diarizationResponse := response.GetInteractionCreateDiarization()
+	if diarizationResponse == nil {
+		logger.Error("received interactionCreate response with unexpected type",
+			"expected", "diarization",
+			"response", response,
+			"correlationId", correlationId,
+			"sessionId", session.SessionId)
+		return nil, errors.New("received interactionCreate response with unexpected type")
+	}
 	interactionId := diarizationResponse.InteractionId
 	if EnableVerboseLogging {
 		logger.Debug("created new diarization interaction",
