@@ -1,7 +1,10 @@
 package session
 
 import (
+	"github.com/lumenvox/go-sdk/lumenvox/api"
+
 	"fmt"
+	"time"
 )
 
 // vadInteractionRecord records the data from a single VAD interaction.
@@ -42,8 +45,27 @@ func (session *SessionObject) PullTtsAudio(interactionId string, audioChannel in
 		return nil, err
 	}
 
-	audioDataResponse := <-session.audioPullChannel
-	audioData = audioDataResponse.GetAudioData()
+	var audioPullResponse *api.AudioPullResponse
+	isFinalDataChunk := false
+	for isFinalDataChunk == false {
+		select {
+		case audioPullResponse = <-session.audioPullChannel:
+		case <-time.After(5 * time.Second):
+			// timed out - log error and return any data received so far
+			logger.Error("timed out waiting for final audio chunk",
+				"interactionId", interactionId,
+				"audioChannel", audioChannel)
+			return audioData, TimeoutError
+		}
+
+		if audioPullResponse == nil {
+			// This should not happen, but if it does, just continue the loop
+			continue
+		} else {
+			isFinalDataChunk = audioPullResponse.FinalDataChunk
+			audioData = append(audioData, audioPullResponse.AudioData...)
+		}
+	}
 
 	return audioData, nil
 }
