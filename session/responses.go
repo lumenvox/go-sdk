@@ -62,8 +62,14 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 		}
 
 		if EnableVerboseLogging {
-			logger.Debug("sessionStream.Recv() received",
-				"response", response)
+			if response.GetAudioPull() == nil {
+				logger.Debug("sessionStream.Recv() received",
+					"response", response)
+			} else {
+				logger.Debug("sessionStream.Recv() received audio",
+					"numBytes", len(response.GetAudioPull().GetAudioData()),
+					"correlationId", response.CorrelationId.Value)
+			}
 		}
 
 		if response.SessionId != nil && response.SessionId.Value != "" {
@@ -186,7 +192,7 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 					"numBytes", len(response.GetAudioPull().GetAudioData()))
 			}
 
-			session.audioPullChannel <- response.GetAudioPull()
+			handleAudioPull(session, response)
 
 		} else if response.GetSessionGrammar() != nil {
 
@@ -529,6 +535,7 @@ func handleFinalResult(session *SessionObject, response *api.SessionResponse) {
 			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
 			interactionObject.finalResultsReceived = true
 			close(interactionObject.resultsReadyChannel)
+			delete(session.asrInteractionsMap, interactionId)
 
 		} else if interactionObject, interactionFound := session.transcriptionInteractionsMap[interactionId]; interactionFound {
 
@@ -538,6 +545,7 @@ func handleFinalResult(session *SessionObject, response *api.SessionResponse) {
 			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
 			interactionObject.finalResultsReceived = true
 			close(interactionObject.resultsReadyChannel)
+			delete(session.transcriptionInteractionsMap, interactionId)
 
 		} else if interactionObject, interactionFound := session.nluInteractionsMap[interactionId]; interactionFound {
 
@@ -547,6 +555,7 @@ func handleFinalResult(session *SessionObject, response *api.SessionResponse) {
 			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
 			interactionObject.finalResultsReceived = true
 			close(interactionObject.resultsReadyChannel)
+			delete(session.nluInteractionsMap, interactionId)
 
 		} else if interactionObject, interactionFound := session.amdInteractionsMap[interactionId]; interactionFound {
 
@@ -556,6 +565,7 @@ func handleFinalResult(session *SessionObject, response *api.SessionResponse) {
 			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
 			interactionObject.finalResultsReceived = true
 			close(interactionObject.resultsReadyChannel)
+			delete(session.amdInteractionsMap, interactionId)
 
 		} else if interactionObject, interactionFound := session.cpaInteractionsMap[interactionId]; interactionFound {
 
@@ -565,6 +575,7 @@ func handleFinalResult(session *SessionObject, response *api.SessionResponse) {
 			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
 			interactionObject.finalResultsReceived = true
 			close(interactionObject.resultsReadyChannel)
+			delete(session.cpaInteractionsMap, interactionId)
 
 		} else if interactionObject, interactionFound := session.normalizationInteractionsMap[interactionId]; interactionFound {
 
@@ -574,6 +585,7 @@ func handleFinalResult(session *SessionObject, response *api.SessionResponse) {
 			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
 			interactionObject.finalResultsReceived = true
 			close(interactionObject.resultsReadyChannel)
+			delete(session.normalizationInteractionsMap, interactionId)
 
 		} else if interactionObject, interactionFound := session.ttsInteractionsMap[interactionId]; interactionFound {
 
@@ -583,6 +595,7 @@ func handleFinalResult(session *SessionObject, response *api.SessionResponse) {
 			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
 			interactionObject.finalResultsReceived = true
 			close(interactionObject.resultsReadyChannel)
+			delete(session.ttsInteractionsMap, interactionId)
 
 		} else if interactionObject, interactionFound := session.diarizationInteractionsMap[interactionId]; interactionFound {
 
@@ -592,6 +605,7 @@ func handleFinalResult(session *SessionObject, response *api.SessionResponse) {
 			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
 			interactionObject.finalResultsReceived = true
 			close(interactionObject.resultsReadyChannel)
+			delete(session.diarizationInteractionsMap, interactionId)
 
 		} else if interactionObject, interactionFound := session.languageIdInteractionsMap[interactionId]; interactionFound {
 
@@ -601,6 +615,7 @@ func handleFinalResult(session *SessionObject, response *api.SessionResponse) {
 			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
 			interactionObject.finalResultsReceived = true
 			close(interactionObject.resultsReadyChannel)
+			delete(session.languageIdInteractionsMap, interactionId)
 
 		} else {
 			// We did not find the interaction.
@@ -657,9 +672,74 @@ func handlePartialResult(session *SessionObject, response *api.SessionResponse) 
 		// Done with updates; release lock.
 		interactionObject.partialResultLock.Unlock()
 
+	} else if interactionObject, ok := session.ttsInteractionsMap[interactionId]; ok {
+
+		// This is a TTS interaction.
+
+		// Synchronize tracking information.
+		interactionObject.partialResultLock.Lock()
+		// Get the index of this partial result.
+		partialResultIdx := interactionObject.partialResultsReceived
+		// Store the new partial result.
+		interactionObject.partialResultsList = append(interactionObject.partialResultsList, response.GetPartialResult())
+		// Create a channel for the next partial result.
+		nextPartialChannel := make(chan struct{})
+		interactionObject.partialResultsChannels = append(interactionObject.partialResultsChannels, nextPartialChannel)
+		// Update the number of partial results received.
+		interactionObject.partialResultsReceived = partialResultIdx + 1
+		// Close the channel for this partial result.
+		close(interactionObject.partialResultsChannels[partialResultIdx])
+		// Done with updates; release lock.
+		interactionObject.partialResultLock.Unlock()
+
 	} else {
 		// We did not find the interaction.
 		logger.Error("Recv PartialResult: interaction not found",
 			"interactionId", interactionId)
+	}
+}
+
+func handleAudioPull(session *SessionObject, response *api.SessionResponse) {
+
+	logger := getLogger()
+
+	// get audio pull response
+	audioPullResponse := response.GetAudioPull()
+	if audioPullResponse == nil {
+		logger.Error("Recv AudioPull: invalid response",
+			"response", response)
+		return
+	}
+
+	// attempt to get the correlationId
+	if response.CorrelationId == nil || response.CorrelationId.Value == "" {
+		logger.Error("Recv AudioPull: empty or missing correlation id",
+			"response", response)
+	}
+	correlationId := response.CorrelationId.Value
+
+	// attempt to get the relevant audio pull channel
+	session.ttsAudioMapLock.Lock()
+	audioPullChannel, ok := session.ttsAudioMap[correlationId]
+	if ok == false {
+		logger.Error("Recv AudioPull: audio pull channel not found",
+			"correlationId", correlationId)
+		session.ttsAudioMapLock.Unlock()
+		return
+	}
+
+	// if this is a final audio chunk, go ahead and delete the channel from
+	// the map before releasing the lock, because we won't be using it again
+	if audioPullResponse.FinalDataChunk {
+		delete(session.ttsAudioMap, correlationId)
+	}
+	session.ttsAudioMapLock.Unlock()
+
+	// pass the audio response through the channel
+	select {
+	case audioPullChannel <- audioPullResponse:
+	default:
+		logger.Error("Recv AudioPull: audio pull channel full",
+			"correlationId", correlationId)
 	}
 }

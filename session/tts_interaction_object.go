@@ -7,12 +7,19 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"google.golang.org/genproto/googleapis/rpc/status"
+	"sync"
 	"time"
 )
 
 // TtsInteractionObject represents a TTS interaction.
 type TtsInteractionObject struct {
 	InteractionId string
+
+	// Partial result tracking
+	partialResultLock      sync.Mutex
+	partialResultsReceived int
+	partialResultsChannels []chan struct{}
+	partialResultsList     []*api.PartialResult
 
 	// Final result tracking
 	finalResultsReceived bool
@@ -29,7 +36,8 @@ func (session *SessionObject) NewInlineTts(language string,
 	inlineSettings *api.TtsInlineSynthesisSettings,
 	synthesizedAudioFormat *api.AudioFormat,
 	synthesisTimeoutMs *api.OptionalInt32,
-	generalInteractionSettings *api.GeneralInteractionSettings) (interactionObject *TtsInteractionObject, err error) {
+	generalInteractionSettings *api.GeneralInteractionSettings,
+	enablePartialResults *api.OptionalBool) (interactionObject *TtsInteractionObject, err error) {
 
 	logger := getLogger()
 
@@ -49,7 +57,8 @@ func (session *SessionObject) NewInlineTts(language string,
 
 	session.streamSendLock.Lock()
 	err = session.SessionStream.Send(getInlineTtsRequest(correlationId, language, textToSynthesize,
-		synthesizedAudioFormat, synthesisTimeoutMs, inlineSettings, generalInteractionSettings))
+		synthesizedAudioFormat, synthesisTimeoutMs, inlineSettings, generalInteractionSettings,
+		enablePartialResults))
 	session.streamSendLock.Unlock()
 	if err != nil {
 		session.errorChan <- fmt.Errorf("sending InteractionCreateTtsRequest error: %v", err)
@@ -92,6 +101,7 @@ func (session *SessionObject) NewInlineTts(language string,
 		FinalResultStatus:    api.FinalResultStatus_FINAL_RESULT_STATUS_UNSPECIFIED,
 		resultsReadyChannel:  make(chan struct{}),
 	}
+	interactionObject.partialResultsChannels = append(interactionObject.partialResultsChannels, make(chan struct{}))
 
 	// Add the interaction object to the session
 	{
@@ -111,7 +121,8 @@ func (session *SessionObject) NewUrlTts(language string,
 	sslVerifyPeer *api.OptionalBool,
 	synthesizedAudioFormat *api.AudioFormat,
 	synthesisTimeoutMs *api.OptionalInt32,
-	generalInteractionSettings *api.GeneralInteractionSettings) (interactionObject *TtsInteractionObject, err error) {
+	generalInteractionSettings *api.GeneralInteractionSettings,
+	enablePartialResults *api.OptionalBool) (interactionObject *TtsInteractionObject, err error) {
 
 	logger := getLogger()
 
@@ -131,7 +142,8 @@ func (session *SessionObject) NewUrlTts(language string,
 
 	session.streamSendLock.Lock()
 	err = session.SessionStream.Send(getUrlTtsRequest(correlationId, language, ssmlUrl,
-		synthesizedAudioFormat, synthesisTimeoutMs, sslVerifyPeer, generalInteractionSettings))
+		synthesizedAudioFormat, synthesisTimeoutMs, sslVerifyPeer, generalInteractionSettings,
+		enablePartialResults))
 	session.streamSendLock.Unlock()
 	if err != nil {
 		session.errorChan <- fmt.Errorf("sending InteractionCreateTtsRequest error: %v", err)
@@ -174,6 +186,7 @@ func (session *SessionObject) NewUrlTts(language string,
 		FinalResultStatus:    api.FinalResultStatus_FINAL_RESULT_STATUS_UNSPECIFIED,
 		resultsReadyChannel:  make(chan struct{}),
 	}
+	interactionObject.partialResultsChannels = append(interactionObject.partialResultsChannels, make(chan struct{}))
 
 	// Add the interaction object to the session
 	{
@@ -200,6 +213,66 @@ func (ttsInteraction *TtsInteractionObject) WaitForFinalResults(timeout time.Dur
 		return nil
 	case <-time.After(timeout):
 		return TimeoutError
+	}
+}
+
+// WaitForNextResult waits for the next result-like response, whether that is
+// a partial result or a final result. It returnes true to indicate a final
+// result and falso to indicate a partial result. If a partial result is detected,
+// resultIdx will indicate the index of that partial result.
+//
+// If the return indicates that a partial result was returned, GetPartialResult
+// can be used to fetch the result. Otherwise, GetFinalResults can be used to
+// fetch the final result.
+//
+// If a result-like response does not arrive before the timeout, an error will
+// be returned.
+func (ttsInteraction *TtsInteractionObject) WaitForNextResult(timeout time.Duration) (resultIdx int, final bool, err error) {
+
+	// before doing anything else, get the index of the next partial result. this
+	// will allow us to read from the correct channel if we end up waiting.
+	ttsInteraction.partialResultLock.Lock()
+	nextPartialResultIdx := ttsInteraction.partialResultsReceived
+	ttsInteraction.partialResultLock.Unlock()
+
+	// Before calling a select on multiple channels, try just the resultsReadyChannel.
+	// If multiple channels in a select statement are available for reading at the
+	// same moment, the chosen channel is randomly selected. We have the extra check
+	// here so that we always indicate a final result if a final result has arrived.
+	select {
+	case <-ttsInteraction.resultsReadyChannel:
+		return 0, true, nil
+	default:
+		// resultsReadyChannel has not been closed. Wait for the next result below.
+	}
+
+	// The final result has not arrived. Wait for the next partial result or final result.
+	select {
+	case <-ttsInteraction.resultsReadyChannel:
+		// We received a final result. Return (0, true) to indicate that the
+		// interaction is complete.
+		return 0, true, nil
+	case <-ttsInteraction.partialResultsChannels[nextPartialResultIdx]:
+		// We received a new partial result. Return the index, and false to
+		// indicate a partial result.
+		return nextPartialResultIdx, false, nil
+	case <-time.After(timeout):
+		// We didn't get any result-like responses. Return an error.
+		return 0, false, TimeoutError
+	}
+}
+
+// GetPartialResult returns a partial result at a given index. If a partial result does not exist
+// at the given index, an error is returned.
+//
+// This function is best used in conjunction with WaitForNextResult, which will return the index of
+// any new partial results.
+func (ttsInteraction *TtsInteractionObject) GetPartialResult(resultIdx int) (*api.PartialResult, error) {
+
+	if resultIdx < 0 || len(ttsInteraction.partialResultsList) <= resultIdx {
+		return nil, errors.New("partial result index out of bounds")
+	} else {
+		return ttsInteraction.partialResultsList[resultIdx], nil
 	}
 }
 

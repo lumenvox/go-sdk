@@ -78,6 +78,10 @@ type SessionObject struct {
 	diarizationInteractionsMap   map[string]*DiarizationInteractionObject
 	languageIdInteractionsMap    map[string]*LanguageIdInteractionObject
 
+	// map of channels to handle TTS audio
+	ttsAudioMapLock sync.Mutex
+	ttsAudioMap     map[string]chan *api.AudioPullResponse
+
 	// settings
 	sessionSettingsChannel chan *api.SessionSettings
 }
@@ -133,6 +137,9 @@ func newSessionObject(
 		ttsInteractionsMap:           make(map[string]*TtsInteractionObject),
 		diarizationInteractionsMap:   make(map[string]*DiarizationInteractionObject),
 		languageIdInteractionsMap:    make(map[string]*LanguageIdInteractionObject),
+
+		// audio pull map
+		ttsAudioMap: make(map[string]chan *api.AudioPullResponse),
 	}
 }
 
@@ -365,6 +372,30 @@ func (session *SessionObject) signalInteractionCreate(correlationId string,
 
 	// if we got this far, the channel should be OK. Write the response.
 	createChannel <- response
+
+	return
+}
+
+// prepareAudioPull creates a channel in an internal map to prepare
+// for a series of audioPull response. It expects the correlationId of the
+// relevant audioPull request, which is used to route the responses. It
+// returns a receive-only channel, as the creating thread should not close the
+// channel.
+func (session *SessionObject) prepareAudioPull(correlationId string) (
+	audioPullChan <-chan *api.AudioPullResponse, err error) {
+
+	session.ttsAudioMapLock.Lock()
+	defer session.ttsAudioMapLock.Unlock()
+
+	// if the correlationId already has a channel, return an error
+	if _, ok := session.ttsAudioMap[correlationId]; ok {
+		return nil, errors.New("audio pull channel already exists")
+	}
+
+	// create the channel, put it in the map, and return it
+	audioPullChannel := make(chan *api.AudioPullResponse, 100)
+	session.ttsAudioMap[correlationId] = audioPullChannel
+	audioPullChan = audioPullChannel
 
 	return
 }

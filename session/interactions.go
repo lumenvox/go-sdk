@@ -4,6 +4,7 @@ import (
 	"github.com/lumenvox/go-sdk/lumenvox/api"
 
 	"fmt"
+	"github.com/google/uuid"
 	"time"
 )
 
@@ -33,10 +34,20 @@ func (session *SessionObject) PullTtsAudio(interactionId string, audioChannel in
 
 	logger := getLogger()
 
-	// Send audio pull request using the provided interactionId, adding specified parameters
+	// Set up a channel to track the returned audio data
+	correlationId := uuid.NewString()
+	audioPullChannel, err := session.prepareAudioPull(correlationId)
+	if err != nil {
+		logger.Error(err.Error(),
+			"correlationId", correlationId,
+			"interactionId", interactionId,
+			"sessionId", session.SessionId)
+		return nil, err
+	}
 
+	// Send audio pull request using the provided interactionId, adding specified parameters
 	session.streamSendLock.Lock()
-	err = session.SessionStream.Send(getAudioPullRequest("", interactionId, audioChannel, audioStartMs, audioLengthMs))
+	err = session.SessionStream.Send(getAudioPullRequest(correlationId, interactionId, audioChannel, audioStartMs, audioLengthMs))
 	session.streamSendLock.Unlock()
 	if err != nil {
 		session.errorChan <- fmt.Errorf("sending AudioPullRequest error: %v", err)
@@ -49,7 +60,7 @@ func (session *SessionObject) PullTtsAudio(interactionId string, audioChannel in
 	isFinalDataChunk := false
 	for isFinalDataChunk == false {
 		select {
-		case audioPullResponse = <-session.audioPullChannel:
+		case audioPullResponse = <-audioPullChannel:
 		case <-time.After(5 * time.Second):
 			// timed out - log error and return any data received so far
 			logger.Error("timed out waiting for final audio chunk",

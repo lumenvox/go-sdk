@@ -95,8 +95,9 @@ func main() {
 	// Create interaction.
 	var synthesisTimeoutMs *api.OptionalInt32 = nil
 	var generalInteractionSettings *api.GeneralInteractionSettings = nil
+	var enablePartialResults *api.OptionalBool = nil
 	ttsInteraction, err := sessionObject.NewInlineTts(language, textToSynthesize, inlineSettings,
-		synthesizedAudioFormat, synthesisTimeoutMs, generalInteractionSettings)
+		synthesizedAudioFormat, synthesisTimeoutMs, generalInteractionSettings, enablePartialResults)
 	if err != nil {
 		logger.Error("failed to create interaction",
 			"error", err)

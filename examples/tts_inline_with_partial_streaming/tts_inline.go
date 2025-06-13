@@ -73,9 +73,20 @@ func main() {
 	///////////////////////
 
 	language := "en-US"
-	ssmlUrl := "https://assets.lumenvox.com/ssml/SimpleTTSClient.ssml"
+	voiceName := "Chris"
+	textToSynthesize := "Every interaction is the child of a session. Conceptually, a session can be" +
+		" likened to a phone call. Over the course of a session, multiple interactions can be processed," +
+		" including concurrent interactions. If the interactions for a session will include speech" +
+		" recognition (ASR or Transcription), the session will also include an audio stream."
 
-	sslVerifyPeer := &api.OptionalBool{Value: false}
+	// Configure settings for inline TTS
+	voiceGender := ""
+	voiceEmphasis := ""
+	voicePitch := ""
+	voiceRate := ""
+	voiceVolume := ""
+	inlineSettings := client.GetTtsInlineSynthesisSettings(voiceName, voiceGender,
+		voiceEmphasis, voicePitch, voiceRate, voiceVolume)
 
 	// Note: conversion to WAV format happens after we get the audio back
 	audioSampleRate := int32(16000)
@@ -85,10 +96,10 @@ func main() {
 	}
 
 	// Create interaction.
-	var synthesisTimeoutMs *api.OptionalInt32 = nil
+	var synthesisTimeoutMs = &api.OptionalInt32{Value: 10000}
 	var generalInteractionSettings *api.GeneralInteractionSettings = nil
-	var enablePartialResults *api.OptionalBool = nil
-	ttsInteraction, err := sessionObject.NewUrlTts(language, ssmlUrl, sslVerifyPeer,
+	enablePartialResults := &api.OptionalBool{Value: true}
+	ttsInteraction, err := sessionObject.NewInlineTts(language, textToSynthesize, inlineSettings,
 		synthesizedAudioFormat, synthesisTimeoutMs, generalInteractionSettings, enablePartialResults)
 	if err != nil {
 		logger.Error("failed to create interaction",
@@ -106,17 +117,53 @@ func main() {
 	// Get results
 	///////////////////////
 
-	// Wait for the final results to arrive.
-	finalResults, err := ttsInteraction.GetFinalResults(10 * time.Second)
-	if err != nil {
-		logger.Error("waiting for final results",
-			"error", err)
-		sessionObject.CloseSession()
-		time.Sleep(500 * time.Millisecond) // Delay a little to get any residual messages
-		return
-	} else {
-		logger.Info("got final results",
-			"finalResults", finalResults)
+	var synthesizedAudioData []byte = nil
+	var audioMsPulledSoFar uint32 = 0
+	finalResultReceived := false
+	for finalResultReceived == false {
+		var resultIdx int
+		resultIdx, finalResultReceived, err = ttsInteraction.WaitForNextResult(10 * time.Second)
+		if err != nil {
+			logger.Error("waiting for results",
+				"error", err)
+		} else if finalResultReceived == false {
+			// partial result received. pull any new audio since the last pull.
+			partialResult, err := ttsInteraction.GetPartialResult(resultIdx)
+			if err != nil {
+				logger.Error("getting partial result",
+					"error", err)
+			} else {
+				audioMsInPartialResult := partialResult.PartialResult.GetTtsInteractionResult().AudioLengthMs
+				newAudioMs := audioMsInPartialResult - audioMsPulledSoFar
+				newAudioData, err := sessionObject.PullTtsAudio(interactionId, 0, int32(audioMsPulledSoFar), int32(newAudioMs))
+				if err != nil {
+					logger.Error("pulling audio",
+						"error", err)
+				} else {
+					synthesizedAudioData = append(synthesizedAudioData, newAudioData...)
+					audioMsPulledSoFar += newAudioMs
+				}
+			}
+		} else {
+			// final result received. pull any remaining audio.
+			finalResult, err := ttsInteraction.GetFinalResults(10 * time.Second)
+			if err != nil {
+				logger.Error("getting final result",
+					"error", err)
+			} else {
+				finalAudioMs := finalResult.AudioLengthMs
+				audioMsToPull := finalAudioMs - audioMsPulledSoFar
+				if audioMsToPull > 0 {
+					newAudioData, err := sessionObject.PullTtsAudio(interactionId, 0, int32(audioMsPulledSoFar), int32(audioMsToPull))
+					if err != nil {
+						logger.Error("pulling audio")
+					} else {
+						synthesizedAudioData = append(synthesizedAudioData, newAudioData...)
+						audioMsPulledSoFar += audioMsToPull
+					}
+				}
+			}
+		}
 	}
 
 	///////////////////////
@@ -127,17 +174,7 @@ func main() {
 	audioOutputFolder := "./examples/synthesized_audio/"
 	_ = os.MkdirAll(audioOutputFolder, os.ModePerm)
 
-	synthesisFilename := audioOutputFolder + "uri-Chris.wav"
-
-	// Pull the audio from the synthesis.
-	synthesizedAudioData, err := sessionObject.PullTtsAudio(interactionId, 0, 0, 0)
-	if err != nil {
-		logger.Error("pulling audio",
-			"error", err)
-		sessionObject.CloseSession()
-		time.Sleep(500 * time.Millisecond) // Delay a little to get any residual messages.
-		return
-	}
+	synthesisFilename := audioOutputFolder + "streamed-inline-Chris.wav"
 
 	// Convert the data to WAV.
 	var intData []int

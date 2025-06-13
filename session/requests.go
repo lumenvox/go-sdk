@@ -306,6 +306,7 @@ func getInlineTtsRequest(
 	synthesisTimeoutMs *api.OptionalInt32,
 	inlineSynthesisSettings *api.TtsInlineSynthesisSettings,
 	generalInteractionSettings *api.GeneralInteractionSettings,
+	enablePartialResults *api.OptionalBool,
 ) (ttsRequest *api.SessionRequest) {
 
 	if correlationId == "" {
@@ -324,6 +325,7 @@ func getInlineTtsRequest(
 				TtsInlineSynthesisSettings: inlineSynthesisSettings,
 			},
 		},
+		EnablePartialResults: enablePartialResults,
 	}
 
 	ttsRequest = &api.SessionRequest{
@@ -350,6 +352,7 @@ func getUrlTtsRequest(
 	synthesisTimeoutMs *api.OptionalInt32,
 	sslVerifyPeer *api.OptionalBool,
 	generalInteractionSettings *api.GeneralInteractionSettings,
+	enablePartialResults *api.OptionalBool,
 ) (ttsRequest *api.SessionRequest) {
 
 	if correlationId == "" {
@@ -368,6 +371,7 @@ func getUrlTtsRequest(
 				SslVerifyPeer: sslVerifyPeer,
 			},
 		},
+		EnablePartialResults: enablePartialResults,
 	}
 
 	ttsRequest = &api.SessionRequest{

@@ -306,7 +306,7 @@ func (transcriptionInteraction *TranscriptionInteractionObject) WaitForFinalResu
 func (transcriptionInteraction *TranscriptionInteractionObject) WaitForNextResult(timeout time.Duration) (resultIdx int, final bool, err error) {
 
 	// before doing anything else, get the index of the next partial result. this
-	// will allow us to read from the correct channel, if we end up waiting.
+	// will allow us to read from the correct channel if we end up waiting.
 	transcriptionInteraction.partialResultLock.Lock()
 	nextPartialResultIdx := transcriptionInteraction.partialResultsReceived
 	transcriptionInteraction.partialResultLock.Unlock()
