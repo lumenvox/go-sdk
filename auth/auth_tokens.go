@@ -29,9 +29,9 @@ type AuthSettings struct {
 	Password    string
 }
 
-// Validate checks if all required fields in AuthSettings are set and assigns
+// validate checks if all required fields in AuthSettings are set and assigns
 // default values for missing fields if applicable.
-func (authSettings AuthSettings) Validate() (err error) {
+func (authSettings AuthSettings) validate() (err error) {
 
 	if authSettings.AuthUrl == "" {
 		return fmt.Errorf("auth_url is required")
@@ -62,12 +62,6 @@ func (authSettings AuthSettings) Validate() (err error) {
 	}
 
 	return nil
-}
-
-// TokenProvider defines an interface for retrieving authentication tokens,
-// potentially supporting context propagation.
-type TokenProvider interface {
-	GetToken(ctx context.Context) (string, error)
 }
 
 // CognitoProvider uses AWS Cognito to fetch tokens
@@ -144,7 +138,7 @@ func (cognitoProvider *CognitoProvider) GetToken(ctx context.Context) (string, e
 		return cognitoProvider.cachedToken, nil
 	}
 
-	validateSettingsErr := cognitoProvider.Settings.Validate()
+	validateSettingsErr := cognitoProvider.Settings.validate()
 	if validateSettingsErr != nil {
 		return "", validateSettingsErr
 	}

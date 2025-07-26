@@ -54,15 +54,15 @@ func GetConfigValues(iniFilepath string) (cfg *ConfigValues, err error) {
 		authHeaders:      make(map[string]string),
 	}
 
-	err = cfg.Load(iniFilepath)
+	err = cfg.load(iniFilepath)
 
 	return cfg, err
 }
 
-// Load initializes the configuration with an optional settings file.
+// load initializes the configuration with an optional settings file.
 // If `file` is an empty string, no file is loaded. Environment variables may
 // be used to override any file-based or default values.
-func (configValues *ConfigValues) Load(iniFilepath string) (err error) {
+func (configValues *ConfigValues) load(iniFilepath string) (err error) {
 
 	logger := getLogger()
 
@@ -151,7 +151,7 @@ func (configValues *ConfigValues) Load(iniFilepath string) (err error) {
 		}
 	}
 
-	err = configValues.Validate()
+	err = configValues.validate()
 
 	return err
 }
@@ -189,7 +189,7 @@ func (configValues *ConfigValues) GetAuthHeaders() map[string]string {
 
 // Validate checks if necessary configuration fields are provided and returns
 // an error if any required field is missing.
-func (configValues *ConfigValues) Validate() (err error) {
+func (configValues *ConfigValues) validate() (err error) {
 
 	if configValues.ApiEndpoint == "" {
 		return fmt.Errorf("api_endpoint is required")

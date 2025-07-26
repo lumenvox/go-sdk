@@ -1,7 +1,7 @@
 package session
 
 import (
-	"github.com/lumenvox/go-sdk/lumenvox/api"
+	"github.com/lumenvox/protos-go/lumenvox/api"
 
 	"github.com/google/uuid"
 )
@@ -158,6 +158,44 @@ func getTranscriptionRequest(
 	}
 
 	return transcriptionRequest
+}
+
+// getGrammarParseRequest returns a grammar parse interaction request. The specified
+// correlationId will be used if nonempty. Otherwise, one will be auto-generated.
+func getGrammarParseRequest(
+	correlationId string,
+	language string,
+	inputText string,
+	grammars []*api.Grammar,
+	grammarSettings *api.GrammarSettings,
+	parseTimeoutMs *api.OptionalInt32,
+	generalInteractionSettings *api.GeneralInteractionSettings,
+) (grammarParseRequest *api.SessionRequest) {
+
+	if correlationId == "" {
+		// Create a new correlationId if one is not specified
+		correlationId = uuid.NewString()
+	}
+
+	grammarParseRequest = &api.SessionRequest{
+		CorrelationId: &api.OptionalString{Value: correlationId},
+		RequestType: &api.SessionRequest_InteractionRequest{
+			InteractionRequest: &api.InteractionRequestMessage{
+				InteractionRequest: &api.InteractionRequestMessage_InteractionCreateGrammarParse{
+					InteractionCreateGrammarParse: &api.InteractionCreateGrammarParseRequest{
+						Language:                   language,
+						InputText:                  inputText,
+						Grammars:                   grammars,
+						GrammarSettings:            grammarSettings,
+						ParseTimeoutMs:             parseTimeoutMs,
+						GeneralInteractionSettings: generalInteractionSettings,
+					},
+				},
+			},
+		},
+	}
+
+	return grammarParseRequest
 }
 
 // getNormalizationRequest returns a normalization interaction request. The specified

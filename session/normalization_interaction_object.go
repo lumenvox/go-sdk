@@ -1,7 +1,7 @@
 package session
 
 import (
-	"github.com/lumenvox/go-sdk/lumenvox/api"
+	"github.com/lumenvox/protos-go/lumenvox/api"
 
 	"errors"
 	"fmt"
@@ -22,7 +22,40 @@ type NormalizationInteractionObject struct {
 	resultsReadyChannel  chan struct{}
 }
 
-// NewNormalization attempts to create a new ITN normalization interaction.
+type interactionCreateNormalizeTextHelper struct {
+	interactionCreateChannel chan *NormalizationInteractionObject
+	deadline                 time.Time
+}
+
+// prepareInteractionCreateNormalization creates a helper in an internal map to prepare
+// for an interactionCreateNormalization response. It expects the correlationId of the
+// relevant interactionCreate request, which is used to route the response, as
+// well as a deadline to receive the response. It returns a receive-only channel,
+// as the creating thread should not close the channel.
+func (session *SessionObject) prepareInteractionCreateNormalization(correlationId string, deadline time.Duration) (
+	interactionCreateChan <-chan *NormalizationInteractionObject, err error) {
+
+	session.interactionCreateNormalizeTextMapLock.Lock()
+	defer session.interactionCreateNormalizeTextMapLock.Unlock()
+
+	// if the correlationId is already in the map, return an error
+	if _, ok := session.interactionCreateNormalizeTextMap[correlationId]; ok {
+		return nil, errors.New("interaction create normalization channel already exists")
+	}
+
+	// create the helper, put it in the map, and return the channel
+	interactionCreateHelper := &interactionCreateNormalizeTextHelper{
+		interactionCreateChannel: make(chan *NormalizationInteractionObject, 1),
+		deadline:                 time.Now().Add(deadline),
+	}
+	session.interactionCreateNormalizeTextMap[correlationId] = interactionCreateHelper
+
+	interactionCreateChan = interactionCreateHelper.interactionCreateChannel
+
+	return
+}
+
+// NewNormalization attempts to create a new normalization interaction.
 // If successful, a new interaction object will be returned.
 func (session *SessionObject) NewNormalization(language string,
 	textToNormalize string,
@@ -34,8 +67,8 @@ func (session *SessionObject) NewNormalization(language string,
 	// Generate a correlation ID to track the response when it arrives
 	correlationId := uuid.NewString()
 
-	// Create a channel to wait for the response
-	interactionCreateChan, err := session.prepareInteractionCreate(correlationId)
+	// Create a helper struct to wait for the new interaction object
+	interactionCreateChan, err := session.prepareInteractionCreateNormalization(correlationId, InteractionCreateDeadline)
 	if err != nil {
 		logger.Error(err.Error(),
 			"correlationId", correlationId,
@@ -43,8 +76,7 @@ func (session *SessionObject) NewNormalization(language string,
 		return nil, err
 	}
 
-	// Create normalization interaction, adding specified parameters
-
+	// send the interaction create request
 	session.streamSendLock.Lock()
 	err = session.SessionStream.Send(getNormalizationRequest(correlationId, language, textToNormalize,
 		normalizationSettings, generalInteractionSettings))
@@ -56,47 +88,28 @@ func (session *SessionObject) NewNormalization(language string,
 		return nil, err
 	}
 
-	// Get the interaction ID.
-	var response *api.SessionResponse
+	// Wait for the new interaction object.
 	select {
-	case response = <-interactionCreateChan:
-	case <-time.After(20 * time.Second):
-		logger.Error("timed out waiting for interaction id",
+	case interactionObject = <-interactionCreateChan:
+	case <-time.After(InteractionCreateDeadline):
+		logger.Error("timed out waiting for interaction object",
 			"type", "itn",
 			"correlationId", correlationId,
 			"sessionId", session.SessionId)
-		return nil, errors.New("timed out waiting for interaction id")
+		return nil, errors.New("timed out waiting for interaction object")
 	}
-	normalizationResponse := response.GetInteractionCreateNormalizeText()
-	if normalizationResponse == nil {
-		logger.Error("received interactionCreate response with unexpected type",
-			"expected", "itn",
-			"response", response,
+
+	if interactionObject == nil {
+		logger.Error("received nil interaction object",
+			"type", "itn",
 			"correlationId", correlationId,
 			"sessionId", session.SessionId)
-		return nil, errors.New("received interactionCreate response with unexpected type")
+		return nil, errors.New("received nil interaction object")
 	}
-	interactionId := normalizationResponse.InteractionId
+
 	if EnableVerboseLogging {
-		logger.Debug("created new ITN interaction",
-			"interactionId", interactionId)
-	}
-
-	// Create the interaction object.
-	interactionObject = &NormalizationInteractionObject{
-		InteractionId:        interactionId,
-		finalResultsReceived: false,
-		finalResults:         nil,
-		FinalResultStatus:    api.FinalResultStatus_FINAL_RESULT_STATUS_UNSPECIFIED,
-		resultsReadyChannel:  make(chan struct{}),
-	}
-
-	// Add the interaction object to the session
-	{
-		session.Lock() // Protect concurrent map access
-		defer session.Unlock()
-
-		session.normalizationInteractionsMap[interactionId] = interactionObject
+		logger.Debug("created new normalization interaction",
+			"interactionId", interactionObject.InteractionId)
 	}
 
 	return interactionObject, err

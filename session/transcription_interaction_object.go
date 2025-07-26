@@ -1,7 +1,7 @@
 package session
 
 import (
-	"github.com/lumenvox/go-sdk/lumenvox/api"
+	"github.com/lumenvox/protos-go/lumenvox/api"
 
 	"errors"
 	"fmt"
@@ -42,6 +42,41 @@ type TranscriptionInteractionObject struct {
 	isContinuousTranscription bool
 }
 
+type interactionCreateTranscriptionHelper struct {
+	interactionCreateChannel  chan *TranscriptionInteractionObject
+	deadline                  time.Time
+	isContinuousTranscription bool
+}
+
+// prepareInteractionCreateTranscription creates a helper in an internal map to prepare
+// for an interactionCreateTranscription response. It expects the correlationId of the
+// relevant interactionCreate request, which is used to route the response, as
+// well as a deadline to receive the response. It returns a receive-only channel,
+// as the creating thread should not close the channel.
+func (session *SessionObject) prepareInteractionCreateTranscription(correlationId string, deadline time.Duration, isContinuous bool) (
+	interactionCreateChan <-chan *TranscriptionInteractionObject, err error) {
+
+	session.interactionCreateTranscriptionMapLock.Lock()
+	defer session.interactionCreateTranscriptionMapLock.Unlock()
+
+	// if the correlationId is already in the map, return an error
+	if _, ok := session.interactionCreateTranscriptionMap[correlationId]; ok {
+		return nil, errors.New("interaction create transcription channel already exists")
+	}
+
+	// create the helper, put it in the map, and return the channel
+	interactionCreateHelper := &interactionCreateTranscriptionHelper{
+		interactionCreateChannel:  make(chan *TranscriptionInteractionObject, 1),
+		deadline:                  time.Now().Add(deadline),
+		isContinuousTranscription: isContinuous,
+	}
+	session.interactionCreateTranscriptionMap[correlationId] = interactionCreateHelper
+
+	interactionCreateChan = interactionCreateHelper.interactionCreateChannel
+
+	return
+}
+
 // NewTranscription attempts to create a new transcription interaction.
 // If successful, a new interaction object will be returned.
 func (session *SessionObject) NewTranscription(
@@ -62,8 +97,11 @@ func (session *SessionObject) NewTranscription(
 	// Generate a correlation ID to track the response when it arrives
 	correlationId := uuid.NewString()
 
-	// Create a channel to wait for the response
-	interactionCreateChan, err := session.prepareInteractionCreate(correlationId)
+	// determine if this is a continuous interaction
+	isContinuousTranscription := enableContinuousTranscription != nil && enableContinuousTranscription.Value
+
+	// Create a helper struct to wait for the new interaction object
+	interactionCreateChan, err := session.prepareInteractionCreateTranscription(correlationId, InteractionCreateDeadline, isContinuousTranscription)
 	if err != nil {
 		logger.Error(err.Error(),
 			"correlationId", correlationId,
@@ -71,8 +109,7 @@ func (session *SessionObject) NewTranscription(
 		return nil, err
 	}
 
-	// Create transcription interaction, adding parameters such as VAD and recognition settings
-
+	// send the interaction create request
 	session.streamSendLock.Lock()
 	err = session.SessionStream.Send(getTranscriptionRequest(correlationId, language, phrases, embeddedGrammars,
 		vadSettings, audioConsumeSettings, normalizationSettings, recognitionSettings,
@@ -85,61 +122,28 @@ func (session *SessionObject) NewTranscription(
 		return nil, err
 	}
 
-	// Get the interaction ID.
-	var response *api.SessionResponse
+	// Wait for the new interaction object.
 	select {
-	case response = <-interactionCreateChan:
-	case <-time.After(20 * time.Second):
-		logger.Error("timed out waiting for interaction id",
+	case interactionObject = <-interactionCreateChan:
+	case <-time.After(InteractionCreateDeadline):
+		logger.Error("timed out waiting for interaction object",
 			"type", "transcription",
 			"correlationId", correlationId,
 			"sessionId", session.SessionId)
-		return nil, errors.New("timed out waiting for interaction id")
+		return nil, errors.New("timed out waiting for interaction object")
 	}
-	transcriptionResponse := response.GetInteractionCreateTranscription()
-	if transcriptionResponse == nil {
-		logger.Error("received interactionCreate response with unexpected type",
-			"expected", "transcription",
-			"response", response,
+
+	if interactionObject == nil {
+		logger.Error("received nil interaction object",
+			"type", "transcription",
 			"correlationId", correlationId,
 			"sessionId", session.SessionId)
-		return nil, errors.New("received interactionCreate response with unexpected type")
+		return nil, errors.New("received nil interaction object")
 	}
-	interactionId := transcriptionResponse.InteractionId
+
 	if EnableVerboseLogging {
 		logger.Debug("created new transcription interaction",
-			"interactionId", interactionId)
-	}
-
-	// determine if this is a continuous interaction
-	isContinuousTranscription := false
-	if enableContinuousTranscription != nil && enableContinuousTranscription.Value {
-		isContinuousTranscription = true
-	}
-
-	// Create the interaction object.
-	interactionObject = &TranscriptionInteractionObject{
-		InteractionId:        interactionId,
-		finalResultsReceived: false,
-		finalResults:         nil,
-		resultsReadyChannel:  make(chan struct{}),
-		vadCurrentState:      api.VadEvent_VAD_EVENT_TYPE_UNSPECIFIED,
-
-		isContinuousTranscription: isContinuousTranscription,
-	}
-	interactionObject.partialResultsChannels = append(interactionObject.partialResultsChannels, make(chan struct{}))
-	interactionObject.vadBeginProcessingChannels = append(interactionObject.vadBeginProcessingChannels, make(chan struct{}))
-	interactionObject.vadBargeInChannels = append(interactionObject.vadBargeInChannels, make(chan struct{}))
-	interactionObject.vadBargeOutChannels = append(interactionObject.vadBargeOutChannels, make(chan struct{}))
-	interactionObject.vadBargeInTimeoutChannels = append(interactionObject.vadBargeInTimeoutChannels, make(chan struct{}))
-	interactionObject.vadRecordLog = append(interactionObject.vadRecordLog, createEmptyVadInteractionRecord())
-
-	// Add the interaction object to the session
-	{
-		session.Lock() // Protect concurrent map access
-		defer session.Unlock()
-
-		session.transcriptionInteractionsMap[interactionId] = interactionObject
+			"interactionId", interactionObject.InteractionId)
 	}
 
 	return interactionObject, err

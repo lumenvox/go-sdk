@@ -28,7 +28,7 @@ func init() {
 // desired log level and service name.
 func CreateLogger(levelStr string, serviceName string) *slog.Logger {
 
-	logLevel, logLevelErr := GetLogLevel(levelStr)
+	logLevel, logLevelErr := getLogLevel(levelStr)
 	// Note: handling error after logging has been initialized below
 
 	// Create a JSON logger
@@ -47,8 +47,8 @@ func CreateLogger(levelStr string, serviceName string) *slog.Logger {
 	return returnedLogger
 }
 
-// GetLogLevel converts a string to slog.Level
-func GetLogLevel(levelStr string) (slog.Level, error) {
+// getLogLevel converts a string to slog.Level
+func getLogLevel(levelStr string) (slog.Level, error) {
 
 	switch strings.ToLower(levelStr) {
 	case "debug":

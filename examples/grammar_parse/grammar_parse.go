@@ -53,11 +53,7 @@ func main() {
 	///////////////////////
 
 	// Set audio configuration for session.
-	audioConfig := session.AudioConfig{
-		Format:     api.AudioFormat_STANDARD_AUDIO_FORMAT_ULAW,
-		SampleRate: 8000,
-		IsBatch:    true,
-	}
+	audioConfig := session.AudioConfig{}
 
 	// Create a new session.
 	streamTimeout := 5 * time.Minute
@@ -69,45 +65,32 @@ func main() {
 	}
 
 	///////////////////////
-	// Add audio to session
-	///////////////////////
-
-	var audioData []byte
-
-	// Read data from disk.
-	audioFilePath := "./examples/test_data/Capacity-AI-Powered-Support-Automation-Platform-English-1min.ulaw"
-	audioData, err = os.ReadFile(audioFilePath)
-	if err != nil {
-		logger.Error("reading audio file",
-			"error", err.Error())
-		os.Exit(1)
-	}
-
-	// Queue the audio for the internal streamer.
-	sessionObject.AddAudio(audioData)
-
-	///////////////////////
-	// Create diarization interaction
+	// Create grammar parse interaction
 	///////////////////////
 
 	language := "en-US"
+	inputText := "one two three four"
 
-	// Configure audio consume settings.
-	var audioChannel int32 = 0
-	audioConsumeMode := api.AudioConsumeSettings_AUDIO_CONSUME_MODE_BATCH
-	streamStartLocation := api.AudioConsumeSettings_STREAM_START_LOCATION_STREAM_BEGIN
-	var startOffsetMs *api.OptionalInt32 = nil
-	var audioConsumeMaxMs *api.OptionalInt32 = nil
-	audioConsumeSettings, err := client.GetAudioConsumeSettings(audioChannel,
-		audioConsumeMode, streamStartLocation, startOffsetMs, audioConsumeMaxMs)
+	// Configure grammar(s).
+	grammars := []*api.Grammar{
+		{ // Digits grammar
+			GrammarLoadMethod: &api.Grammar_GrammarUrl{
+				GrammarUrl: "http://assets.lumenvox.com/grammar/en/en_digits.grxml",
+			},
+			Label: &api.OptionalString{
+				Value: "digits-grammar",
+			},
+		},
+	}
+
+	// Configure settings
+	var grammarSettings *api.GrammarSettings = nil
+	var generalInteractionSettings *api.GeneralInteractionSettings = nil
+	parseTimeoutMs := &api.OptionalInt32{Value: 10000}
 
 	// Create interaction.
-	var maxSpeakers int32 = 2
-	var requestTimeoutMs *api.OptionalInt32 = nil
-	var generalInteractionSettings *api.GeneralInteractionSettings = nil
-	diarizationInteraction, err := sessionObject.NewDiarization(language, maxSpeakers, requestTimeoutMs,
-		generalInteractionSettings, audioConsumeSettings)
-
+	grammarParseInteraction, err := sessionObject.NewGrammarParse(language, inputText, grammars, grammarSettings,
+		parseTimeoutMs, generalInteractionSettings)
 	if err != nil {
 		logger.Error("failed to create interaction",
 			"error", err)
@@ -116,7 +99,7 @@ func main() {
 		return
 	}
 
-	interactionId := diarizationInteraction.InteractionId
+	interactionId := grammarParseInteraction.InteractionId
 	logger.Info("received interactionId",
 		"interactionId", interactionId)
 
@@ -124,8 +107,8 @@ func main() {
 	// Get results
 	///////////////////////
 
-	// Wait for the final results to arrive.
-	finalResults, err := diarizationInteraction.GetFinalResults(10 * time.Second)
+	// Wait for the final results to become available.
+	finalResults, err := grammarParseInteraction.GetFinalResults(10 * time.Second)
 	if err != nil {
 		logger.Error("waiting for final results",
 			"error", err)

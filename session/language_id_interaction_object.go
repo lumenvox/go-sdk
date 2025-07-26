@@ -1,7 +1,7 @@
 package session
 
 import (
-	"github.com/lumenvox/go-sdk/lumenvox/api"
+	"github.com/lumenvox/protos-go/lumenvox/api"
 
 	"errors"
 	"fmt"
@@ -22,6 +22,39 @@ type LanguageIdInteractionObject struct {
 	resultsReadyChannel  chan struct{}
 }
 
+type interactionCreateLanguageIdHelper struct {
+	interactionCreateChannel chan *LanguageIdInteractionObject
+	deadline                 time.Time
+}
+
+// prepareInteractionCreateLanguageId creates a helper in an internal map to prepare
+// for an interactionCreateLanguageId response. It expects the correlationId of the
+// relevant interactionCreate request, which is used to route the response, as
+// well as a deadline to receive the response. It returns a receive-only channel,
+// as the creating thread should not close the channel.
+func (session *SessionObject) prepareInteractionCreateLanguageId(correlationId string, deadline time.Duration) (
+	interactionCreateChan <-chan *LanguageIdInteractionObject, err error) {
+
+	session.interactionCreateLanguageIdMapLock.Lock()
+	defer session.interactionCreateLanguageIdMapLock.Unlock()
+
+	// if the correlationId is already in the map, return an error
+	if _, ok := session.interactionCreateLanguageIdMap[correlationId]; ok {
+		return nil, errors.New("interaction create language id channel already exists")
+	}
+
+	// create the helper, put it in the map, and return the channel
+	interactionCreateHelper := &interactionCreateLanguageIdHelper{
+		interactionCreateChannel: make(chan *LanguageIdInteractionObject, 1),
+		deadline:                 time.Now().Add(deadline),
+	}
+	session.interactionCreateLanguageIdMap[correlationId] = interactionCreateHelper
+
+	interactionCreateChan = interactionCreateHelper.interactionCreateChannel
+
+	return
+}
+
 // NewLanguageId attempts to create a new language id interaction.
 // If successful, a new interaction object will be returned.
 func (session *SessionObject) NewLanguageId(
@@ -35,8 +68,8 @@ func (session *SessionObject) NewLanguageId(
 	// Generate a correlation ID to track the response when it arrives
 	correlationId := uuid.NewString()
 
-	// Create a channel to wait for the response
-	interactionCreateChan, err := session.prepareInteractionCreate(correlationId)
+	// Create a helper struct to wait for the new interaction object
+	interactionCreateChan, err := session.prepareInteractionCreateLanguageId(correlationId, InteractionCreateDeadline)
 	if err != nil {
 		logger.Error(err.Error(),
 			"correlationId", correlationId,
@@ -44,8 +77,7 @@ func (session *SessionObject) NewLanguageId(
 		return nil, err
 	}
 
-	// Create language id interaction, adding parameters such as VAD and recognition settings
-
+	// send the interaction create request
 	session.streamSendLock.Lock()
 	err = session.SessionStream.Send(getLanguageIdRequest(correlationId,
 		requestTimeoutMs, generalInteractionSettings, audioConsumeSettings))
@@ -57,46 +89,28 @@ func (session *SessionObject) NewLanguageId(
 		return nil, err
 	}
 
-	// Get the interaction ID.
-	var response *api.SessionResponse
+	// Wait for the new interaction object.
 	select {
-	case response = <-interactionCreateChan:
-	case <-time.After(20 * time.Second):
-		logger.Error("timed out waiting for interaction id",
+	case interactionObject = <-interactionCreateChan:
+	case <-time.After(InteractionCreateDeadline):
+		logger.Error("timed out waiting for interaction object",
 			"type", "lid",
 			"correlationId", correlationId,
 			"sessionId", session.SessionId)
-		return nil, errors.New("timed out waiting for interaction id")
+		return nil, errors.New("timed out waiting for interaction object")
 	}
-	languageIdResponse := response.GetInteractionCreateLanguageId()
-	if languageIdResponse == nil {
-		logger.Error("received interactionCreate response with unexpected type",
-			"expected", "lid",
-			"response", response,
+
+	if interactionObject == nil {
+		logger.Error("received nil interaction object",
+			"type", "lid",
 			"correlationId", correlationId,
 			"sessionId", session.SessionId)
-		return nil, errors.New("received interactionCreate response with unexpected type")
+		return nil, errors.New("received nil interaction object")
 	}
-	interactionId := languageIdResponse.InteractionId
+
 	if EnableVerboseLogging {
 		logger.Debug("created new language id interaction",
-			"interactionId", interactionId)
-	}
-
-	// Create the interaction object.
-	interactionObject = &LanguageIdInteractionObject{
-		InteractionId:        interactionId,
-		finalResultsReceived: false,
-		finalResults:         nil,
-		resultsReadyChannel:  make(chan struct{}),
-	}
-
-	// Add the interaction object to the session
-	{
-		session.Lock() // Protect concurrent map access
-		defer session.Unlock()
-
-		session.languageIdInteractionsMap[interactionId] = interactionObject
+			"interactionId", interactionObject.InteractionId)
 	}
 
 	return interactionObject, err

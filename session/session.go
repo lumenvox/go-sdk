@@ -2,7 +2,7 @@ package session
 
 import (
 	"github.com/lumenvox/go-sdk/auth"
-	"github.com/lumenvox/go-sdk/lumenvox/api"
+	"github.com/lumenvox/protos-go/lumenvox/api"
 
 	"context"
 	"errors"
@@ -23,6 +23,8 @@ const TimeoutError = SdkError("timeout waiting for API response")
 type SdkError string
 
 func (e SdkError) Error() string { return string(e) }
+
+const InteractionCreateDeadline = 20 * time.Second
 
 var EnableVerboseLogging = func() bool {
 	return os.Getenv("LUMENVOX_GO_SDK__ENABLE_VERBOSE_LOGGING") == "true"
@@ -67,16 +69,39 @@ type SessionObject struct {
 	interactionCreateMapLock sync.Mutex
 	interactionCreateMap     map[string]chan *api.SessionResponse
 
+	interactionCreateAmdMapLock           sync.Mutex
+	interactionCreateAsrMapLock           sync.Mutex
+	interactionCreateCpaMapLock           sync.Mutex
+	interactionCreateDiarizationMapLock   sync.Mutex
+	interactionCreateGrammarParseMapLock  sync.Mutex
+	interactionCreateLanguageIdMapLock    sync.Mutex
+	interactionCreateNluMapLock           sync.Mutex
+	interactionCreateNormalizeTextMapLock sync.Mutex
+	interactionCreateTranscriptionMapLock sync.Mutex
+	interactionCreateTtsMapLock           sync.Mutex
+
+	interactionCreateAmdMap           map[string]*interactionCreateAmdHelper
+	interactionCreateAsrMap           map[string]*interactionCreateAsrHelper
+	interactionCreateCpaMap           map[string]*interactionCreateCpaHelper
+	interactionCreateDiarizationMap   map[string]*interactionCreateDiarizationHelper
+	interactionCreateGrammarParseMap  map[string]*interactionCreateGrammarParseHelper
+	interactionCreateLanguageIdMap    map[string]*interactionCreateLanguageIdHelper
+	interactionCreateNluMap           map[string]*interactionCreateNluHelper
+	interactionCreateNormalizeTextMap map[string]*interactionCreateNormalizeTextHelper
+	interactionCreateTranscriptionMap map[string]*interactionCreateTranscriptionHelper
+	interactionCreateTtsMap           map[string]*interactionCreateTtsHelper
+
 	// maps to store all active interactions
-	asrInteractionsMap           map[string]*AsrInteractionObject
-	transcriptionInteractionsMap map[string]*TranscriptionInteractionObject
 	amdInteractionsMap           map[string]*AmdInteractionObject
+	asrInteractionsMap           map[string]*AsrInteractionObject
 	cpaInteractionsMap           map[string]*CpaInteractionObject
+	diarizationInteractionsMap   map[string]*DiarizationInteractionObject
+	grammarParseInteractionsMap  map[string]*GrammarParseInteractionObject
+	languageIdInteractionsMap    map[string]*LanguageIdInteractionObject
 	nluInteractionsMap           map[string]*NluInteractionObject
 	normalizationInteractionsMap map[string]*NormalizationInteractionObject
+	transcriptionInteractionsMap map[string]*TranscriptionInteractionObject
 	ttsInteractionsMap           map[string]*TtsInteractionObject
-	diarizationInteractionsMap   map[string]*DiarizationInteractionObject
-	languageIdInteractionsMap    map[string]*LanguageIdInteractionObject
 
 	// map of channels to handle TTS audio
 	ttsAudioMapLock sync.Mutex
@@ -125,18 +150,29 @@ func newSessionObject(
 		sessionSettingsChannel: make(chan *api.SessionSettings, 100),
 
 		// map of channels to handle interactionCreate responses
-		interactionCreateMap: make(map[string]chan *api.SessionResponse),
+		interactionCreateMap:              make(map[string]chan *api.SessionResponse),
+		interactionCreateAmdMap:           make(map[string]*interactionCreateAmdHelper),
+		interactionCreateAsrMap:           make(map[string]*interactionCreateAsrHelper),
+		interactionCreateCpaMap:           make(map[string]*interactionCreateCpaHelper),
+		interactionCreateDiarizationMap:   make(map[string]*interactionCreateDiarizationHelper),
+		interactionCreateGrammarParseMap:  make(map[string]*interactionCreateGrammarParseHelper),
+		interactionCreateLanguageIdMap:    make(map[string]*interactionCreateLanguageIdHelper),
+		interactionCreateNluMap:           make(map[string]*interactionCreateNluHelper),
+		interactionCreateNormalizeTextMap: make(map[string]*interactionCreateNormalizeTextHelper),
+		interactionCreateTranscriptionMap: make(map[string]*interactionCreateTranscriptionHelper),
+		interactionCreateTtsMap:           make(map[string]*interactionCreateTtsHelper),
 
 		// interaction maps
-		asrInteractionsMap:           make(map[string]*AsrInteractionObject),
-		transcriptionInteractionsMap: make(map[string]*TranscriptionInteractionObject),
 		amdInteractionsMap:           make(map[string]*AmdInteractionObject),
+		asrInteractionsMap:           make(map[string]*AsrInteractionObject),
 		cpaInteractionsMap:           make(map[string]*CpaInteractionObject),
+		diarizationInteractionsMap:   make(map[string]*DiarizationInteractionObject),
+		grammarParseInteractionsMap:  make(map[string]*GrammarParseInteractionObject),
+		languageIdInteractionsMap:    make(map[string]*LanguageIdInteractionObject),
 		nluInteractionsMap:           make(map[string]*NluInteractionObject),
 		normalizationInteractionsMap: make(map[string]*NormalizationInteractionObject),
+		transcriptionInteractionsMap: make(map[string]*TranscriptionInteractionObject),
 		ttsInteractionsMap:           make(map[string]*TtsInteractionObject),
-		diarizationInteractionsMap:   make(map[string]*DiarizationInteractionObject),
-		languageIdInteractionsMap:    make(map[string]*LanguageIdInteractionObject),
 
 		// audio pull map
 		ttsAudioMap: make(map[string]chan *api.AudioPullResponse),
@@ -339,39 +375,6 @@ func (session *SessionObject) prepareInteractionCreate(correlationId string) (
 	createChannel := make(chan *api.SessionResponse, 1)
 	session.interactionCreateMap[correlationId] = createChannel
 	interactionCreateChan = createChannel
-
-	return
-}
-
-// signalInteractionCreate sends an interactionCreate response through
-// the relevant channel in the interactionCreateMap. If the channel is
-// not found or is empty, it returns an error.
-//
-// Each correlationId should only be used once, so if a map entry exists
-// for the provided correlationId, it will be deleted.
-func (session *SessionObject) signalInteractionCreate(correlationId string,
-	response *api.SessionResponse) (err error) {
-
-	session.interactionCreateMapLock.Lock()
-	defer session.interactionCreateMapLock.Unlock()
-
-	// attempt to fetch the channel from the map
-	createChannel, ok := session.interactionCreateMap[correlationId]
-	if ok == false {
-		return errors.New("interaction create channel does not exist")
-	}
-
-	// an entry in the map exists. each channel should only be used once,
-	// and we already have the channel, so delete the map entry.
-	delete(session.interactionCreateMap, correlationId)
-
-	// catch nil channel
-	if createChannel == nil {
-		return errors.New("interaction create channel is nil")
-	}
-
-	// if we got this far, the channel should be OK. Write the response.
-	createChannel <- response
 
 	return
 }

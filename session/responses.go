@@ -1,7 +1,7 @@
 package session
 
 import (
-	"github.com/lumenvox/go-sdk/lumenvox/api"
+	"github.com/lumenvox/protos-go/lumenvox/api"
 
 	"errors"
 	"fmt"
@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc/status"
 	"io"
 	"strings"
+	"time"
 )
 
 // sessionResponseListener handles all responses from the specified session.
@@ -123,42 +124,11 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 
 			handleFinalResult(session, response)
 
-		} else if response.GetInteractionCreateAmd() != nil ||
-			response.GetInteractionCreateAsr() != nil ||
-			response.GetInteractionCreateCpa() != nil ||
-			response.GetInteractionCreateDiarization() != nil ||
-			response.GetInteractionCreateGrammarParse() != nil ||
-			response.GetInteractionCreateLanguageId() != nil ||
-			response.GetInteractionCreateNlu() != nil ||
-			response.GetInteractionCreateNormalizeText() != nil ||
-			response.GetInteractionCreateTranscription() != nil ||
-			response.GetInteractionCreateTts() != nil {
+		} else if response.GetInteractionCreateAmd() != nil {
 
 			if EnableVerboseLogging {
-				interactionType := "unknown"
-				if response.GetInteractionCreateAmd() != nil {
-					interactionType = "InteractionCreateAmdResponse"
-				} else if response.GetInteractionCreateAsr() != nil {
-					interactionType = "InteractionCreateAsrResponse"
-				} else if response.GetInteractionCreateCpa() != nil {
-					interactionType = "InteractionCreateCpaResponse"
-				} else if response.GetInteractionCreateDiarization() != nil {
-					interactionType = "InteractionCreateDiarizationResponse"
-				} else if response.GetInteractionCreateGrammarParse() != nil {
-					interactionType = "InteractionCreateGrammarParseResponse"
-				} else if response.GetInteractionCreateLanguageId() != nil {
-					interactionType = "InteractionCreateLanguageIdResponse"
-				} else if response.GetInteractionCreateNlu() != nil {
-					interactionType = "InteractionCreateNluResponse"
-				} else if response.GetInteractionCreateNormalizeText() != nil {
-					interactionType = "InteractionCreateNormalizeTextResponse"
-				} else if response.GetInteractionCreateTranscription() != nil {
-					interactionType = "InteractionCreateTranscriptionResponse"
-				} else if response.GetInteractionCreateTts() != nil {
-					interactionType = "InteractionCreateTtsResponse"
-				}
 				logger.Debug("recv interaction create response",
-					"type", interactionType,
+					"type", "InteractionCreateAmdResponse",
 					"response", response)
 			}
 
@@ -176,14 +146,729 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			}
 			correlationId := response.CorrelationId.Value
 
-			// attempt to send the response to the channel mapped by the correlationId
-			err := session.signalInteractionCreate(correlationId, response)
-			if err != nil {
+			// look for the interaction create AMD helper in the map
+			session.interactionCreateAmdMapLock.Lock()
+			createAmdHelper, ok := session.interactionCreateAmdMap[correlationId]
+			// each helper should only be used once, and we already have the helper,
+			// so delete the map entry before unlocking.
+			delete(session.interactionCreateAmdMap, correlationId)
+			session.interactionCreateAmdMapLock.Unlock()
+
+			// catch missing map entry
+			if ok == false {
 				logger.Warn("error routing interaction create",
-					"error", err.Error(),
+					"error", "interaction create helper does not exist",
 					"response", response)
 				continue
 			}
+
+			// catch nil helper
+			if createAmdHelper == nil {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create channel is nil",
+					"response", response)
+				continue
+			}
+
+			// catch timeout
+			if time.Now().After(createAmdHelper.deadline) {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create timed out",
+					"response", response)
+				continue
+			}
+
+			// if we got this far, the response should be OK. create the interaction object
+			interactionId := response.GetInteractionCreateAmd().InteractionId
+			newInteractionObject := &AmdInteractionObject{
+				InteractionId:             interactionId,
+				vadBeginProcessingChannel: make(chan struct{}, 1),
+				vadBargeInChannel:         make(chan int, 1),
+				vadBargeInReceived:        -1,
+				vadBargeOutChannel:        make(chan int, 1),
+				vadBargeOutReceived:       -1,
+				vadBargeInTimeoutChannel:  make(chan struct{}),
+				vadBargeInTimeoutReceived: false,
+				finalResultsReceived:      false,
+				finalResults:              nil,
+				resultsReadyChannel:       make(chan struct{}),
+			}
+
+			// add the new interaction object to the map
+			session.Lock() // Protect concurrent map access
+			session.amdInteractionsMap[interactionId] = newInteractionObject
+			session.Unlock()
+
+			// send the interaction object over the channel
+			createAmdHelper.interactionCreateChannel <- newInteractionObject
+
+		} else if response.GetInteractionCreateAsr() != nil {
+
+			if EnableVerboseLogging {
+				logger.Debug("recv interaction create response",
+					"type", "InteractionCreateAsrResponse",
+					"response", response)
+			}
+
+			// validate the correlation ID
+			if response.CorrelationId == nil {
+				logger.Warn("error routing interaction create",
+					"error", "missing correlationId",
+					"response", response)
+				continue
+			} else if response.CorrelationId.Value == "" {
+				logger.Warn("error routing interaction create",
+					"error", "empty correlationId",
+					"response", response)
+				continue
+			}
+			correlationId := response.CorrelationId.Value
+
+			// look for the interaction create ASR helper in the map
+			session.interactionCreateAsrMapLock.Lock()
+			createAsrHelper, ok := session.interactionCreateAsrMap[correlationId]
+			// each helper should only be used once, and we already have the helper,
+			// so delete the map entry before unlocking.
+			delete(session.interactionCreateAsrMap, correlationId)
+			session.interactionCreateAsrMapLock.Unlock()
+
+			// catch missing map entry
+			if ok == false {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create helper does not exist",
+					"response", response)
+				continue
+			}
+
+			// catch nil helper
+			if createAsrHelper == nil {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create channel is nil",
+					"response", response)
+				continue
+			}
+
+			// catch timeout
+			if time.Now().After(createAsrHelper.deadline) {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create timed out",
+					"response", response)
+				continue
+			}
+
+			// if we got this far, the response should be OK. create the interaction object
+			interactionId := response.GetInteractionCreateAsr().InteractionId
+			newInteractionObject := &AsrInteractionObject{
+				InteractionId:             interactionId,
+				vadBeginProcessingChannel: make(chan struct{}, 1),
+				vadBargeInChannel:         make(chan int, 1),
+				vadBargeInReceived:        -1,
+				vadBargeOutChannel:        make(chan int, 1),
+				vadBargeOutReceived:       -1,
+				vadBargeInTimeoutChannel:  make(chan struct{}),
+				vadBargeInTimeoutReceived: false,
+				finalResultsReceived:      false,
+				finalResults:              nil,
+				resultsReadyChannel:       make(chan struct{}),
+			}
+			newInteractionObject.partialResultsChannels = append(newInteractionObject.partialResultsChannels, make(chan struct{}))
+
+			// add the new interaction object to the map
+			session.Lock() // Protect concurrent map access
+			session.asrInteractionsMap[interactionId] = newInteractionObject
+			session.Unlock()
+
+			// send the interaction object over the channel
+			createAsrHelper.interactionCreateChannel <- newInteractionObject
+
+		} else if response.GetInteractionCreateCpa() != nil {
+
+			if EnableVerboseLogging {
+				logger.Debug("recv interaction create response",
+					"type", "InteractionCreateCpaResponse",
+					"response", response)
+			}
+
+			// validate the correlation ID
+			if response.CorrelationId == nil {
+				logger.Warn("error routing interaction create",
+					"error", "missing correlationId",
+					"response", response)
+				continue
+			} else if response.CorrelationId.Value == "" {
+				logger.Warn("error routing interaction create",
+					"error", "empty correlationId",
+					"response", response)
+				continue
+			}
+			correlationId := response.CorrelationId.Value
+
+			// look for the interaction create CPA helper in the map
+			session.interactionCreateCpaMapLock.Lock()
+			createCpaHelper, ok := session.interactionCreateCpaMap[correlationId]
+			// each helper should only be used once, and we already have the helper,
+			// so delete the map entry before unlocking.
+			delete(session.interactionCreateCpaMap, correlationId)
+			session.interactionCreateCpaMapLock.Unlock()
+
+			// catch missing map entry
+			if ok == false {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create helper does not exist",
+					"response", response)
+				continue
+			}
+
+			// catch nil helper
+			if createCpaHelper == nil {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create channel is nil",
+					"response", response)
+				continue
+			}
+
+			// catch timeout
+			if time.Now().After(createCpaHelper.deadline) {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create timed out",
+					"response", response)
+				continue
+			}
+
+			// if we got this far, the response should be OK. create the interaction object
+			interactionId := response.GetInteractionCreateCpa().InteractionId
+			newInteractionObject := &CpaInteractionObject{
+				InteractionId:             interactionId,
+				vadBeginProcessingChannel: make(chan struct{}, 1),
+				vadBargeInChannel:         make(chan int, 1),
+				vadBargeInReceived:        -1,
+				vadBargeOutChannel:        make(chan int, 1),
+				vadBargeOutReceived:       -1,
+				vadBargeInTimeoutChannel:  make(chan struct{}),
+				vadBargeInTimeoutReceived: false,
+				finalResultsReceived:      false,
+				finalResults:              nil,
+				resultsReadyChannel:       make(chan struct{}),
+			}
+
+			// add the new interaction object to the map
+			session.Lock() // Protect concurrent map access
+			session.cpaInteractionsMap[interactionId] = newInteractionObject
+			session.Unlock()
+
+			// send the interaction object over the channel
+			createCpaHelper.interactionCreateChannel <- newInteractionObject
+
+		} else if response.GetInteractionCreateDiarization() != nil {
+
+			if EnableVerboseLogging {
+				logger.Debug("recv interaction create response",
+					"type", "InteractionCreateDiarizationResponse",
+					"response", response)
+			}
+
+			// validate the correlation ID
+			if response.CorrelationId == nil {
+				logger.Warn("error routing interaction create",
+					"error", "missing correlationId",
+					"response", response)
+				continue
+			} else if response.CorrelationId.Value == "" {
+				logger.Warn("error routing interaction create",
+					"error", "empty correlationId",
+					"response", response)
+				continue
+			}
+			correlationId := response.CorrelationId.Value
+
+			// look for the interaction create Diarization helper in the map
+			session.interactionCreateDiarizationMapLock.Lock()
+			createDiarizationHelper, ok := session.interactionCreateDiarizationMap[correlationId]
+			// each helper should only be used once, and we already have the helper,
+			// so delete the map entry before unlocking.
+			delete(session.interactionCreateDiarizationMap, correlationId)
+			session.interactionCreateDiarizationMapLock.Unlock()
+
+			// catch missing map entry
+			if ok == false {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create helper does not exist",
+					"response", response)
+				continue
+			}
+
+			// catch nil helper
+			if createDiarizationHelper == nil {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create channel is nil",
+					"response", response)
+				continue
+			}
+
+			// catch timeout
+			if time.Now().After(createDiarizationHelper.deadline) {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create timed out",
+					"response", response)
+				continue
+			}
+
+			// if we got this far, the response should be OK. create the interaction object
+			interactionId := response.GetInteractionCreateDiarization().InteractionId
+			newInteractionObject := &DiarizationInteractionObject{
+				InteractionId:        interactionId,
+				finalResultsReceived: false,
+				finalResults:         nil,
+				resultsReadyChannel:  make(chan struct{}),
+			}
+
+			// add the new interaction object to the map
+			session.Lock() // Protect concurrent map access
+			session.diarizationInteractionsMap[interactionId] = newInteractionObject
+			session.Unlock()
+
+			// send the interaction object over the channel
+			createDiarizationHelper.interactionCreateChannel <- newInteractionObject
+
+		} else if response.GetInteractionCreateGrammarParse() != nil {
+
+			if EnableVerboseLogging {
+				logger.Debug("recv interaction create response",
+					"type", "InteractionCreateGrammarParseResponse",
+					"response", response)
+			}
+
+			// validate the correlation ID
+			if response.CorrelationId == nil {
+				logger.Warn("error routing interaction create",
+					"error", "missing correlationId",
+					"response", response)
+				continue
+			} else if response.CorrelationId.Value == "" {
+				logger.Warn("error routing interaction create",
+					"error", "empty correlationId",
+					"response", response)
+				continue
+			}
+			correlationId := response.CorrelationId.Value
+
+			// look for the interaction create grammar parse helper in the map
+			session.interactionCreateGrammarParseMapLock.Lock()
+			createGrammarParseHelper, ok := session.interactionCreateGrammarParseMap[correlationId]
+			// each helper should only be used once, and we already have the helper,
+			// so delete the map entry before unlocking.
+			delete(session.interactionCreateGrammarParseMap, correlationId)
+			session.interactionCreateGrammarParseMapLock.Unlock()
+
+			// catch missing map entry
+			if ok == false {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create helper does not exist",
+					"response", response)
+				continue
+			}
+
+			// catch nil helper
+			if createGrammarParseHelper == nil {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create channel is nil",
+					"response", response)
+				continue
+			}
+
+			// catch timeout
+			if time.Now().After(createGrammarParseHelper.deadline) {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create timed out",
+					"response", response)
+				continue
+			}
+
+			// if we got this far, the response should be OK. create the interaction object
+			interactionId := response.GetInteractionCreateGrammarParse().InteractionId
+			newInteractionObject := &GrammarParseInteractionObject{
+				InteractionId:        interactionId,
+				finalResultsReceived: false,
+				finalResults:         nil,
+				FinalResultStatus:    api.FinalResultStatus_FINAL_RESULT_STATUS_UNSPECIFIED,
+				resultsReadyChannel:  make(chan struct{}),
+			}
+
+			// add the new interaction object to the map
+			session.Lock() // Protect concurrent map access
+			session.grammarParseInteractionsMap[interactionId] = newInteractionObject
+			session.Unlock()
+
+			// send the interaction object over the channel
+			createGrammarParseHelper.interactionCreateChannel <- newInteractionObject
+
+		} else if response.GetInteractionCreateLanguageId() != nil {
+
+			if EnableVerboseLogging {
+				logger.Debug("recv interaction create response",
+					"type", "InteractionCreateLanguageIdResponse",
+					"response", response)
+			}
+
+			// validate the correlation ID
+			if response.CorrelationId == nil {
+				logger.Warn("error routing interaction create",
+					"error", "missing correlationId",
+					"response", response)
+				continue
+			} else if response.CorrelationId.Value == "" {
+				logger.Warn("error routing interaction create",
+					"error", "empty correlationId",
+					"response", response)
+				continue
+			}
+			correlationId := response.CorrelationId.Value
+
+			// look for the interaction create LanguageId helper in the map
+			session.interactionCreateLanguageIdMapLock.Lock()
+			createLanguageIdHelper, ok := session.interactionCreateLanguageIdMap[correlationId]
+			// each helper should only be used once, and we already have the helper,
+			// so delete the map entry before unlocking.
+			delete(session.interactionCreateLanguageIdMap, correlationId)
+			session.interactionCreateLanguageIdMapLock.Unlock()
+
+			// catch missing map entry
+			if ok == false {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create helper does not exist",
+					"response", response)
+				continue
+			}
+
+			// catch nil helper
+			if createLanguageIdHelper == nil {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create channel is nil",
+					"response", response)
+				continue
+			}
+
+			// catch timeout
+			if time.Now().After(createLanguageIdHelper.deadline) {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create timed out",
+					"response", response)
+				continue
+			}
+
+			// if we got this far, the response should be OK. create the interaction object
+			interactionId := response.GetInteractionCreateLanguageId().InteractionId
+			newInteractionObject := &LanguageIdInteractionObject{
+				InteractionId:        interactionId,
+				finalResultsReceived: false,
+				finalResults:         nil,
+				resultsReadyChannel:  make(chan struct{}),
+			}
+
+			// add the new interaction object to the map
+			session.Lock() // Protect concurrent map access
+			session.languageIdInteractionsMap[interactionId] = newInteractionObject
+			session.Unlock()
+
+			// send the interaction object over the channel
+			createLanguageIdHelper.interactionCreateChannel <- newInteractionObject
+
+		} else if response.GetInteractionCreateNlu() != nil {
+
+			if EnableVerboseLogging {
+				logger.Debug("recv interaction create response",
+					"type", "InteractionCreateNluResponse",
+					"response", response)
+			}
+
+			// validate the correlation ID
+			if response.CorrelationId == nil {
+				logger.Warn("error routing interaction create",
+					"error", "missing correlationId",
+					"response", response)
+				continue
+			} else if response.CorrelationId.Value == "" {
+				logger.Warn("error routing interaction create",
+					"error", "empty correlationId",
+					"response", response)
+				continue
+			}
+			correlationId := response.CorrelationId.Value
+
+			// look for the interaction create NLU helper in the map
+			session.interactionCreateNluMapLock.Lock()
+			createNluHelper, ok := session.interactionCreateNluMap[correlationId]
+			// each helper should only be used once, and we already have the helper,
+			// so delete the map entry before unlocking.
+			delete(session.interactionCreateNluMap, correlationId)
+			session.interactionCreateNluMapLock.Unlock()
+
+			// catch missing map entry
+			if ok == false {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create helper does not exist",
+					"response", response)
+				continue
+			}
+
+			// catch nil helper
+			if createNluHelper == nil {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create channel is nil",
+					"response", response)
+				continue
+			}
+
+			// catch timeout
+			if time.Now().After(createNluHelper.deadline) {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create timed out",
+					"response", response)
+				continue
+			}
+
+			// if we got this far, the response should be OK. create the interaction object
+			interactionId := response.GetInteractionCreateNlu().InteractionId
+			newInteractionObject := &NluInteractionObject{
+				InteractionId:        interactionId,
+				finalResultsReceived: false,
+				finalResults:         nil,
+				FinalResultStatus:    api.FinalResultStatus_FINAL_RESULT_STATUS_UNSPECIFIED,
+				resultsReadyChannel:  make(chan struct{}),
+			}
+
+			// add the new interaction object to the map
+			session.Lock() // Protect concurrent map access
+			session.nluInteractionsMap[interactionId] = newInteractionObject
+			session.Unlock()
+
+			// send the interaction object over the channel
+			createNluHelper.interactionCreateChannel <- newInteractionObject
+
+		} else if response.GetInteractionCreateNormalizeText() != nil {
+
+			if EnableVerboseLogging {
+				logger.Debug("recv interaction create response",
+					"type", "InteractionCreateNormalizeTextResponse",
+					"response", response)
+			}
+
+			// validate the correlation ID
+			if response.CorrelationId == nil {
+				logger.Warn("error routing interaction create",
+					"error", "missing correlationId",
+					"response", response)
+				continue
+			} else if response.CorrelationId.Value == "" {
+				logger.Warn("error routing interaction create",
+					"error", "empty correlationId",
+					"response", response)
+				continue
+			}
+			correlationId := response.CorrelationId.Value
+
+			// look for the interaction create normalization helper in the map
+			session.interactionCreateNormalizeTextMapLock.Lock()
+			createNormalizationHelper, ok := session.interactionCreateNormalizeTextMap[correlationId]
+			// each helper should only be used once, and we already have the helper,
+			// so delete the map entry before unlocking.
+			delete(session.interactionCreateNormalizeTextMap, correlationId)
+			session.interactionCreateNormalizeTextMapLock.Unlock()
+
+			// catch missing map entry
+			if ok == false {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create helper does not exist",
+					"response", response)
+				continue
+			}
+
+			// catch nil helper
+			if createNormalizationHelper == nil {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create channel is nil",
+					"response", response)
+				continue
+			}
+
+			// catch timeout
+			if time.Now().After(createNormalizationHelper.deadline) {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create timed out",
+					"response", response)
+				continue
+			}
+
+			// if we got this far, the response should be OK. create the interaction object
+			interactionId := response.GetInteractionCreateNormalizeText().InteractionId
+			newInteractionObject := &NormalizationInteractionObject{
+				InteractionId:        interactionId,
+				finalResultsReceived: false,
+				finalResults:         nil,
+				FinalResultStatus:    api.FinalResultStatus_FINAL_RESULT_STATUS_UNSPECIFIED,
+				resultsReadyChannel:  make(chan struct{}),
+			}
+
+			// add the new interaction object to the map
+			session.Lock() // Protect concurrent map access
+			session.normalizationInteractionsMap[interactionId] = newInteractionObject
+			session.Unlock()
+
+			// send the interaction object over the channel
+			createNormalizationHelper.interactionCreateChannel <- newInteractionObject
+
+		} else if response.GetInteractionCreateTranscription() != nil {
+
+			if EnableVerboseLogging {
+				logger.Debug("recv interaction create response",
+					"type", "InteractionCreateTranscriptionResponse",
+					"response", response)
+			}
+
+			// validate the correlation ID
+			if response.CorrelationId == nil {
+				logger.Warn("error routing interaction create",
+					"error", "missing correlationId",
+					"response", response)
+				continue
+			} else if response.CorrelationId.Value == "" {
+				logger.Warn("error routing interaction create",
+					"error", "empty correlationId",
+					"response", response)
+				continue
+			}
+			correlationId := response.CorrelationId.Value
+
+			// look for the interaction create transcription helper in the map
+			session.interactionCreateTranscriptionMapLock.Lock()
+			createTranscriptionHelper, ok := session.interactionCreateTranscriptionMap[correlationId]
+			// each helper should only be used once, and we already have the helper,
+			// so delete the map entry before unlocking.
+			delete(session.interactionCreateTranscriptionMap, correlationId)
+			session.interactionCreateTranscriptionMapLock.Unlock()
+
+			// catch missing map entry
+			if ok == false {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create helper does not exist",
+					"response", response)
+				continue
+			}
+
+			// catch nil helper
+			if createTranscriptionHelper == nil {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create channel is nil",
+					"response", response)
+				continue
+			}
+
+			// catch timeout
+			if time.Now().After(createTranscriptionHelper.deadline) {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create timed out",
+					"response", response)
+				continue
+			}
+
+			// if we got this far, the response should be OK. create the interaction object
+			interactionId := response.GetInteractionCreateTranscription().InteractionId
+			newInteractionObject := &TranscriptionInteractionObject{
+				InteractionId:        interactionId,
+				finalResultsReceived: false,
+				finalResults:         nil,
+				resultsReadyChannel:  make(chan struct{}),
+				vadCurrentState:      api.VadEvent_VAD_EVENT_TYPE_UNSPECIFIED,
+
+				isContinuousTranscription: createTranscriptionHelper.isContinuousTranscription,
+			}
+			newInteractionObject.partialResultsChannels = append(newInteractionObject.partialResultsChannels, make(chan struct{}))
+			newInteractionObject.vadBeginProcessingChannels = append(newInteractionObject.vadBeginProcessingChannels, make(chan struct{}))
+			newInteractionObject.vadBargeInChannels = append(newInteractionObject.vadBargeInChannels, make(chan struct{}))
+			newInteractionObject.vadBargeOutChannels = append(newInteractionObject.vadBargeOutChannels, make(chan struct{}))
+			newInteractionObject.vadBargeInTimeoutChannels = append(newInteractionObject.vadBargeInTimeoutChannels, make(chan struct{}))
+			newInteractionObject.vadRecordLog = append(newInteractionObject.vadRecordLog, createEmptyVadInteractionRecord())
+
+			// add the new interaction object to the map
+			session.Lock() // Protect concurrent map access
+			session.transcriptionInteractionsMap[interactionId] = newInteractionObject
+			session.Unlock()
+
+			// send the interaction object over the channel
+			createTranscriptionHelper.interactionCreateChannel <- newInteractionObject
+
+		} else if response.GetInteractionCreateTts() != nil {
+
+			if EnableVerboseLogging {
+				logger.Debug("recv interaction create response",
+					"type", "InteractionCreateTtsResponse",
+					"response", response)
+			}
+
+			// validate the correlation ID
+			if response.CorrelationId == nil {
+				logger.Warn("error routing interaction create",
+					"error", "missing correlationId",
+					"response", response)
+				continue
+			} else if response.CorrelationId.Value == "" {
+				logger.Warn("error routing interaction create",
+					"error", "empty correlationId",
+					"response", response)
+				continue
+			}
+			correlationId := response.CorrelationId.Value
+
+			// look for the interaction create TTS helper in the map
+			session.interactionCreateTtsMapLock.Lock()
+			createTtsHelper, ok := session.interactionCreateTtsMap[correlationId]
+			// each helper should only be used once, and we already have the helper,
+			// so delete the map entry before unlocking.
+			delete(session.interactionCreateTtsMap, correlationId)
+			session.interactionCreateTtsMapLock.Unlock()
+
+			// catch missing map entry
+			if ok == false {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create helper does not exist",
+					"response", response)
+				continue
+			}
+
+			// catch nil helper
+			if createTtsHelper == nil {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create channel is nil",
+					"response", response)
+				continue
+			}
+
+			// catch timeout
+			if time.Now().After(createTtsHelper.deadline) {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create timed out",
+					"response", response)
+				continue
+			}
+
+			// if we got this far, the response should be OK. create the interaction object
+			interactionId := response.GetInteractionCreateTts().InteractionId
+			newInteractionObject := &TtsInteractionObject{
+				InteractionId:        interactionId,
+				finalResultsReceived: false,
+				finalResults:         nil,
+				FinalResultStatus:    api.FinalResultStatus_FINAL_RESULT_STATUS_UNSPECIFIED,
+				resultsReadyChannel:  make(chan struct{}),
+			}
+			newInteractionObject.partialResultsChannels = append(newInteractionObject.partialResultsChannels, make(chan struct{}))
+
+			// add the new interaction object to the map
+			session.Lock() // Protect concurrent map access
+			session.ttsInteractionsMap[interactionId] = newInteractionObject
+			session.Unlock()
+
+			// send the interaction object over the channel
+			createTtsHelper.interactionCreateChannel <- newInteractionObject
 
 		} else if response.GetAudioPull() != nil {
 
@@ -556,6 +1241,16 @@ func handleFinalResult(session *SessionObject, response *api.SessionResponse) {
 			interactionObject.finalResultsReceived = true
 			close(interactionObject.resultsReadyChannel)
 			delete(session.nluInteractionsMap, interactionId)
+
+		} else if interactionObject, interactionFound := session.grammarParseInteractionsMap[interactionId]; interactionFound {
+
+			// This is a grammar parse interaction.
+			interactionObject.finalResults = finalResult.GetFinalResult().GetGrammarParseInteractionResult()
+			interactionObject.FinalStatus = finalResult.Status
+			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
+			interactionObject.finalResultsReceived = true
+			close(interactionObject.resultsReadyChannel)
+			delete(session.grammarParseInteractionsMap, interactionId)
 
 		} else if interactionObject, interactionFound := session.amdInteractionsMap[interactionId]; interactionFound {
 

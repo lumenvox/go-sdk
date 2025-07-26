@@ -1,7 +1,7 @@
 package session
 
 import (
-	"github.com/lumenvox/go-sdk/lumenvox/api"
+	"github.com/lumenvox/protos-go/lumenvox/api"
 
 	"errors"
 	"fmt"
@@ -29,6 +29,39 @@ type TtsInteractionObject struct {
 	resultsReadyChannel  chan struct{}
 }
 
+type interactionCreateTtsHelper struct {
+	interactionCreateChannel chan *TtsInteractionObject
+	deadline                 time.Time
+}
+
+// prepareInteractionCreateTts creates a helper in an internal map to prepare
+// for an interactionCreateTts response. It expects the correlationId of the
+// relevant interactionCreate request, which is used to route the response, as
+// well as a deadline to receive the response. It returns a receive-only channel,
+// as the creating thread should not close the channel.
+func (session *SessionObject) prepareInteractionCreateTts(correlationId string, deadline time.Duration) (
+	interactionCreateChan <-chan *TtsInteractionObject, err error) {
+
+	session.interactionCreateTtsMapLock.Lock()
+	defer session.interactionCreateTtsMapLock.Unlock()
+
+	// if the correlationId is already in the map, return an error
+	if _, ok := session.interactionCreateTtsMap[correlationId]; ok {
+		return nil, errors.New("interaction create tts channel already exists")
+	}
+
+	// create the helper, put it in the map, and return the channel
+	interactionCreateHelper := &interactionCreateTtsHelper{
+		interactionCreateChannel: make(chan *TtsInteractionObject, 1),
+		deadline:                 time.Now().Add(deadline),
+	}
+	session.interactionCreateTtsMap[correlationId] = interactionCreateHelper
+
+	interactionCreateChan = interactionCreateHelper.interactionCreateChannel
+
+	return
+}
+
 // NewInlineTts attempts to create a new inline TTS interaction. If successful,
 // a new interaction object will be returned.
 func (session *SessionObject) NewInlineTts(language string,
@@ -44,8 +77,8 @@ func (session *SessionObject) NewInlineTts(language string,
 	// Generate a correlation ID to track the response when it arrives
 	correlationId := uuid.NewString()
 
-	// Create a channel to wait for the response
-	interactionCreateChan, err := session.prepareInteractionCreate(correlationId)
+	// Create a helper struct to wait for the new interaction object
+	interactionCreateChan, err := session.prepareInteractionCreateTts(correlationId, InteractionCreateDeadline)
 	if err != nil {
 		logger.Error(err.Error(),
 			"correlationId", correlationId,
@@ -53,8 +86,7 @@ func (session *SessionObject) NewInlineTts(language string,
 		return nil, err
 	}
 
-	// Create TTS interaction, adding specified parameters
-
+	// send the interaction create request
 	session.streamSendLock.Lock()
 	err = session.SessionStream.Send(getInlineTtsRequest(correlationId, language, textToSynthesize,
 		synthesizedAudioFormat, synthesisTimeoutMs, inlineSettings, generalInteractionSettings,
@@ -67,48 +99,28 @@ func (session *SessionObject) NewInlineTts(language string,
 		return nil, err
 	}
 
-	// Get the interaction ID.
-	var response *api.SessionResponse
+	// Wait for the new interaction object.
 	select {
-	case response = <-interactionCreateChan:
-	case <-time.After(20 * time.Second):
-		logger.Error("timed out waiting for interaction id",
+	case interactionObject = <-interactionCreateChan:
+	case <-time.After(InteractionCreateDeadline):
+		logger.Error("timed out waiting for interaction object",
 			"type", "tts",
 			"correlationId", correlationId,
 			"sessionId", session.SessionId)
-		return nil, errors.New("timed out waiting for interaction id")
+		return nil, errors.New("timed out waiting for interaction object")
 	}
-	ttsResponse := response.GetInteractionCreateTts()
-	if ttsResponse == nil {
-		logger.Error("received interactionCreate response with unexpected type",
-			"expected", "tts",
-			"response", response,
+
+	if interactionObject == nil {
+		logger.Error("received nil interaction object",
+			"type", "tts",
 			"correlationId", correlationId,
 			"sessionId", session.SessionId)
-		return nil, errors.New("received interactionCreate response with unexpected type")
+		return nil, errors.New("received nil interaction object")
 	}
-	interactionId := ttsResponse.InteractionId
+
 	if EnableVerboseLogging {
 		logger.Debug("created new TTS interaction",
-			"interactionId", interactionId)
-	}
-
-	// Create the interaction object.
-	interactionObject = &TtsInteractionObject{
-		InteractionId:        interactionId,
-		finalResultsReceived: false,
-		finalResults:         nil,
-		FinalResultStatus:    api.FinalResultStatus_FINAL_RESULT_STATUS_UNSPECIFIED,
-		resultsReadyChannel:  make(chan struct{}),
-	}
-	interactionObject.partialResultsChannels = append(interactionObject.partialResultsChannels, make(chan struct{}))
-
-	// Add the interaction object to the session
-	{
-		session.Lock() // Protect concurrent map access
-		defer session.Unlock()
-
-		session.ttsInteractionsMap[interactionId] = interactionObject
+			"interactionId", interactionObject.InteractionId)
 	}
 
 	return interactionObject, err
@@ -129,8 +141,8 @@ func (session *SessionObject) NewUrlTts(language string,
 	// Generate a correlation ID to track the response when it arrives
 	correlationId := uuid.NewString()
 
-	// Create a channel to wait for the response
-	interactionCreateChan, err := session.prepareInteractionCreate(correlationId)
+	// Create a helper struct to wait for the new interaction object
+	interactionCreateChan, err := session.prepareInteractionCreateTts(correlationId, InteractionCreateDeadline)
 	if err != nil {
 		logger.Error(err.Error(),
 			"correlationId", correlationId,
@@ -138,8 +150,7 @@ func (session *SessionObject) NewUrlTts(language string,
 		return nil, err
 	}
 
-	// Create TTS interaction, adding specified parameters
-
+	// send the interaction create request
 	session.streamSendLock.Lock()
 	err = session.SessionStream.Send(getUrlTtsRequest(correlationId, language, ssmlUrl,
 		synthesizedAudioFormat, synthesisTimeoutMs, sslVerifyPeer, generalInteractionSettings,
@@ -152,48 +163,28 @@ func (session *SessionObject) NewUrlTts(language string,
 		return nil, err
 	}
 
-	// Get the interaction ID.
-	var response *api.SessionResponse
+	// Wait for the new interaction object.
 	select {
-	case response = <-interactionCreateChan:
-	case <-time.After(20 * time.Second):
-		logger.Error("timed out waiting for interaction id",
+	case interactionObject = <-interactionCreateChan:
+	case <-time.After(InteractionCreateDeadline):
+		logger.Error("timed out waiting for interaction object",
 			"type", "tts",
 			"correlationId", correlationId,
 			"sessionId", session.SessionId)
-		return nil, errors.New("timed out waiting for interaction id")
+		return nil, errors.New("timed out waiting for interaction object")
 	}
-	ttsResponse := response.GetInteractionCreateTts()
-	if ttsResponse == nil {
-		logger.Error("received interactionCreate response with unexpected type",
-			"expected", "tts",
-			"response", response,
+
+	if interactionObject == nil {
+		logger.Error("received nil interaction object",
+			"type", "tts",
 			"correlationId", correlationId,
 			"sessionId", session.SessionId)
-		return nil, errors.New("received interactionCreate response with unexpected type")
+		return nil, errors.New("received nil interaction object")
 	}
-	interactionId := ttsResponse.InteractionId
+
 	if EnableVerboseLogging {
 		logger.Debug("created new TTS interaction",
-			"interactionId", interactionId)
-	}
-
-	// Create the interaction object.
-	interactionObject = &TtsInteractionObject{
-		InteractionId:        interactionId,
-		finalResultsReceived: false,
-		finalResults:         nil,
-		FinalResultStatus:    api.FinalResultStatus_FINAL_RESULT_STATUS_UNSPECIFIED,
-		resultsReadyChannel:  make(chan struct{}),
-	}
-	interactionObject.partialResultsChannels = append(interactionObject.partialResultsChannels, make(chan struct{}))
-
-	// Add the interaction object to the session
-	{
-		session.Lock() // Protect concurrent map access
-		defer session.Unlock()
-
-		session.ttsInteractionsMap[interactionId] = interactionObject
+			"interactionId", interactionObject.InteractionId)
 	}
 
 	return interactionObject, err

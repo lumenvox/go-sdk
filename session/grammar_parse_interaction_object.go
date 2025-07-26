@@ -10,57 +10,59 @@ import (
 	"time"
 )
 
-// NluInteractionObject represents an NLU interaction.
-type NluInteractionObject struct {
+// GrammarParseInteractionObject represents a grammar parse interaction.
+type GrammarParseInteractionObject struct {
 	InteractionId string
 
 	// Final result tracking
 	finalResultsReceived bool
-	finalResults         *api.NluInteractionResult
+	finalResults         *api.GrammarParseInteractionResult
 	FinalStatus          *status.Status
 	FinalResultStatus    api.FinalResultStatus
 	resultsReadyChannel  chan struct{}
 }
 
-type interactionCreateNluHelper struct {
-	interactionCreateChannel chan *NluInteractionObject
+type interactionCreateGrammarParseHelper struct {
+	interactionCreateChannel chan *GrammarParseInteractionObject
 	deadline                 time.Time
 }
 
-// prepareInteractionCreateNlu creates a helper in an internal map to prepare
-// for an interactionCreateNlu response. It expects the correlationId of the
+// prepareInteractionCreateGrammarParse creates a helper in an internal map to prepare
+// for an interactionCreateGrammarParse response. It expects the correlationId of the
 // relevant interactionCreate request, which is used to route the response, as
 // well as a deadline to receive the response. It returns a receive-only channel,
 // as the creating thread should not close the channel.
-func (session *SessionObject) prepareInteractionCreateNlu(correlationId string, deadline time.Duration) (
-	interactionCreateChan <-chan *NluInteractionObject, err error) {
+func (session *SessionObject) prepareInteractionCreateGrammarParse(correlationId string, deadline time.Duration) (
+	interactionCreateChan <-chan *GrammarParseInteractionObject, err error) {
 
-	session.interactionCreateNluMapLock.Lock()
-	defer session.interactionCreateNluMapLock.Unlock()
+	session.interactionCreateGrammarParseMapLock.Lock()
+	defer session.interactionCreateGrammarParseMapLock.Unlock()
 
 	// if the correlationId is already in the map, return an error
-	if _, ok := session.interactionCreateNluMap[correlationId]; ok {
-		return nil, errors.New("interaction create nlu channel already exists")
+	if _, ok := session.interactionCreateGrammarParseMap[correlationId]; ok {
+		return nil, errors.New("interaction create grammar parse channel already exists")
 	}
 
 	// create the helper, put it in the map, and return the channel
-	interactionCreateHelper := &interactionCreateNluHelper{
-		interactionCreateChannel: make(chan *NluInteractionObject, 1),
+	interactionCreateHelper := &interactionCreateGrammarParseHelper{
+		interactionCreateChannel: make(chan *GrammarParseInteractionObject, 1),
 		deadline:                 time.Now().Add(deadline),
 	}
-	session.interactionCreateNluMap[correlationId] = interactionCreateHelper
+	session.interactionCreateGrammarParseMap[correlationId] = interactionCreateHelper
 
 	interactionCreateChan = interactionCreateHelper.interactionCreateChannel
 
 	return
 }
 
-// NewNlu attempts to create a new NLU interaction.
+// NewGrammarParse attempts to create a new grammar parse interaction.
 // If successful, a new interaction object will be returned.
-func (session *SessionObject) NewNlu(language string,
+func (session *SessionObject) NewGrammarParse(language string,
 	inputText string,
-	nluSettings *api.NluSettings,
-	generalInteractionSettings *api.GeneralInteractionSettings) (interactionObject *NluInteractionObject, err error) {
+	grammars []*api.Grammar,
+	grammarSettings *api.GrammarSettings,
+	parseTimeoutMs *api.OptionalInt32,
+	generalInteractionSettings *api.GeneralInteractionSettings) (interactionObject *GrammarParseInteractionObject, err error) {
 
 	logger := getLogger()
 
@@ -68,7 +70,7 @@ func (session *SessionObject) NewNlu(language string,
 	correlationId := uuid.NewString()
 
 	// Create a helper struct to wait for the new interaction object
-	interactionCreateChan, err := session.prepareInteractionCreateNlu(correlationId, InteractionCreateDeadline)
+	interactionCreateChan, err := session.prepareInteractionCreateGrammarParse(correlationId, InteractionCreateDeadline)
 	if err != nil {
 		logger.Error(err.Error(),
 			"correlationId", correlationId,
@@ -78,12 +80,12 @@ func (session *SessionObject) NewNlu(language string,
 
 	// send the interaction create request
 	session.streamSendLock.Lock()
-	err = session.SessionStream.Send(getNluRequest(correlationId, language, inputText,
-		nluSettings, generalInteractionSettings))
+	err = session.SessionStream.Send(getGrammarParseRequest(correlationId, language, inputText, grammars,
+		grammarSettings, parseTimeoutMs, generalInteractionSettings))
 	session.streamSendLock.Unlock()
 	if err != nil {
-		session.errorChan <- fmt.Errorf("sending InteractionCreateNluRequest error: %v", err)
-		logger.Error("sending NLU create request",
+		session.errorChan <- fmt.Errorf("sending InteractionCreateGrammarParseRequest error: %v", err)
+		logger.Error("sending grammar parse create request",
 			"error", err.Error())
 		return nil, err
 	}
@@ -93,7 +95,7 @@ func (session *SessionObject) NewNlu(language string,
 	case interactionObject = <-interactionCreateChan:
 	case <-time.After(InteractionCreateDeadline):
 		logger.Error("timed out waiting for interaction object",
-			"type", "nlu",
+			"type", "grammar parse",
 			"correlationId", correlationId,
 			"sessionId", session.SessionId)
 		return nil, errors.New("timed out waiting for interaction object")
@@ -101,14 +103,14 @@ func (session *SessionObject) NewNlu(language string,
 
 	if interactionObject == nil {
 		logger.Error("received nil interaction object",
-			"type", "nlu",
+			"type", "grammar parse",
 			"correlationId", correlationId,
 			"sessionId", session.SessionId)
 		return nil, errors.New("received nil interaction object")
 	}
 
 	if EnableVerboseLogging {
-		logger.Debug("created new NLU interaction",
+		logger.Debug("created new grammar parse interaction",
 			"interactionId", interactionObject.InteractionId)
 	}
 
@@ -121,10 +123,10 @@ func (session *SessionObject) NewNlu(language string,
 // If nothing arrives before the timeout, an error will be returned. Note that
 // interaction failures do not trigger errors from this function, so long as
 // the notification arrives before the timeout.
-func (nluInteraction *NluInteractionObject) WaitForFinalResults(timeout time.Duration) error {
+func (grammarParseInteraction *GrammarParseInteractionObject) WaitForFinalResults(timeout time.Duration) error {
 
 	select {
-	case <-nluInteraction.resultsReadyChannel:
+	case <-grammarParseInteraction.resultsReadyChannel:
 		// resultsReadyChannel is closed when final results arrive
 		return nil
 	case <-time.After(timeout):
@@ -139,26 +141,26 @@ func (nluInteraction *NluInteractionObject) WaitForFinalResults(timeout time.Dur
 //
 // If the interaction does not end before the specified timeout, an error will
 // be returned.
-func (nluInteraction *NluInteractionObject) GetFinalResults(timeout time.Duration) (result *api.NluInteractionResult, err error) {
+func (grammarParseInteraction *GrammarParseInteractionObject) GetFinalResults(timeout time.Duration) (result *api.GrammarParseInteractionResult, err error) {
 
 	// Wait for the end of the interaction.
-	err = nluInteraction.WaitForFinalResults(timeout)
+	err = grammarParseInteraction.WaitForFinalResults(timeout)
 	if err != nil {
 		return nil, err
 	}
 
-	if nluInteraction.finalResultsReceived {
+	if grammarParseInteraction.finalResultsReceived {
 		// If we received final results, verify the status.
-		if nluInteraction.FinalResultStatus == api.FinalResultStatus_FINAL_RESULT_STATUS_NLU_RESULT {
+		if grammarParseInteraction.FinalResultStatus == api.FinalResultStatus_FINAL_RESULT_STATUS_GRAMMAR_MATCH {
 			// Successful interaction, return result
-			return nluInteraction.finalResults, nil
+			return grammarParseInteraction.finalResults, nil
 		} else {
 			// Unsuccessful interaction, return error
-			errorString := fmt.Sprintf("%v: %v", nluInteraction.FinalResultStatus, nluInteraction.FinalStatus.Message)
+			errorString := fmt.Sprintf("%v: %v", grammarParseInteraction.FinalResultStatus, grammarParseInteraction.FinalStatus.Message)
 			return nil, errors.New(errorString)
 		}
 	} else {
 		// This should never happen.
-		return nil, errors.New("unexpected end of NLU interaction")
+		return nil, errors.New("unexpected end of grammar parse interaction")
 	}
 }

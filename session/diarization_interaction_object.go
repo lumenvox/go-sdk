@@ -1,7 +1,7 @@
 package session
 
 import (
-	"github.com/lumenvox/go-sdk/lumenvox/api"
+	"github.com/lumenvox/protos-go/lumenvox/api"
 
 	"errors"
 	"fmt"
@@ -22,6 +22,39 @@ type DiarizationInteractionObject struct {
 	resultsReadyChannel  chan struct{}
 }
 
+type interactionCreateDiarizationHelper struct {
+	interactionCreateChannel chan *DiarizationInteractionObject
+	deadline                 time.Time
+}
+
+// prepareInteractionCreateDiarization creates a helper in an internal map to prepare
+// for an interactionCreateDiarization response. It expects the correlationId of the
+// relevant interactionCreate request, which is used to route the response, as
+// well as a deadline to receive the response. It returns a receive-only channel,
+// as the creating thread should not close the channel.
+func (session *SessionObject) prepareInteractionCreateDiarization(correlationId string, deadline time.Duration) (
+	interactionCreateChan <-chan *DiarizationInteractionObject, err error) {
+
+	session.interactionCreateDiarizationMapLock.Lock()
+	defer session.interactionCreateDiarizationMapLock.Unlock()
+
+	// if the correlationId is already in the map, return an error
+	if _, ok := session.interactionCreateDiarizationMap[correlationId]; ok {
+		return nil, errors.New("interaction create diarization channel already exists")
+	}
+
+	// create the helper, put it in the map, and return the channel
+	interactionCreateHelper := &interactionCreateDiarizationHelper{
+		interactionCreateChannel: make(chan *DiarizationInteractionObject, 1),
+		deadline:                 time.Now().Add(deadline),
+	}
+	session.interactionCreateDiarizationMap[correlationId] = interactionCreateHelper
+
+	interactionCreateChan = interactionCreateHelper.interactionCreateChannel
+
+	return
+}
+
 // NewDiarization attempts to create a new diarization interaction.
 // If successful, a new interaction object will be returned.
 func (session *SessionObject) NewDiarization(
@@ -37,8 +70,8 @@ func (session *SessionObject) NewDiarization(
 	// Generate a correlation ID to track the response when it arrives
 	correlationId := uuid.NewString()
 
-	// Create a channel to wait for the response
-	interactionCreateChan, err := session.prepareInteractionCreate(correlationId)
+	// Create a helper struct to wait for the new interaction object
+	interactionCreateChan, err := session.prepareInteractionCreateDiarization(correlationId, InteractionCreateDeadline)
 	if err != nil {
 		logger.Error(err.Error(),
 			"correlationId", correlationId,
@@ -46,8 +79,7 @@ func (session *SessionObject) NewDiarization(
 		return nil, err
 	}
 
-	// Create diarization interaction, adding parameters such as VAD and recognition settings
-
+	// send the interaction create request
 	session.streamSendLock.Lock()
 	err = session.SessionStream.Send(getDiarizationRequest(correlationId, language, maxSpeakers,
 		requestTimeoutMs, generalInteractionSettings, audioConsumeSettings))
@@ -59,46 +91,28 @@ func (session *SessionObject) NewDiarization(
 		return nil, err
 	}
 
-	// Get the interaction ID.
-	var response *api.SessionResponse
+	// Wait for the new interaction object.
 	select {
-	case response = <-interactionCreateChan:
-	case <-time.After(20 * time.Second):
-		logger.Error("timed out waiting for interaction id",
+	case interactionObject = <-interactionCreateChan:
+	case <-time.After(InteractionCreateDeadline):
+		logger.Error("timed out waiting for interaction object",
 			"type", "diarization",
 			"correlationId", correlationId,
 			"sessionId", session.SessionId)
-		return nil, errors.New("timed out waiting for interaction id")
+		return nil, errors.New("timed out waiting for interaction object")
 	}
-	diarizationResponse := response.GetInteractionCreateDiarization()
-	if diarizationResponse == nil {
-		logger.Error("received interactionCreate response with unexpected type",
-			"expected", "diarization",
-			"response", response,
+
+	if interactionObject == nil {
+		logger.Error("received nil interaction object",
+			"type", "diarization",
 			"correlationId", correlationId,
 			"sessionId", session.SessionId)
-		return nil, errors.New("received interactionCreate response with unexpected type")
+		return nil, errors.New("received nil interaction object")
 	}
-	interactionId := diarizationResponse.InteractionId
+
 	if EnableVerboseLogging {
 		logger.Debug("created new diarization interaction",
-			"interactionId", interactionId)
-	}
-
-	// Create the interaction object.
-	interactionObject = &DiarizationInteractionObject{
-		InteractionId:        interactionId,
-		finalResultsReceived: false,
-		finalResults:         nil,
-		resultsReadyChannel:  make(chan struct{}),
-	}
-
-	// Add the interaction object to the session
-	{
-		session.Lock() // Protect concurrent map access
-		defer session.Unlock()
-
-		session.diarizationInteractionsMap[interactionId] = interactionObject
+			"interactionId", interactionObject.InteractionId)
 	}
 
 	return interactionObject, err

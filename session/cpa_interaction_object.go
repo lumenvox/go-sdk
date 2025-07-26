@@ -1,7 +1,7 @@
 package session
 
 import (
-	"github.com/lumenvox/go-sdk/lumenvox/api"
+	"github.com/lumenvox/protos-go/lumenvox/api"
 
 	"errors"
 	"fmt"
@@ -38,6 +38,39 @@ type CpaInteractionObject struct {
 	resultsReadyChannel  chan struct{}
 }
 
+type interactionCreateCpaHelper struct {
+	interactionCreateChannel chan *CpaInteractionObject
+	deadline                 time.Time
+}
+
+// prepareInteractionCreateCpa creates a helper in an internal map to prepare
+// for an interactionCreateCpa response. It expects the correlationId of the
+// relevant interactionCreate request, which is used to route the response, as
+// well as a deadline to receive the response. It returns a receive-only channel,
+// as the creating thread should not close the channel.
+func (session *SessionObject) prepareInteractionCreateCpa(correlationId string, deadline time.Duration) (
+	interactionCreateChan <-chan *CpaInteractionObject, err error) {
+
+	session.interactionCreateCpaMapLock.Lock()
+	defer session.interactionCreateCpaMapLock.Unlock()
+
+	// if the correlationId is already in the map, return an error
+	if _, ok := session.interactionCreateCpaMap[correlationId]; ok {
+		return nil, errors.New("interaction create cpa channel already exists")
+	}
+
+	// create the helper, put it in the map, and return the channel
+	interactionCreateHelper := &interactionCreateCpaHelper{
+		interactionCreateChannel: make(chan *CpaInteractionObject, 1),
+		deadline:                 time.Now().Add(deadline),
+	}
+	session.interactionCreateCpaMap[correlationId] = interactionCreateHelper
+
+	interactionCreateChan = interactionCreateHelper.interactionCreateChannel
+
+	return
+}
+
 // NewCpa attempts to create a new CPA interaction.
 // If successful, a new interaction object will be returned.
 func (session *SessionObject) NewCpa(
@@ -51,8 +84,8 @@ func (session *SessionObject) NewCpa(
 	// Generate a correlation ID to track the response when it arrives
 	correlationId := uuid.NewString()
 
-	// Create a channel to wait for the response
-	interactionCreateChan, err := session.prepareInteractionCreate(correlationId)
+	// Create a helper struct to wait for the new interaction object
+	interactionCreateChan, err := session.prepareInteractionCreateCpa(correlationId, InteractionCreateDeadline)
 	if err != nil {
 		logger.Error(err.Error(),
 			"correlationId", correlationId,
@@ -60,8 +93,7 @@ func (session *SessionObject) NewCpa(
 		return nil, err
 	}
 
-	// Create CPA interaction, adding parameters such as VAD and recognition settings
-
+	// send the interaction create request
 	session.streamSendLock.Lock()
 	err = session.SessionStream.Send(getCpaRequest(correlationId,
 		cpaSettings, audioConsumeSettings, vadSettings, generalInteractionSettings))
@@ -73,54 +105,30 @@ func (session *SessionObject) NewCpa(
 		return nil, err
 	}
 
-	// Get the interaction ID.
-	var response *api.SessionResponse
+	// Wait for the new interaction object.
 	select {
-	case response = <-interactionCreateChan:
-	case <-time.After(20 * time.Second):
-		logger.Error("timed out waiting for interaction id",
+	case interactionObject = <-interactionCreateChan:
+	case <-time.After(InteractionCreateDeadline):
+		logger.Error("timed out waiting for interaction object",
 			"type", "cpa",
 			"correlationId", correlationId,
 			"sessionId", session.SessionId)
-		return nil, errors.New("timed out waiting for interaction id")
+		return nil, errors.New("timed out waiting for interaction object")
 	}
-	cpaResponse := response.GetInteractionCreateCpa()
-	if cpaResponse == nil {
-		logger.Error("received interactionCreate response with unexpected type",
-			"expected", "cpa",
-			"response", response,
+
+	if interactionObject == nil {
+		logger.Error("received nil interaction object",
+			"type", "cpa",
 			"correlationId", correlationId,
 			"sessionId", session.SessionId)
-		return nil, errors.New("received interactionCreate response with unexpected type")
+		return nil, errors.New("received nil interaction object")
 	}
-	interactionId := cpaResponse.InteractionId
+
 	if EnableVerboseLogging {
 		logger.Debug("created new CPA interaction",
-			"interactionId", interactionId)
+			"interactionId", interactionObject.InteractionId)
 	}
 
-	// Create the interaction object.
-	interactionObject = &CpaInteractionObject{
-		InteractionId:             interactionId,
-		vadBeginProcessingChannel: make(chan struct{}, 1),
-		vadBargeInChannel:         make(chan int, 1),
-		vadBargeInReceived:        -1,
-		vadBargeOutChannel:        make(chan int, 1),
-		vadBargeOutReceived:       -1,
-		vadBargeInTimeoutChannel:  make(chan struct{}),
-		vadBargeInTimeoutReceived: false,
-		finalResultsReceived:      false,
-		finalResults:              nil,
-		resultsReadyChannel:       make(chan struct{}),
-	}
-
-	// Add the interaction object to the session
-	{
-		session.Lock() // Protect concurrent map access
-		defer session.Unlock()
-
-		session.cpaInteractionsMap[interactionId] = interactionObject
-	}
 	return interactionObject, err
 }
 
@@ -216,72 +224,6 @@ func (cpaInteraction *CpaInteractionObject) WaitForFinalResults(timeout time.Dur
 		return TimeoutError
 	}
 }
-
-//// WaitForNextResult waits for the next result-like response, whether that
-//// is a partial result, a final result, or a barge-in timeout. It returns true to
-//// indicate a final (interaction-ending) result and false to indicate a partial
-//// result. If a partial result is detected, resultIdx will indicate the index of
-//// that partial result.
-////
-//// If the return indicates that a partial result has arrived, GetPartialResult
-//// can be used to fetch the result. Otherwise, GetFinalResults can be used to
-//// fetch the final result or error.
-////
-//// If a result-like response does not arrive before the timeout, an error will
-//// be returned.
-//func (cpaInteraction *CpaInteractionObject) WaitForNextResult(timeout time.Duration) (resultIdx int, final bool, err error) {
-//
-//	// before doing anything else, get the index of the next partial result. this
-//	// will allow us to read from the correct channel, if we end up waiting.
-//	cpaInteraction.partialResultLock.Lock()
-//	nextPartialResultIdx := cpaInteraction.partialResultsReceived
-//	cpaInteraction.partialResultLock.Unlock()
-//
-//	// Before calling a select on multiple channels, try just the resultsReadyChannel.
-//	// If multiple channels in a select statement are available for reading at the
-//	// same moment, the chosen channel is randomly selected. We have the extra check
-//	// here so that we always indicate a final result if a final result has arrived.
-//	select {
-//	case <-cpaInteraction.resultsReadyChannel:
-//		// resultsReadyChannel has already closed. Return (0, true) to indicate
-//		// that the final results have already arrived.
-//		return 0, true, nil
-//	default:
-//		// resultsReadyChannel has not been closed. Wait for the result below.
-//	}
-//
-//	// The final result has not arrived. Wait for the next partial result or final result.
-//	select {
-//	case <-cpaInteraction.resultsReadyChannel:
-//		// We received a final result. Return (0, true) to indicate that the
-//		// interaction is complete.
-//		return 0, true, nil
-//	case <-cpaInteraction.partialResultsChannels[nextPartialResultIdx]:
-//		// We received a new partial result. Return the index, and false to
-//		// indicate a partial result.
-//		return nextPartialResultIdx, false, nil
-//	case <-cpaInteraction.vadBargeInTimeoutChannel:
-//		// We received a barge-in timeout. Return (0, true) to indicate that the
-//		// interaction is complete.
-//		return 0, true, nil
-//	case <-time.After(timeout):
-//		return 0, false, TimeoutError
-//	}
-//}
-
-//// GetPartialResult returns a partial result at a given index. If a partial result does not exist
-//// at the given index, an error is returned.
-////
-//// This function is best used in conjunction with WaitForNextResult, which will return the index of
-//// any new partial results.
-//func (cpaInteraction *CpaInteractionObject) GetPartialResult(resultIdx int) (*api.PartialResult, error) {
-//
-//	if resultIdx < 0 || len(cpaInteraction.partialResultsList) <= resultIdx {
-//		return nil, errors.New("partial result index out of bounds")
-//	} else {
-//		return cpaInteraction.partialResultsList[resultIdx], nil
-//	}
-//}
 
 // GetFinalResults fetches the final results or error from an interaction,
 // waiting if necessary. If the interaction succeeds, results will be returned.

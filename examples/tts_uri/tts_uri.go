@@ -4,8 +4,9 @@ import (
 	lumenvoxSdk "github.com/lumenvox/go-sdk"
 	"github.com/lumenvox/go-sdk/config"
 	"github.com/lumenvox/go-sdk/logging"
-	"github.com/lumenvox/go-sdk/lumenvox/api"
 	"github.com/lumenvox/go-sdk/session"
+
+	"github.com/lumenvox/protos-go/lumenvox/api"
 
 	"encoding/binary"
 	"errors"

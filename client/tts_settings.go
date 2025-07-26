@@ -1,7 +1,7 @@
 package client
 
 import (
-	"github.com/lumenvox/go-sdk/lumenvox/api"
+	"github.com/lumenvox/protos-go/lumenvox/api"
 )
 
 // GetTtsInlineSynthesisSettings returns an api.TtsInlineSynthesisSettings

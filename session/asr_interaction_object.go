@@ -1,7 +1,7 @@
 package session
 
 import (
-	"github.com/lumenvox/go-sdk/lumenvox/api"
+	"github.com/lumenvox/protos-go/lumenvox/api"
 
 	"errors"
 	"fmt"
@@ -45,6 +45,39 @@ type AsrInteractionObject struct {
 	resultsReadyChannel  chan struct{}
 }
 
+type interactionCreateAsrHelper struct {
+	interactionCreateChannel chan *AsrInteractionObject
+	deadline                 time.Time
+}
+
+// prepareInteractionCreateAsr creates a helper in an internal map to prepare
+// for an interactionCreateAsr response. It expects the correlationId of the
+// relevant interactionCreate request, which is used to route the response, as
+// well as a deadline to receive the response. It returns a receive-only channel,
+// as the creating thread should not close the channel.
+func (session *SessionObject) prepareInteractionCreateAsr(correlationId string, deadline time.Duration) (
+	interactionCreateChan <-chan *AsrInteractionObject, err error) {
+
+	session.interactionCreateAsrMapLock.Lock()
+	defer session.interactionCreateAsrMapLock.Unlock()
+
+	// if the correlationId is already in the map, return an error
+	if _, ok := session.interactionCreateAsrMap[correlationId]; ok {
+		return nil, errors.New("interaction create asr channel already exists")
+	}
+
+	// create the helper, put it in the map, and return the channel
+	interactionCreateHelper := &interactionCreateAsrHelper{
+		interactionCreateChannel: make(chan *AsrInteractionObject, 1),
+		deadline:                 time.Now().Add(deadline),
+	}
+	session.interactionCreateAsrMap[correlationId] = interactionCreateHelper
+
+	interactionCreateChan = interactionCreateHelper.interactionCreateChannel
+
+	return
+}
+
 // NewAsr attempts to create a new ASR interaction.
 // If successful, a new interaction object will be returned.
 func (session *SessionObject) NewAsr(
@@ -61,8 +94,8 @@ func (session *SessionObject) NewAsr(
 	// Generate a correlation ID to track the response when it arrives
 	correlationId := uuid.NewString()
 
-	// Create a channel to wait for the response
-	interactionCreateChan, err := session.prepareInteractionCreate(correlationId)
+	// Create a helper struct to wait for the new interaction object
+	interactionCreateChan, err := session.prepareInteractionCreateAsr(correlationId, InteractionCreateDeadline)
 	if err != nil {
 		logger.Error(err.Error(),
 			"correlationId", correlationId,
@@ -70,8 +103,7 @@ func (session *SessionObject) NewAsr(
 		return nil, err
 	}
 
-	// Create ASR interaction, adding parameters such as VAD and recognition settings
-
+	// send the interaction create request
 	session.streamSendLock.Lock()
 	err = session.SessionStream.Send(getAsrRequest(correlationId, language, grammars, grammarSettings,
 		recognitionSettings, vadSettings, audioConsumeSettings, generalInteractionSettings))
@@ -83,54 +115,28 @@ func (session *SessionObject) NewAsr(
 		return nil, err
 	}
 
-	// Get the interaction ID.
-	var response *api.SessionResponse
+	// Wait for the new interaction object.
 	select {
-	case response = <-interactionCreateChan:
-	case <-time.After(20 * time.Second):
-		logger.Error("timed out waiting for interaction id",
+	case interactionObject = <-interactionCreateChan:
+	case <-time.After(InteractionCreateDeadline):
+		logger.Error("timed out waiting for interaction object",
 			"type", "asr",
 			"correlationId", correlationId,
 			"sessionId", session.SessionId)
-		return nil, errors.New("timed out waiting for interaction id")
+		return nil, errors.New("timed out waiting for interaction object")
 	}
-	asrResponse := response.GetInteractionCreateAsr()
-	if asrResponse == nil {
-		logger.Error("received interactionCreate response with unexpected type",
-			"expected", "asr",
-			"response", response,
+
+	if interactionObject == nil {
+		logger.Error("received nil interaction object",
+			"type", "asr",
 			"correlationId", correlationId,
 			"sessionId", session.SessionId)
-		return nil, errors.New("received interactionCreate response with unexpected type")
+		return nil, errors.New("received nil interaction object")
 	}
-	interactionId := asrResponse.InteractionId
+
 	if EnableVerboseLogging {
 		logger.Debug("created new ASR interaction",
-			"interactionId", interactionId)
-	}
-
-	// Create the interaction object.
-	interactionObject = &AsrInteractionObject{
-		InteractionId:             interactionId,
-		vadBeginProcessingChannel: make(chan struct{}, 1),
-		vadBargeInChannel:         make(chan int, 1),
-		vadBargeInReceived:        -1,
-		vadBargeOutChannel:        make(chan int, 1),
-		vadBargeOutReceived:       -1,
-		vadBargeInTimeoutChannel:  make(chan struct{}),
-		vadBargeInTimeoutReceived: false,
-		finalResultsReceived:      false,
-		finalResults:              nil,
-		resultsReadyChannel:       make(chan struct{}),
-	}
-	interactionObject.partialResultsChannels = append(interactionObject.partialResultsChannels, make(chan struct{}))
-
-	// Add the interaction object to the session
-	{
-		session.Lock() // Protect concurrent map access
-		defer session.Unlock()
-
-		session.asrInteractionsMap[interactionId] = interactionObject
+			"interactionId", interactionObject.InteractionId)
 	}
 
 	return interactionObject, err
