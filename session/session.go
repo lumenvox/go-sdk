@@ -7,12 +7,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/metadata"
 	"os"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 )
 
 // TimeoutError represents a specific SDK error indicating that a timeout has occurred during an operation.
@@ -79,6 +80,8 @@ type SessionObject struct {
 	interactionCreateNormalizeTextMapLock sync.Mutex
 	interactionCreateTranscriptionMapLock sync.Mutex
 	interactionCreateTtsMapLock           sync.Mutex
+	interactionCreateNeuronMapLock        sync.Mutex
+	loadSessionGrammarMapLock             sync.Mutex
 
 	interactionCreateAmdMap           map[string]*interactionCreateAmdHelper
 	interactionCreateAsrMap           map[string]*interactionCreateAsrHelper
@@ -90,6 +93,8 @@ type SessionObject struct {
 	interactionCreateNormalizeTextMap map[string]*interactionCreateNormalizeTextHelper
 	interactionCreateTranscriptionMap map[string]*interactionCreateTranscriptionHelper
 	interactionCreateTtsMap           map[string]*interactionCreateTtsHelper
+	interactionCreateNeuronMap        map[string]*interactionCreateNeuronHelper
+	loadSessionGrammarMap             map[string]*LoadSessionGrammarObject
 
 	// maps to store all active interactions
 	amdInteractionsMap           map[string]*AmdInteractionObject
@@ -102,6 +107,7 @@ type SessionObject struct {
 	normalizationInteractionsMap map[string]*NormalizationInteractionObject
 	transcriptionInteractionsMap map[string]*TranscriptionInteractionObject
 	ttsInteractionsMap           map[string]*TtsInteractionObject
+	neuronInteractionsMap        map[string]*NeuronInteractionObject
 
 	// map of channels to handle TTS audio
 	ttsAudioMapLock sync.Mutex
@@ -161,6 +167,8 @@ func newSessionObject(
 		interactionCreateNormalizeTextMap: make(map[string]*interactionCreateNormalizeTextHelper),
 		interactionCreateTranscriptionMap: make(map[string]*interactionCreateTranscriptionHelper),
 		interactionCreateTtsMap:           make(map[string]*interactionCreateTtsHelper),
+		interactionCreateNeuronMap:        make(map[string]*interactionCreateNeuronHelper),
+		loadSessionGrammarMap:             make(map[string]*LoadSessionGrammarObject),
 
 		// interaction maps
 		amdInteractionsMap:           make(map[string]*AmdInteractionObject),
@@ -173,6 +181,7 @@ func newSessionObject(
 		normalizationInteractionsMap: make(map[string]*NormalizationInteractionObject),
 		transcriptionInteractionsMap: make(map[string]*TranscriptionInteractionObject),
 		ttsInteractionsMap:           make(map[string]*TtsInteractionObject),
+		neuronInteractionsMap:        make(map[string]*NeuronInteractionObject),
 
 		// audio pull map
 		ttsAudioMap: make(map[string]chan *api.AudioPullResponse),

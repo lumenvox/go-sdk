@@ -21,6 +21,7 @@ type TranscriptionInteractionObject struct {
 	vadBargeInChannels         []chan struct{}
 	vadBargeOutChannels        []chan struct{}
 	vadBargeInTimeoutChannels  []chan struct{}
+	vadBargeOutTimeoutChannels []chan struct{}
 	vadRecordLog               []*vadInteractionRecord
 	vadInteractionCounter      int
 	vadCurrentState            api.VadEvent_VadEventType
@@ -178,7 +179,8 @@ func (transcriptionInteraction *TranscriptionInteractionObject) WaitForBeginProc
 
 // WaitForBargeIn blocks until the API sends a VAD_BARGE_IN message. If the
 // message has already arrived, this function returns immediately. Otherwise,
-// if the message does not return before the timeout, an error will be returned.
+// if the message does not return before the timeout, or a barge-in timeout is
+// received, an error will be returned.
 func (transcriptionInteraction *TranscriptionInteractionObject) WaitForBargeIn(vadInteractionIdx int, timeout time.Duration) error {
 
 	// TODO: instead of just checking the barge_in channel, we should also pay attention
@@ -198,12 +200,16 @@ func (transcriptionInteraction *TranscriptionInteractionObject) WaitForBargeIn(v
 	// check if a barge-in has arrived or not.
 	if transcriptionInteraction.vadRecordLog[vadInteractionIdx].bargeInReceived > 0 {
 		return nil
+	} else if transcriptionInteraction.vadRecordLog[vadInteractionIdx].bargeInTimeoutReceived {
+		return errors.New("barge-in timeout received")
 	}
 
-	// Otherwise, wait for the BARGE_IN event to arrive.
+	// Otherwise, wait for the BARGE_IN/BARGE_IN_TIMEOUT event to arrive.
 	select {
 	case <-transcriptionInteraction.vadBargeInChannels[vadInteractionIdx]:
 		return nil
+	case <-transcriptionInteraction.vadBargeInTimeoutChannels[vadInteractionIdx]:
+		return errors.New("barge-in timeout received")
 	case <-time.After(timeout):
 		return TimeoutError
 	}
@@ -211,7 +217,8 @@ func (transcriptionInteraction *TranscriptionInteractionObject) WaitForBargeIn(v
 
 // WaitForEndOfSpeech blocks until the API sends a VAD_END_OF_SPEECH message. If
 // the message has already arrived, this function returns immediately. Otherwise,
-// if the message does not return before the timeout, an error will be returned.
+// if the message does not return before the timeout, or an end-of-speech timeout
+// arrives, an error will be returned.
 func (transcriptionInteraction *TranscriptionInteractionObject) WaitForEndOfSpeech(vadInteractionIdx int, timeout time.Duration) error {
 
 	// Verify that the index is valid
@@ -226,12 +233,16 @@ func (transcriptionInteraction *TranscriptionInteractionObject) WaitForEndOfSpee
 	// check if a barge-out has arrived or not.
 	if transcriptionInteraction.vadRecordLog[vadInteractionIdx].bargeOutReceived > 0 {
 		return nil
+	} else if transcriptionInteraction.vadRecordLog[vadInteractionIdx].bargeOutTimeoutReceived {
+		return errors.New("barge-out timeout received")
 	}
 
 	// Otherwise, wait for the BARGE_OUT event to arrive.
 	select {
 	case <-transcriptionInteraction.vadBargeOutChannels[vadInteractionIdx]:
 		return nil
+	case <-transcriptionInteraction.vadBargeOutTimeoutChannels[vadInteractionIdx]:
+		return errors.New("barge-out timeout received")
 	case <-time.After(timeout):
 		return TimeoutError
 	}
@@ -240,7 +251,7 @@ func (transcriptionInteraction *TranscriptionInteractionObject) WaitForEndOfSpee
 // WaitForBargeInTimeout blocks until the API sends a VAD_BARGE_IN_TIMEOUT
 // message. If the message has already arrived, this function returns
 // immediately. Otherwise, if the message does not return before the timeout,
-// an error will be returned.
+// or a barge-in arrives, an error will be returned.
 func (transcriptionInteraction *TranscriptionInteractionObject) WaitForBargeInTimeout(vadInteractionIdx int, timeout time.Duration) error {
 
 	// Verify that the index is valid
@@ -253,12 +264,16 @@ func (transcriptionInteraction *TranscriptionInteractionObject) WaitForBargeInTi
 	// received a BARGE_IN_TIMEOUT event for this interaction.
 	if transcriptionInteraction.vadRecordLog[vadInteractionIdx].bargeInTimeoutReceived {
 		return nil
+	} else if transcriptionInteraction.vadRecordLog[vadInteractionIdx].bargeInReceived > 0 {
+		return errors.New("barge-in received")
 	}
 
 	// Otherwise, wait for the BARGE_OUT event to arrive.
 	select {
 	case <-transcriptionInteraction.vadBargeInTimeoutChannels[vadInteractionIdx]:
 		return nil
+	case <-transcriptionInteraction.vadBargeInChannels[vadInteractionIdx]:
+		return errors.New("barge-in received")
 	case <-time.After(timeout):
 		return TimeoutError
 	}
@@ -271,6 +286,9 @@ func (transcriptionInteraction *TranscriptionInteractionObject) WaitForBargeInTi
 // If nothing arrives before the timeout, an error will be returned. Note that
 // interaction failures (like a barge-in timeout) do not trigger errors from
 // this function, so long as the notification arrives before the timeout.
+//
+// This function is not affected by barge-out timeouts because results will
+// still be returned in that case.
 func (transcriptionInteraction *TranscriptionInteractionObject) WaitForFinalResults(timeout time.Duration) error {
 
 	if transcriptionInteraction.isContinuousTranscription {
@@ -307,6 +325,9 @@ func (transcriptionInteraction *TranscriptionInteractionObject) WaitForFinalResu
 //
 // If a result-like response does not arrive before the timeout, an error will
 // be returned.
+//
+// This function is not affected by barge-out timeouts because results will
+// still be returned in that case.
 func (transcriptionInteraction *TranscriptionInteractionObject) WaitForNextResult(timeout time.Duration) (resultIdx int, final bool, err error) {
 
 	// before doing anything else, get the index of the next partial result. this
@@ -386,6 +407,9 @@ func (transcriptionInteraction *TranscriptionInteractionObject) GetPartialResult
 //
 // If the interaction does not end before the specified timeout, an error will
 // be returned.
+//
+// This function is not affected by barge-out timeouts because results will
+// still be returned in that case.
 func (transcriptionInteraction *TranscriptionInteractionObject) GetFinalResults(timeout time.Duration) (result *api.TranscriptionInteractionResult, err error) {
 
 	// Wait for the end of the interaction.

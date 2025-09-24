@@ -66,11 +66,10 @@ func main() {
 	// Session creation
 	///////////////////////
 
-	// Set audio configuration for session.
+	// Set the audio configuration for the session. It's just text processing, so
+	// the format should be set to NO_AUDIO_RESOURCE.
 	audioConfig := session.AudioConfig{
-		Format:     api.AudioFormat_STANDARD_AUDIO_FORMAT_ULAW,
-		SampleRate: 8000,
-		IsBatch:    false,
+		Format: api.AudioFormat_STANDARD_AUDIO_FORMAT_NO_AUDIO_RESOURCE,
 	}
 
 	// Create a new session.
@@ -83,63 +82,21 @@ func main() {
 	}
 
 	///////////////////////
-	// Add audio to session
+	// Create neuron interaction
 	///////////////////////
 
-	var audioData []byte
+	language := "en-US"
 
-	// Read data from disk.
-	audioFilePath := "./examples/test_data/human_business.ulaw"
-	audioData, err = os.ReadFile(audioFilePath)
-	if err != nil {
-		logger.Error("reading audio file",
-			"error", err.Error())
-		os.Exit(1)
-	}
-
-	// Queue the audio for the internal streamer.
-	sessionObject.AddAudio(audioData)
-
-	///////////////////////
-	// Create CPA interaction
-	///////////////////////
-
-	// Configure CPA settings.
-	var humanResidenceTimeMs *api.OptionalInt32 = nil
-	var humanBusinessTimeMs *api.OptionalInt32 = nil
-	var humanSilenceTimeoutMs *api.OptionalInt32 = nil
-	var maxTimeFromConnectMs *api.OptionalInt32 = nil
-	cpaSettings := client.GetCpaSettings(humanResidenceTimeMs, humanBusinessTimeMs,
-		humanSilenceTimeoutMs, maxTimeFromConnectMs)
-
-	// Configure VAD settings.
-	useVad := false
-	bargeInTimeout := int32(30000) // 30 second default
-	eosDelay := int32(1000)
-	var endOfSpeechTimeoutMs *api.OptionalInt32 = nil
-	noiseReductionMode := api.VadSettings_NOISE_REDUCTION_MODE_DISABLED
-	var bargeInThreshold *api.OptionalInt32 = nil
-	var snrSensitivity *api.OptionalInt32 = nil
-	var streamInitDelay *api.OptionalInt32 = nil
-	var volumeSensitivity *api.OptionalInt32 = nil
-	var windBackMs *api.OptionalInt32 = nil
-	vadSettings := client.GetVadSettings(useVad, bargeInTimeout, eosDelay, endOfSpeechTimeoutMs,
-		noiseReductionMode, bargeInThreshold, snrSensitivity, streamInitDelay, volumeSensitivity, windBackMs)
-
-	// Configure audio consume settings.
-	var audioChannel int32 = 0
-	audioConsumeMode := api.AudioConsumeSettings_AUDIO_CONSUME_MODE_BATCH
-	streamStartLocation := api.AudioConsumeSettings_STREAM_START_LOCATION_STREAM_BEGIN
-	var startOffsetMs *api.OptionalInt32 = nil
-	var audioConsumeMaxMs *api.OptionalInt32 = nil
-	audioConsumeSettings, err := client.GetAudioConsumeSettings(audioChannel,
-		audioConsumeMode, streamStartLocation, startOffsetMs, audioConsumeMaxMs)
-
-	var generalInteractionSettings *api.GeneralInteractionSettings = nil
+	textToProcess := "i lost my luggage"
 
 	// Create interaction.
-	cpaInteraction, err := sessionObject.NewCpa(cpaSettings, audioConsumeSettings,
-		vadSettings, generalInteractionSettings)
+	var generalInteractionSettings *api.GeneralInteractionSettings = &api.GeneralInteractionSettings{
+		SecureContext:         nil,
+		CustomInteractionData: nil,
+		LoggingTag:            nil,
+	}
+	neuronInteraction, err := sessionObject.NewNeuron(language, textToProcess,
+		generalInteractionSettings)
 	if err != nil {
 		logger.Error("failed to create interaction",
 			"error", err)
@@ -148,7 +105,7 @@ func main() {
 		return
 	}
 
-	interactionId := cpaInteraction.InteractionId
+	interactionId := neuronInteraction.InteractionId
 	logger.Info("received interactionId",
 		"interactionId", interactionId)
 
@@ -157,7 +114,7 @@ func main() {
 	///////////////////////
 
 	// Wait for the final results to arrive.
-	finalResults, err := cpaInteraction.GetFinalResults(30 * time.Second)
+	finalResults, err := neuronInteraction.GetFinalResults(10 * time.Second)
 	if err != nil {
 		logger.Error("waiting for final results",
 			"error", err)

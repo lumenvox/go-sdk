@@ -31,6 +31,10 @@ type AsrInteractionObject struct {
 	vadBargeInTimeoutReceived bool
 	vadBargeInTimeoutChannel  chan struct{}
 
+	// VAD barge-out timeout tracking
+	vadBargeOutTimeoutReceived bool
+	vadBargeOutTimeoutChannel  chan struct{}
+
 	// Partial result tracking
 	partialResultLock      sync.Mutex
 	partialResultsReceived int
@@ -162,17 +166,21 @@ func (asrInteraction *AsrInteractionObject) WaitForBeginProcessing(timeout time.
 
 // WaitForBargeIn blocks until the API sends a VAD_BARGE_IN message. If the
 // message has already arrived, this function returns immediately. Otherwise,
-// if the message does not return before the timeout, an error will be
-// returned.
+// if the message does not return before the timeout, or a barge-in timeout is
+// received, an error will be returned.
 func (asrInteraction *AsrInteractionObject) WaitForBargeIn(timeout time.Duration) error {
 
 	if asrInteraction.vadBargeInReceived != -1 {
 		return nil
+	} else if asrInteraction.vadBargeInTimeoutReceived {
+		return errors.New("barge-in timeout received")
 	}
 
 	select {
 	case <-asrInteraction.vadBargeInChannel:
 		return nil
+	case <-asrInteraction.vadBargeInTimeoutChannel:
+		return errors.New("barge-in timeout received")
 	case <-time.After(timeout):
 		return TimeoutError
 	}
@@ -180,16 +188,21 @@ func (asrInteraction *AsrInteractionObject) WaitForBargeIn(timeout time.Duration
 
 // WaitForEndOfSpeech blocks until the API sends a VAD_END_OF_SPEECH message. If
 // the message has already arrived, this function returns immediately. Otherwise,
-// if the message does not return before the timeout, an error will be returned.
+// if the message does not return before the timeout, or an end-of-speech timeout
+// arrives, an error will be returned.
 func (asrInteraction *AsrInteractionObject) WaitForEndOfSpeech(timeout time.Duration) error {
 
 	if asrInteraction.vadBargeOutReceived != -1 {
 		return nil
+	} else if asrInteraction.vadBargeOutTimeoutReceived {
+		return errors.New("barge-out timeout received")
 	}
 
 	select {
 	case <-asrInteraction.vadBargeOutChannel:
 		return nil
+	case <-asrInteraction.vadBargeOutTimeoutChannel:
+		return errors.New("barge-out timeout received")
 	case <-time.After(timeout):
 		return TimeoutError
 	}
@@ -198,17 +211,21 @@ func (asrInteraction *AsrInteractionObject) WaitForEndOfSpeech(timeout time.Dura
 // WaitForBargeInTimeout blocks until the API sends a VAD_BARGE_IN_TIMEOUT
 // message. If the message has already arrived, this function returns
 // immediately. Otherwise, if the message does not return before the timeout,
-// an error will be returned.
+// or a barge-in arrives, an error will be returned.
 func (asrInteraction *AsrInteractionObject) WaitForBargeInTimeout(timeout time.Duration) error {
 
 	if asrInteraction.vadBargeInTimeoutReceived {
 		return nil
+	} else if asrInteraction.vadBargeInReceived != -1 {
+		return errors.New("barge-in received")
 	}
 
 	// vadBargeInTimeoutChannel is closed when a barge-in timeout arrives
 	select {
 	case <-asrInteraction.vadBargeInTimeoutChannel:
 		return nil
+	case <-asrInteraction.vadBargeInChannel:
+		return errors.New("barge-in received")
 	case <-time.After(timeout):
 		return TimeoutError
 	}
@@ -221,6 +238,9 @@ func (asrInteraction *AsrInteractionObject) WaitForBargeInTimeout(timeout time.D
 // If nothing arrives before the timeout, an error will be returned. Note that
 // interaction failures (like a barge-in timeout) do not trigger errors from
 // this function, so long as the notification arrives before the timeout.
+//
+// This function is not affected by barge-out timeouts because results will
+// still be returned in that case.
 func (asrInteraction *AsrInteractionObject) WaitForFinalResults(timeout time.Duration) error {
 
 	select {
@@ -247,6 +267,9 @@ func (asrInteraction *AsrInteractionObject) WaitForFinalResults(timeout time.Dur
 //
 // If a result-like response does not arrive before the timeout, an error will
 // be returned.
+//
+// This function is not affected by barge-out timeouts because results will
+// still be returned in that case.
 func (asrInteraction *AsrInteractionObject) WaitForNextResult(timeout time.Duration) (resultIdx int, final bool, err error) {
 
 	// before doing anything else, get the index of the next partial result. this
@@ -308,6 +331,9 @@ func (asrInteraction *AsrInteractionObject) GetPartialResult(resultIdx int) (*ap
 //
 // If the interaction does not end before the specified timeout, an error will
 // be returned.
+//
+// This function is not affected by barge-out timeouts because results will
+// still be returned in that case.
 func (asrInteraction *AsrInteractionObject) GetFinalResults(timeout time.Duration) (result *api.AsrInteractionResult, err error) {
 
 	// Wait for the end of the interaction.

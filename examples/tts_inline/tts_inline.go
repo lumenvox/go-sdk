@@ -2,6 +2,7 @@ package main
 
 import (
 	lumenvoxSdk "github.com/lumenvox/go-sdk"
+	"github.com/lumenvox/go-sdk/auth"
 	"github.com/lumenvox/go-sdk/config"
 	"github.com/lumenvox/go-sdk/logging"
 	"github.com/lumenvox/go-sdk/session"
@@ -47,8 +48,21 @@ func main() {
 		os.Exit(1)
 	}
 
+	authSettings := &auth.AuthSettings{
+		ClientId:    cfg.ClientId,
+		SecretHash:  cfg.SecretHash,
+		AuthHeaders: cfg.GetAuthHeaders(),
+		Username:    cfg.Username,
+		Password:    cfg.Password,
+		AuthUrl:     cfg.AuthUrl,
+	}
+
+	if cfg.AuthUrl == "" || cfg.Username == "" || cfg.Password == "" || cfg.ClientId == "" || cfg.SecretHash == "" {
+		authSettings = nil
+	}
+
 	// Create the client
-	client := lumenvoxSdk.CreateClient(conn, cfg.DeploymentId, nil)
+	client := lumenvoxSdk.CreateClient(conn, cfg.DeploymentId, authSettings)
 
 	logger.Info("successfully created connection to LumenVox API!")
 
@@ -57,8 +71,10 @@ func main() {
 	///////////////////////
 
 	// Set audio configuration for session. We're not sending any audio to the API,
-	// so it's fine to leave it empty.
-	audioConfig := session.AudioConfig{}
+	// so the format should be set to NO_AUDIO_RESOURCE.
+	audioConfig := session.AudioConfig{
+		Format: api.AudioFormat_STANDARD_AUDIO_FORMAT_NO_AUDIO_RESOURCE,
+	}
 
 	// Create a new session.
 	streamTimeout := 5 * time.Minute

@@ -82,52 +82,33 @@ func main() {
 	}
 
 	///////////////////////
-	// Create normalization interaction
+	// Create session grammar load request
 	///////////////////////
 
 	language := "en-US"
+	grammarUri := "http://assets.lumenvox.com/grammar/en/en_digits.grxml"
+	grammarLabel := "digits-grammar"
 
-	// Configure normalization settings.
-	enableInverseText := false
-	enableCapitalization := true
-	enableRedaction := false
-	enableSrtGeneration := false
-	enableVttGeneration := false
-	var requestTimeoutMs *api.OptionalInt32 = nil
-	normalizationSettings := client.GetNormalizationSettings(enableInverseText, enableCapitalization,
-		enableRedaction, enableSrtGeneration, enableVttGeneration, requestTimeoutMs)
+	// Configure settings
+	var grammarSettings *api.GrammarSettings = nil
 
-	textToNormalize := "recorded books presents an unabridged recording of the great gatsby by f scott" +
-		" fitzgerald narrated by frank muller chapter one in my younger and more vulnerable years my father" +
-		" gave me some advice that i've been turning over in my mind ever since whenever you feel like criticizing" +
-		" anyone he told me just remember that all the people in this world haven't had the advantages that you've" +
-		" had he didn't say any more but we've always been unusually communicative and a reserved way and i" +
-		" understood that he meant a great deal more than that in consequence i am inclined to reserve all judgments" +
-		" the habit that has opened up many curious natures to me and also made me the victim of not a few veteran" +
-		" wars the abnormal mind is quick to detect and detach itself to this quality when it appears in a normal person"
-
-	// Create interaction.
-	var generalInteractionSettings *api.GeneralInteractionSettings = nil
-	normalizationInteraction, err := sessionObject.NewNormalization(language, textToNormalize,
-		normalizationSettings, generalInteractionSettings)
+	// Create request.
+	sessionGrammarLoadRequest, err := sessionObject.NewUriLoadSessionGrammar(language, grammarLabel, grammarUri,
+		grammarSettings)
 	if err != nil {
-		logger.Error("failed to create interaction",
+		logger.Error("failed to create request",
 			"error", err)
 		sessionObject.CloseSession()
 		time.Sleep(500 * time.Millisecond) // Delay a little to get any residual messages
 		return
 	}
 
-	interactionId := normalizationInteraction.InteractionId
-	logger.Info("received interactionId",
-		"interactionId", interactionId)
-
 	///////////////////////
 	// Get results
 	///////////////////////
 
-	// Wait for the final results to arrive.
-	finalResults, err := normalizationInteraction.GetFinalResults(10 * time.Second)
+	// Wait for the final results to become available.
+	finalResults, err := sessionGrammarLoadRequest.GetFinalResults(10 * time.Second)
 	if err != nil {
 		logger.Error("waiting for final results",
 			"error", err)

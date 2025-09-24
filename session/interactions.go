@@ -3,6 +3,7 @@ package session
 import (
 	"github.com/lumenvox/protos-go/lumenvox/api"
 
+	"errors"
 	"fmt"
 	"github.com/google/uuid"
 	"time"
@@ -16,6 +17,7 @@ type vadInteractionRecord struct {
 	beginProcessingReceived bool
 	bargeInTimeoutReceived  bool
 	bargeInReceived         int
+	bargeOutTimeoutReceived bool
 	bargeOutReceived        int
 }
 
@@ -81,19 +83,44 @@ func (session *SessionObject) PullTtsAudio(interactionId string, audioChannel in
 	return audioData, nil
 }
 
+func (session *SessionObject) BeginProcessingInteraction(interactionId string) (err error) {
+
+	// validate the request
+	if interactionId == "" {
+		return errors.New("empty interaction id")
+	}
+
+	// assuming the request is valid, send the begin-processing request
+	session.streamSendLock.Lock()
+	err = session.SessionStream.Send(getInteractionBeginProcessingRequest("", interactionId))
+	session.streamSendLock.Unlock()
+	if err != nil {
+		session.errorChan <- fmt.Errorf("sending InteractionFinalizeProcessingRequest error: %v", err)
+		logger := getLogger()
+		logger.Error("sending finalize processing request",
+			"error", err.Error())
+		return err
+	}
+
+	return nil
+}
+
 // FinalizeInteraction attempts to finalize an existing interaction. This is not limited to a
 // single interaction type.
 func (session *SessionObject) FinalizeInteraction(interactionId string) (err error) {
 
-	logger := getLogger()
+	// validate the request
+	if interactionId == "" {
+		return errors.New("empty interaction id")
+	}
 
-	// Send finalize request using the provided interactionId, adding specified parameters
-
+	// Send finalize request using the provided interactionId
 	session.streamSendLock.Lock()
 	err = session.SessionStream.Send(getInteractionFinalizeRequest("", interactionId))
 	session.streamSendLock.Unlock()
 	if err != nil {
 		session.errorChan <- fmt.Errorf("sending InteractionFinalizeProcessingRequest error: %v", err)
+		logger := getLogger()
 		logger.Error("sending finalize processing request",
 			"error", err.Error())
 		return err

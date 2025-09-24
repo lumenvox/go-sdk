@@ -5,11 +5,12 @@ import (
 
 	"errors"
 	"fmt"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"io"
 	"strings"
 	"time"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // sessionResponseListener handles all responses from the specified session.
@@ -717,6 +718,78 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			// send the interaction object over the channel
 			createNormalizationHelper.interactionCreateChannel <- newInteractionObject
 
+		} else if response.GetInteractionCreateNeuron() != nil {
+
+			if EnableVerboseLogging {
+				logger.Debug("recv interaction create response",
+					"type", "InteractionCreateNeuronResponse",
+					"response", response)
+			}
+
+			// validate the correlation ID
+			if response.CorrelationId == nil {
+				logger.Warn("error routing interaction create",
+					"error", "missing correlationId",
+					"response", response)
+				continue
+			} else if response.CorrelationId.Value == "" {
+				logger.Warn("error routing interaction create",
+					"error", "empty correlationId",
+					"response", response)
+				continue
+			}
+			correlationId := response.CorrelationId.Value
+
+			// look for the interaction create neuron helper in the map
+			session.interactionCreateNeuronMapLock.Lock()
+			createNeuronHelper, ok := session.interactionCreateNeuronMap[correlationId]
+			// each helper should only be used once, and we already have the helper,
+			// so delete the map entry before unlocking.
+			delete(session.interactionCreateNeuronMap, correlationId)
+			session.interactionCreateNeuronMapLock.Unlock()
+
+			// catch missing map entry
+			if ok == false {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create helper does not exist",
+					"response", response)
+				continue
+			}
+
+			// catch nil helper
+			if createNeuronHelper == nil {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create channel is nil",
+					"response", response)
+				continue
+			}
+
+			// catch timeout
+			if time.Now().After(createNeuronHelper.deadline) {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create timed out",
+					"response", response)
+				continue
+			}
+
+			// if we got this far, the response should be OK. create the interaction object
+			interactionId := response.GetInteractionCreateNeuron().InteractionId
+			newInteractionObject := &NeuronInteractionObject{
+				InteractionId:        interactionId,
+				finalResultsReceived: false,
+				finalResults:         nil,
+				FinalResultStatus:    api.FinalResultStatus_FINAL_RESULT_STATUS_UNSPECIFIED,
+				resultsReadyChannel:  make(chan struct{}),
+			}
+
+			// add the new interaction object to the map
+			session.Lock() // Protect concurrent map access
+			session.neuronInteractionsMap[interactionId] = newInteractionObject
+			session.Unlock()
+
+			// send the interaction object over the channel
+			createNeuronHelper.interactionCreateChannel <- newInteractionObject
+
 		} else if response.GetInteractionCreateTranscription() != nil {
 
 			if EnableVerboseLogging {
@@ -787,6 +860,7 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			newInteractionObject.vadBargeInChannels = append(newInteractionObject.vadBargeInChannels, make(chan struct{}))
 			newInteractionObject.vadBargeOutChannels = append(newInteractionObject.vadBargeOutChannels, make(chan struct{}))
 			newInteractionObject.vadBargeInTimeoutChannels = append(newInteractionObject.vadBargeInTimeoutChannels, make(chan struct{}))
+			newInteractionObject.vadBargeOutTimeoutChannels = append(newInteractionObject.vadBargeOutTimeoutChannels, make(chan struct{}))
 			newInteractionObject.vadRecordLog = append(newInteractionObject.vadRecordLog, createEmptyVadInteractionRecord())
 
 			// add the new interaction object to the map
@@ -886,7 +960,50 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 					"response", response)
 			}
 
-			session.sessionLoadChannel <- response.GetSessionGrammar()
+			// validate the correlation ID
+			if response.CorrelationId == nil {
+				logger.Warn("error routing session grammar",
+					"error", "missing correlationId",
+					"response", response)
+				continue
+			} else if response.CorrelationId.Value == "" {
+				logger.Warn("error routing session grammar",
+					"error", "empty correlationId",
+					"response", response)
+				continue
+			}
+			correlationId := response.CorrelationId.Value
+
+			// look for the request object in the map
+			session.loadSessionGrammarMapLock.Lock()
+			requestObject, ok := session.loadSessionGrammarMap[correlationId]
+			// there should only be one response per request, so delete the map
+			// entry before unlocking.
+			delete(session.loadSessionGrammarMap, correlationId)
+			session.loadSessionGrammarMapLock.Unlock()
+
+			// catch missing map entry
+			if ok == false {
+				logger.Warn("error routing session grammar",
+					"error", "request object does not exist",
+					"response", response)
+				continue
+			}
+
+			// catch nil object
+			if requestObject == nil {
+				logger.Warn("error routing session grammar",
+					"error", "request object is nil",
+					"response", response)
+				continue
+			}
+
+			// if we got this far, the response should be OK. update the request object
+			requestObject.loadComplete = true
+			result := response.GetSessionGrammar()
+			requestObject.finalResults = result
+			requestObject.FinalStatus = result.Status
+			close(requestObject.resultsReadyChannel)
 
 		} else if response.GetSessionGetSettings() != nil {
 
@@ -967,6 +1084,12 @@ func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
 		case api.VadEvent_VAD_EVENT_TYPE_BARGE_IN_TIMEOUT:
 			interactionObject.vadBargeInTimeoutReceived = true
 			close(interactionObject.vadBargeInTimeoutChannel)
+		case api.VadEvent_VAD_EVENT_TYPE_END_OF_SPEECH_TIMEOUT:
+			interactionObject.vadBargeOutTimeoutReceived = true
+			close(interactionObject.vadBargeOutTimeoutChannel)
+		default:
+			logger.Warn("unexpected VAD event",
+				"toState", response.GetVadEvent().VadEventType.String())
 		}
 
 	} else if interactionObject, ok := session.transcriptionInteractionsMap[interactionId]; ok {
@@ -1000,6 +1123,7 @@ func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
 				interactionObject.vadBargeInChannels = append(interactionObject.vadBargeInChannels, make(chan struct{}))
 				interactionObject.vadBargeOutChannels = append(interactionObject.vadBargeOutChannels, make(chan struct{}))
 				interactionObject.vadBargeInTimeoutChannels = append(interactionObject.vadBargeInTimeoutChannels, make(chan struct{}))
+				interactionObject.vadBargeOutTimeoutChannels = append(interactionObject.vadBargeOutTimeoutChannels, make(chan struct{}))
 				interactionObject.vadRecordLog = append(interactionObject.vadRecordLog, createEmptyVadInteractionRecord())
 				// Now that the event has been recorded, signal the channel.
 				close(interactionObject.vadBeginProcessingChannels[currentVadInteractionIndex])
@@ -1086,6 +1210,21 @@ func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
 				// Update the local counter
 				currentVadInteractionIndex = interactionObject.vadInteractionCounter
 
+			case api.VadEvent_VAD_EVENT_TYPE_END_OF_SPEECH_TIMEOUT:
+				// we got an END_OF_SPEECH_TIMEOUT event. This is a valid transition, but it is also
+				// an error.
+
+				// Update the current state
+				interactionObject.vadCurrentState = api.VadEvent_VAD_EVENT_TYPE_END_OF_SPEECH_TIMEOUT
+				// Update the VAD event log
+				interactionObject.vadRecordLog[currentVadInteractionIndex].bargeInTimeoutReceived = true
+				// Increment the vad interaction counter
+				interactionObject.vadInteractionCounter++
+				// Now that the event has been recorded, signal the channel
+				close(interactionObject.vadBargeOutTimeoutChannels[currentVadInteractionIndex])
+				// Update the local counter
+				currentVadInteractionIndex = interactionObject.vadInteractionCounter
+
 			// TODO: support more VAD cases here
 			default:
 				// We received something that doesn't make sense after a BARGE_IN. In other
@@ -1152,6 +1291,40 @@ func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
 			default:
 				// We received something that doesn't make sense after a BARGE_IN_TIMEOUT. In
 				// other words, an invalid transition. Log a warning.
+				logger.Warn("ignoring invalid VAD state transition",
+					"fromState", currentVadInteractionState.String(),
+					"toState", response.GetVadEvent().VadEventType.String())
+			}
+
+		case api.VadEvent_VAD_EVENT_TYPE_END_OF_SPEECH_TIMEOUT:
+			// We previously received an END_OF_SPEECH_TIMEOUT event. Based on the type of the
+			// new event, update the interaction.
+			//
+			// Note that interactions are not expected to proceed past an end-of-speech timeout,
+			// so this code will likely be unused.
+			switch response.GetVadEvent().VadEventType {
+
+			case api.VadEvent_VAD_EVENT_TYPE_BEGIN_PROCESSING:
+				// we got a BEGIN_PROCESSING event. This is a valid transition for
+				// continuous interactions.
+
+				// Update the current state
+				interactionObject.vadCurrentState = api.VadEvent_VAD_EVENT_TYPE_BEGIN_PROCESSING
+				// Update the VAD event log
+				interactionObject.vadRecordLog[currentVadInteractionIndex].beginProcessingReceived = true
+				// To provide for functionality like "WaitForNextBeginProcessing", create
+				// the next set of VAD event channels.
+				interactionObject.vadBeginProcessingChannels = append(interactionObject.vadBeginProcessingChannels, make(chan struct{}))
+				interactionObject.vadBargeInChannels = append(interactionObject.vadBargeInChannels, make(chan struct{}))
+				interactionObject.vadBargeOutChannels = append(interactionObject.vadBargeOutChannels, make(chan struct{}))
+				interactionObject.vadBargeInTimeoutChannels = append(interactionObject.vadBargeInTimeoutChannels, make(chan struct{}))
+				interactionObject.vadRecordLog = append(interactionObject.vadRecordLog, createEmptyVadInteractionRecord())
+				// Now that the event has been recorded, signal the channel
+				close(interactionObject.vadBeginProcessingChannels[currentVadInteractionIndex])
+
+			default:
+				// We received something that doesn't make sense after an END_OF_SPEECH_TIMEOUT.
+				// In other words, an invalid transition. Log a warning.
 				logger.Warn("ignoring invalid VAD state transition",
 					"fromState", currentVadInteractionState.String(),
 					"toState", response.GetVadEvent().VadEventType.String())
@@ -1281,6 +1454,16 @@ func handleFinalResult(session *SessionObject, response *api.SessionResponse) {
 			interactionObject.finalResultsReceived = true
 			close(interactionObject.resultsReadyChannel)
 			delete(session.normalizationInteractionsMap, interactionId)
+
+		} else if interactionObject, interactionFound := session.neuronInteractionsMap[interactionId]; interactionFound {
+
+			// This is a neuron interaction.
+			interactionObject.finalResults = finalResult.GetFinalResult().GetNeuronInteractionResult()
+			interactionObject.FinalStatus = finalResult.Status
+			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
+			interactionObject.finalResultsReceived = true
+			close(interactionObject.resultsReadyChannel)
+			delete(session.neuronInteractionsMap, interactionId)
 
 		} else if interactionObject, interactionFound := session.ttsInteractionsMap[interactionId]; interactionFound {
 

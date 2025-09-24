@@ -52,11 +52,10 @@ func main() {
 	// Session creation
 	///////////////////////
 
-	// Set audio configuration for session.
+	// Set the audio configuration for the session. There is no audio processing in
+	// this example, so the format should be set to NO_AUDIO_RESOURCE.
 	audioConfig := session.AudioConfig{
-		Format:     api.AudioFormat_STANDARD_AUDIO_FORMAT_NO_AUDIO_RESOURCE,
-		SampleRate: 0,
-		IsBatch:    false,
+		Format: api.AudioFormat_STANDARD_AUDIO_FORMAT_NO_AUDIO_RESOURCE,
 	}
 
 	// Create a new session. Note: we have specified NO_AUDIO_RESOURCE because

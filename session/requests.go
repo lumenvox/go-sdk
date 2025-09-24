@@ -232,6 +232,112 @@ func getNormalizationRequest(
 	return normalizationRequest
 }
 
+// getNeuronRequest returns a Neuron interaction request. The specified
+// correlationId will be used if nonempty. Otherwise, one will be auto-generated.
+func getNeuronRequest(
+	correlationId string,
+	language string,
+	textToProcess string,
+	generalInteractionSettings *api.GeneralInteractionSettings,
+) (neuronRequest *api.SessionRequest) {
+
+	if correlationId == "" {
+		// Create a new correlationId if one is not specified
+		correlationId = uuid.NewString()
+	}
+
+	neuronRequest = &api.SessionRequest{
+		CorrelationId: &api.OptionalString{Value: correlationId},
+		RequestType: &api.SessionRequest_InteractionRequest{
+			InteractionRequest: &api.InteractionRequestMessage{
+				InteractionRequest: &api.InteractionRequestMessage_InteractionCreateNeuron{
+					InteractionCreateNeuron: &api.InteractionCreateNeuronRequest{
+						Language:                   language,
+						Transcript:                 textToProcess,
+						GeneralInteractionSettings: generalInteractionSettings,
+					},
+				},
+			},
+		},
+	}
+
+	return neuronRequest
+}
+
+// getInlineLoadSessionGrammarRequest returns a load session grammar request for
+// an inline grammar. The specified correlationId will be used if nonempty. Otherwise, one
+// will be auto-generated.
+func getInlineLoadSessionGrammarRequest(
+	correlationId string,
+	language string,
+	grammarLabel string,
+	grammarText string,
+	grammarSettings *api.GrammarSettings,
+) (loadSessionGrammarRequest *api.SessionRequest) {
+
+	if correlationId == "" {
+		// Create a new correlationId if one is not specified
+		correlationId = uuid.NewString()
+	}
+
+	loadSessionGrammarRequest = &api.SessionRequest{
+		CorrelationId: &api.OptionalString{Value: correlationId},
+		RequestType: &api.SessionRequest_SessionRequest{
+			SessionRequest: &api.SessionRequestMessage{
+				Name: &api.SessionRequestMessage_SessionLoadGrammar{
+					SessionLoadGrammar: &api.SessionLoadGrammarRequest{
+						Language:        language,
+						GrammarLabel:    grammarLabel,
+						GrammarSettings: grammarSettings,
+						SessionGrammarReference: &api.SessionLoadGrammarRequest_InlineGrammarText{
+							InlineGrammarText: grammarText,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	return loadSessionGrammarRequest
+}
+
+// getUriLoadSessionGrammarRequest returns a load session grammar request for
+// a URI-based grammar. The specified correlationId will be used if nonempty. Otherwise,
+// one will be auto-generated.
+func getUriLoadSessionGrammarRequest(
+	correlationId string,
+	language string,
+	grammarLabel string,
+	grammarUri string,
+	grammarSettings *api.GrammarSettings,
+) (loadSessionGrammarRequest *api.SessionRequest) {
+
+	if correlationId == "" {
+		// Create a new correlationId if one is not specified
+		correlationId = uuid.NewString()
+	}
+
+	loadSessionGrammarRequest = &api.SessionRequest{
+		CorrelationId: &api.OptionalString{Value: correlationId},
+		RequestType: &api.SessionRequest_SessionRequest{
+			SessionRequest: &api.SessionRequestMessage{
+				Name: &api.SessionRequestMessage_SessionLoadGrammar{
+					SessionLoadGrammar: &api.SessionLoadGrammarRequest{
+						Language:        language,
+						GrammarLabel:    grammarLabel,
+						GrammarSettings: grammarSettings,
+						SessionGrammarReference: &api.SessionLoadGrammarRequest_GrammarUrl{
+							GrammarUrl: grammarUri,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	return loadSessionGrammarRequest
+}
+
 // getAmdRequest returns an AMD interaction request. The specified
 // correlationId will be used if nonempty. Otherwise, one will be
 // auto-generated.
@@ -524,6 +630,30 @@ func getAudioPushRequest(correlationId string, audioChunk []byte) (audioPushRequ
 	}
 
 	return audioPushRequest
+}
+
+// getInteractionBeginProcessingRequest returns an interaction begin processing request.
+func getInteractionBeginProcessingRequest(correlationId, interactionId string) (
+	beginProcessingRequest *api.SessionRequest) {
+
+	if correlationId == "" {
+		// Create a new correlationId if one is not specified
+		correlationId = uuid.NewString()
+	}
+
+	beginProcessingRequest = &api.SessionRequest{
+		RequestType: &api.SessionRequest_InteractionRequest{
+			InteractionRequest: &api.InteractionRequestMessage{
+				InteractionRequest: &api.InteractionRequestMessage_InteractionBeginProcessing{
+					InteractionBeginProcessing: &api.InteractionBeginProcessingRequest{
+						InteractionId: interactionId,
+					},
+				},
+			},
+		},
+	}
+
+	return beginProcessingRequest
 }
 
 // getInteractionFinalizeRequest returns an interaction finalize request.
