@@ -59,7 +59,7 @@ func (session *SessionObject) prepareInteractionCreateNeuron(correlationId strin
 // NewNeuron attempts to create a new neuron interaction.
 // If successful, a new interaction object will be returned.
 func (session *SessionObject) NewNeuron(language string,
-	textToProcess string,
+	textToProcess string, modelName string,
 	generalInteractionSettings *api.GeneralInteractionSettings) (interactionObject *NeuronInteractionObject, err error) {
 
 	logger := getLogger()
@@ -78,7 +78,7 @@ func (session *SessionObject) NewNeuron(language string,
 
 	// send the interaction create request
 	session.streamSendLock.Lock()
-	err = session.SessionStream.Send(getNeuronRequest(correlationId, language, textToProcess,
+	err = session.SessionStream.Send(getNeuronRequest(correlationId, language, textToProcess, modelName,
 		generalInteractionSettings))
 	session.streamSendLock.Unlock()
 	if err != nil {

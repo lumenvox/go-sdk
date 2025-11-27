@@ -260,17 +260,19 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			// if we got this far, the response should be OK. create the interaction object
 			interactionId := response.GetInteractionCreateAsr().InteractionId
 			newInteractionObject := &AsrInteractionObject{
-				InteractionId:             interactionId,
-				vadBeginProcessingChannel: make(chan struct{}, 1),
-				vadBargeInChannel:         make(chan int, 1),
-				vadBargeInReceived:        -1,
-				vadBargeOutChannel:        make(chan int, 1),
-				vadBargeOutReceived:       -1,
-				vadBargeInTimeoutChannel:  make(chan struct{}),
-				vadBargeInTimeoutReceived: false,
-				finalResultsReceived:      false,
-				finalResults:              nil,
-				resultsReadyChannel:       make(chan struct{}),
+				InteractionId:              interactionId,
+				vadBeginProcessingChannel:  make(chan struct{}, 1),
+				vadBargeInChannel:          make(chan int, 1),
+				vadBargeInReceived:         -1,
+				vadBargeOutChannel:         make(chan int, 1),
+				vadBargeOutReceived:        -1,
+				vadBargeInTimeoutChannel:   make(chan struct{}),
+				vadBargeInTimeoutReceived:  false,
+				vadBargeOutTimeoutChannel:  make(chan struct{}),
+				vadBargeOutTimeoutReceived: false,
+				finalResultsReceived:       false,
+				finalResults:               nil,
+				resultsReadyChannel:        make(chan struct{}),
 			}
 			newInteractionObject.partialResultsChannels = append(newInteractionObject.partialResultsChannels, make(chan struct{}))
 
@@ -790,6 +792,78 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			// send the interaction object over the channel
 			createNeuronHelper.interactionCreateChannel <- newInteractionObject
 
+		} else if response.GetInteractionCreateSentiment() != nil {
+
+			if EnableVerboseLogging {
+				logger.Debug("recv interaction create response",
+					"type", "InteractionCreateSentimentResponse",
+					"response", response)
+			}
+
+			// validate the correlation ID
+			if response.CorrelationId == nil {
+				logger.Warn("error routing interaction create",
+					"error", "missing correlationId",
+					"response", response)
+				continue
+			} else if response.CorrelationId.Value == "" {
+				logger.Warn("error routing interaction create",
+					"error", "empty correlationId",
+					"response", response)
+				continue
+			}
+			correlationId := response.CorrelationId.Value
+
+			// look for the interaction create sentiment helper in the map
+			session.interactionCreateSentimentMapLock.Lock()
+			createSentimentHelper, ok := session.interactionCreateSentimentMap[correlationId]
+			// each helper should only be used once, and we already have the helper,
+			// so delete the map entry before unlocking.
+			delete(session.interactionCreateSentimentMap, correlationId)
+			session.interactionCreateSentimentMapLock.Unlock()
+
+			// catch missing map entry
+			if ok == false {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create helper does not exist",
+					"response", response)
+				continue
+			}
+
+			// catch nil helper
+			if createSentimentHelper == nil {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create channel is nil",
+					"response", response)
+				continue
+			}
+
+			// catch timeout
+			if time.Now().After(createSentimentHelper.deadline) {
+				logger.Warn("error routing interaction create",
+					"error", "interaction create timed out",
+					"response", response)
+				continue
+			}
+
+			// if we got this far, the response should be OK. create the interaction object
+			interactionId := response.GetInteractionCreateSentiment().InteractionId
+			newInteractionObject := &SentimentInteractionObject{
+				InteractionId:        interactionId,
+				finalResultsReceived: false,
+				finalResults:         nil,
+				FinalResultStatus:    api.FinalResultStatus_FINAL_RESULT_STATUS_UNSPECIFIED,
+				resultsReadyChannel:  make(chan struct{}),
+			}
+
+			// add the new interaction object to the map
+			session.Lock() // Protect concurrent map access
+			session.sentimentInteractionsMap[interactionId] = newInteractionObject
+			session.Unlock()
+
+			// send the interaction object over the channel
+			createSentimentHelper.interactionCreateChannel <- newInteractionObject
+
 		} else if response.GetInteractionCreateTranscription() != nil {
 
 			if EnableVerboseLogging {
@@ -1030,8 +1104,60 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 
 				if EnableVerboseLogging {
 					logger.Debug("Recv session event",
-						"response", response.GetSessionEvent())
+						"response", response)
 				}
+
+				// Check if this SessionEvent is a finalize response by looking for the correlationId in our map
+				if response.CorrelationId != nil && response.CorrelationId.Value != "" {
+					correlationId := response.CorrelationId.Value
+
+					// look for the finalize helper in the map
+					session.interactionFinalizeMapLock.Lock()
+					finalizeHelper, ok := session.interactionFinalizeMap[correlationId]
+					if ok {
+						// each helper should only be used once, so delete the map entry before unlocking
+						delete(session.interactionFinalizeMap, correlationId)
+					}
+					session.interactionFinalizeMapLock.Unlock()
+
+					if ok {
+						// This is a finalize interaction response
+						if EnableVerboseLogging {
+							logger.Debug("Recv finalize interaction response",
+								"response", response)
+						}
+
+						// catch nil helper
+						if finalizeHelper == nil {
+							logger.Warn("error routing finalize interaction response",
+								"error", "finalize helper is nil",
+								"response", response)
+							continue
+						}
+
+						// catch timeout
+						if time.Now().After(finalizeHelper.deadline) {
+							logger.Warn("error routing finalize interaction response",
+								"error", "finalize interaction timed out",
+								"response", response)
+							continue
+						}
+
+						// determine success or failure based on status code
+						var responseErr error
+						if response.GetSessionEvent().StatusMessage != nil && response.GetSessionEvent().StatusMessage.Code != 0 {
+							responseErr = fmt.Errorf("finalize interaction failed: %s (code: %d)",
+								response.GetSessionEvent().StatusMessage.Message,
+								response.GetSessionEvent().StatusMessage.Code)
+						}
+
+						// send the response (nil for success, error for failure)
+						finalizeHelper.responseChannel <- responseErr
+						continue // handled, don't process as other event types
+					}
+				}
+
+				// Handle other SessionEvent types (grammar errors, etc.)
 				if response.GetSessionEvent().StatusMessage != nil {
 					if strings.Contains(response.GetSessionEvent().StatusMessage.Message, "grammar failed to load") {
 						logger.Error("Recv grammar error",
@@ -1388,7 +1514,22 @@ func handleFinalResult(session *SessionObject, response *api.SessionResponse) {
 		if interactionObject, interactionFound := session.asrInteractionsMap[interactionId]; interactionFound {
 
 			// This is an ASR interaction.
-			interactionObject.finalResults = finalResult.GetFinalResult().GetAsrInteractionResult()
+			// We support grammar-based alternatives for multiple interaction types, so we need to figure
+			// out which was active here.
+			if finalResult.GetFinalResult().GetCpaInteractionResult() != nil {
+				newAsrInteractionResult := &api.AsrInteractionResult{
+					NBests: []*api.AsrGrammarResult{finalResult.GetFinalResult().GetCpaInteractionResult().CpaResult},
+				}
+				interactionObject.finalResults = newAsrInteractionResult
+			} else if finalResult.GetFinalResult().GetAmdInteractionResult() != nil {
+				newAsrInteractionResult := &api.AsrInteractionResult{
+					NBests: []*api.AsrGrammarResult{finalResult.GetFinalResult().GetAmdInteractionResult().AmdResult},
+				}
+				interactionObject.finalResults = newAsrInteractionResult
+			} else {
+				// If we didn't detect CPA or AMD interaction results, assume a plain ASR interaction.
+				interactionObject.finalResults = finalResult.GetFinalResult().GetAsrInteractionResult()
+			}
 			interactionObject.FinalStatus = finalResult.Status
 			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
 			interactionObject.finalResultsReceived = true
@@ -1464,6 +1605,16 @@ func handleFinalResult(session *SessionObject, response *api.SessionResponse) {
 			interactionObject.finalResultsReceived = true
 			close(interactionObject.resultsReadyChannel)
 			delete(session.neuronInteractionsMap, interactionId)
+
+		} else if interactionObject, interactionFound := session.sentimentInteractionsMap[interactionId]; interactionFound {
+
+			// This is a sentiment interaction.
+			interactionObject.finalResults = finalResult.GetFinalResult().GetSentimentInteractionResult()
+			interactionObject.FinalStatus = finalResult.Status
+			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
+			interactionObject.finalResultsReceived = true
+			close(interactionObject.resultsReadyChannel)
+			delete(session.sentimentInteractionsMap, interactionId)
 
 		} else if interactionObject, interactionFound := session.ttsInteractionsMap[interactionId]; interactionFound {
 

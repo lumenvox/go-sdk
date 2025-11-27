@@ -5,10 +5,11 @@ import (
 
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
-	"google.golang.org/genproto/googleapis/rpc/status"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
+	"google.golang.org/genproto/googleapis/rpc/status"
 )
 
 // TtsInteractionObject represents a TTS interaction.

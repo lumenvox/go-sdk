@@ -20,7 +20,7 @@ var transcriptionGrammar = `<?xml version='1.0'?>
              tag-format="semantics/1.0.2006">
 
         <meta name="TRANSCRIPTION_ENGINE" content="V2"/>
-        <lexicon uri="https://assets.lumenvox.com/lexicon/zero_lexicon.xml"/>       
+        <lexicon uri="https://assets.lumenvox.com/lexicon/zero_lexicon.xml"/>
         <rule id="root" scope="public">
             <item>
 

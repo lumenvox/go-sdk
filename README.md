@@ -40,7 +40,7 @@ session will include speech recognition (ASR or Transcription), the session will
 also include an audio stream.
 
 Sessions are implemented as gRPC streams, so each session is the child of a
-**client**. The client controls the gRPC connection to the LumenVox API. 
+**client**. The client controls the gRPC connection to the LumenVox API.
 
 ## Writing an Application
 
@@ -133,7 +133,7 @@ USERNAME = "testuser"
 Once you have defined these values, your code can then use them to acquire
 OAuth tokens automatically, when needed. There is a built-in caching mechanism
 to avoid making excessive calls to the OAuth service, and we encourage users
-to utilize this caching method (which is automatically enabled) 
+to utilize this caching method (which is automatically enabled)
 
 The `simple_oauth` example shows how these can be utilized, when needed. Also
 note that it is best practice to enable TLS when using OAuth tokens. This is
@@ -146,7 +146,7 @@ also written in a way in which users who wish to implement their own token
 authorization within their own managed systems, may be able to use much of
 the same code, however implementation of those methods is outside the scope
 of what is supported. There are many online references available that can
-offer better advise in how to implement your own authorization if needed. 
+offer better advise in how to implement your own authorization if needed.
 
 In general, automated token acquisition and checking can easily be added
 by simply adding the definition shown below (from the `simple_oauth`

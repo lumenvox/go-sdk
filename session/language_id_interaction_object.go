@@ -5,9 +5,10 @@ import (
 
 	"errors"
 	"fmt"
+	"time"
+
 	"github.com/google/uuid"
 	"google.golang.org/genproto/googleapis/rpc/status"
-	"time"
 )
 
 // LanguageIdInteractionObject represents a language id interaction.
@@ -58,6 +59,7 @@ func (session *SessionObject) prepareInteractionCreateLanguageId(correlationId s
 // NewLanguageId attempts to create a new language id interaction.
 // If successful, a new interaction object will be returned.
 func (session *SessionObject) NewLanguageId(
+	targetLanguages []string,
 	requestTimeoutMs *api.OptionalInt32,
 	generalInteractionSettings *api.GeneralInteractionSettings,
 	audioConsumeSettings *api.AudioConsumeSettings,
@@ -79,7 +81,7 @@ func (session *SessionObject) NewLanguageId(
 
 	// send the interaction create request
 	session.streamSendLock.Lock()
-	err = session.SessionStream.Send(getLanguageIdRequest(correlationId,
+	err = session.SessionStream.Send(getLanguageIdRequest(correlationId, targetLanguages,
 		requestTimeoutMs, generalInteractionSettings, audioConsumeSettings))
 	session.streamSendLock.Unlock()
 	if err != nil {

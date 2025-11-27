@@ -9,8 +9,8 @@ import (
 )
 
 var (
-	defaultBatchChunkSize       = 10000
-	defaultBatchChunkDelayMs    = 25
+	defaultBatchChunkSize       = 128000
+	defaultBatchChunkDelayMs    = 5
 	defaultStreamingChunkSizeMs = 20
 )
 
@@ -37,23 +37,20 @@ type AudioConfig struct {
 // will be streamed in the background by a separate goroutine.
 func (session *SessionObject) AddAudio(audioData []byte) error {
 
-	// Get the deadline for the parent session
-	sessionDeadline, ok := session.streamContext.Deadline()
-	if ok != true {
-		return errors.New("failed to retrieve session stream deadline")
-	}
-
-	// Set up a producer context with the same deadline as the session
-	producerCtx, producerCancel := context.WithDeadline(context.Background(), sessionDeadline)
-
 	// Check audio config: streaming or batch?
 	if session.audioConfig.IsBatch {
-		// if we're in batch mode, block until all audio is sent
+		// Since this is blocking, set up a per-call context with the same deadline as
+		// the session.
+		sessionDeadline, ok := session.streamContext.Deadline()
+		if ok == false {
+			return errors.New("failed to retrieve session stream deadline")
+		}
+		producerCtx, producerCancel := context.WithDeadline(context.Background(), sessionDeadline)
 		streamBatchAudio(session, producerCtx, audioData)
 		producerCancel()
 	} else {
-		// if we're in streaming mode, add the audio to the internal queue
-		err := streamStreamAudio(session, producerCtx, producerCancel, audioData)
+		// If we're in streaming mode, add the audio to the internal queue
+		err := streamStreamAudio(session, audioData)
 		if err != nil {
 			return err
 		}
@@ -169,35 +166,47 @@ func (session *SessionObject) handleInternalStream(producerCtx context.Context, 
 
 	logger := getLogger()
 
+	// Pre-allocate chunk buffer to avoid allocations in the hot path
+	chunkBuffer := make([]byte, chunkSizeBytes)
+
 audioStreamLoop:
 	for {
 		select {
 		case <-ticker.C:
 
-			// One more tick, check for any new data.
+			// Fast path: check atomic counter first to skip lock when empty
+			if session.audioBufferLen.Load() == 0 {
+				continue // skip to the next tick
+			}
+
+			// audioBufferLen suggests we have data; acquire the lock.
 			session.audioLock.Lock()
 			availableDataLen := len(session.audioForStream)
 			if availableDataLen == 0 {
 				session.audioLock.Unlock()
-				break
+				continue
 			}
 
-			// Determine how much data to get.
+			// Determine how much data to get
 			nextChunkSizeBytes := chunkSizeBytes
 			if availableDataLen < nextChunkSizeBytes {
 				nextChunkSizeBytes = availableDataLen
 			}
 
-			// Save the data and remove it from the buffer
-			nextChunkData := session.audioForStream[:nextChunkSizeBytes]
-			session.audioForStream = session.audioForStream[nextChunkSizeBytes:]
+			// Copy data to the pre-allocated buffer
+			copy(chunkBuffer[:nextChunkSizeBytes], session.audioForStream[:nextChunkSizeBytes])
+
+			// Shift remaining data to the front
+			remaining := copy(session.audioForStream, session.audioForStream[nextChunkSizeBytes:])
+			session.audioForStream = session.audioForStream[:remaining]
+			session.audioBufferLen.Store(int64(remaining))
 
 			// Now that we've done everything with the internal buffer, release the lock.
 			session.audioLock.Unlock()
 
 			// Send the chunk
 			session.streamSendLock.Lock()
-			err := session.SessionStream.Send(getAudioPushRequest("", nextChunkData))
+			err := session.SessionStream.Send(getAudioPushRequest("", chunkBuffer[:nextChunkSizeBytes]))
 			session.streamSendLock.Unlock()
 			if err != nil {
 				logger.Error("sending audio to API",
@@ -226,8 +235,7 @@ audioStreamLoop:
 // On the first call to this function, the goroutine is initialized. On later
 // calls, this function is only responsible for adding audio to the internal
 // session buffer as the internal streamer continues to stream.
-func streamStreamAudio(session *SessionObject, producerCtx context.Context, producerCancel context.CancelFunc,
-	audioData []byte) error {
+func streamStreamAudio(session *SessionObject, audioData []byte) error {
 
 	// Immediately return if there is no data to stream.
 	if len(audioData) == 0 {
@@ -257,10 +265,12 @@ func streamStreamAudio(session *SessionObject, producerCtx context.Context, prod
 		// Based on the milliseconds, format, and sample rate, get the chunk size in bytes
 		sampleRate := session.audioConfig.SampleRate
 		if sampleRate <= 0 {
+			session.audioStreamerLock.Unlock()
 			return errors.New("invalid sample rate (must be positive)")
 		}
 		format := session.audioConfig.Format
 		if format == api.AudioFormat_STANDARD_AUDIO_FORMAT_NO_AUDIO_RESOURCE {
+			session.audioStreamerLock.Unlock()
 			return errors.New("invalid format NO_AUDIO_RESOURCE")
 		}
 		samplesPerChunk := sampleRate * chunkSizeMs / 1000
@@ -272,8 +282,18 @@ func streamStreamAudio(session *SessionObject, producerCtx context.Context, prod
 		case api.AudioFormat_STANDARD_AUDIO_FORMAT_ULAW:
 		case api.AudioFormat_STANDARD_AUDIO_FORMAT_ALAW:
 		default:
+			session.audioStreamerLock.Unlock()
 			return errors.New("unsupported audio format")
 		}
+
+		// By creating the context here, we avoid creating a new context for every AddAudio call (which
+		// could be thousands of times per second)
+		sessionDeadline, ok := session.streamContext.Deadline()
+		if ok == false {
+			session.audioStreamerLock.Unlock()
+			return errors.New("failed to retrieve session stream deadline")
+		}
+		producerCtx, producerCancel := context.WithDeadline(context.Background(), sessionDeadline)
 
 		go session.handleInternalStream(producerCtx, chunkSizeMs, chunkSizeBytes)
 		session.audioStreamerInitialized = true
@@ -281,10 +301,18 @@ func streamStreamAudio(session *SessionObject, producerCtx context.Context, prod
 	}
 	session.audioStreamerLock.Unlock()
 
+	// If this is our first time adding to the internal streaming buffer and the provided
+	// data is less than 32KB (~4s of 8kHz ULAW), go ahead and pre-allocate 32KB of space
+	// to avoid extra allocations as the buffer grows.
+	if session.audioForStream == nil && len(audioData) < 32*1024 {
+		session.audioForStream = make([]byte, 0, 32*1024)
+	}
+
 	// Add audio to the session buffer. The internal streamer will read from this buffer,
 	// automatically handling chunking and delays.
 	session.audioLock.Lock()
 	session.audioForStream = append(session.audioForStream, audioData...)
+	session.audioBufferLen.Store(int64(len(session.audioForStream)))
 	session.audioLock.Unlock()
 
 	return nil
@@ -293,13 +321,14 @@ func streamStreamAudio(session *SessionObject, producerCtx context.Context, prod
 // AudioBufferSize returns the size of the internal audio buffer. This can be used to
 // monitor streaming operations.
 func (session *SessionObject) AudioBufferSize() int {
-	return len(session.audioForStream)
+	return int(session.audioBufferLen.Load())
 }
 
 // ClearAudioBuffer clears the internal audio queue, preventing any new
 // packets from being sent. This is only relevant for streaming operations.
 func (session *SessionObject) ClearAudioBuffer() {
 	session.audioLock.Lock()
-	session.audioForStream = nil
+	session.audioForStream = session.audioForStream[:0] // preserve capacity
+	session.audioBufferLen.Store(0)
 	session.audioLock.Unlock()
 }

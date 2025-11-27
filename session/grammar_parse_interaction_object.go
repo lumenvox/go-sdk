@@ -5,9 +5,10 @@ import (
 
 	"errors"
 	"fmt"
+	"time"
+
 	"github.com/google/uuid"
 	"google.golang.org/genproto/googleapis/rpc/status"
-	"time"
 )
 
 // GrammarParseInteractionObject represents a grammar parse interaction.

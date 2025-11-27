@@ -5,8 +5,9 @@ import (
 
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // vadInteractionRecord records the data from a single VAD interaction.
@@ -28,6 +29,40 @@ func createEmptyVadInteractionRecord() *vadInteractionRecord {
 		bargeInReceived:         0,
 		bargeOutReceived:        0,
 	}
+}
+
+// interactionFinalizeHelper is used to coordinate finalize interaction requests and responses
+type interactionFinalizeHelper struct {
+	responseChannel chan error
+	deadline        time.Time
+}
+
+// prepareInteractionFinalize creates a helper in an internal map to prepare
+// for an interaction finalize response. It expects the correlationId of the
+// relevant finalize request, which is used to route the response, as
+// well as a deadline to receive the response. It returns a receive-only channel,
+// as the creating thread should not close the channel.
+func (session *SessionObject) prepareInteractionFinalize(correlationId string, deadline time.Duration) (
+	finalizeResponseChan <-chan error, err error) {
+
+	session.interactionFinalizeMapLock.Lock()
+	defer session.interactionFinalizeMapLock.Unlock()
+
+	// if the correlationId is already in the map, return an error
+	if _, ok := session.interactionFinalizeMap[correlationId]; ok {
+		return nil, errors.New("interaction finalize channel already exists")
+	}
+
+	// create the helper, put it in the map, and return the channel
+	finalizeHelper := &interactionFinalizeHelper{
+		responseChannel: make(chan error, 1),
+		deadline:        time.Now().Add(deadline),
+	}
+	session.interactionFinalizeMap[correlationId] = finalizeHelper
+
+	finalizeResponseChan = finalizeHelper.responseChannel
+
+	return
 }
 
 // PullTtsAudio fetches generated audio from a specified TTS interaction.
@@ -114,9 +149,20 @@ func (session *SessionObject) FinalizeInteraction(interactionId string) (err err
 		return errors.New("empty interaction id")
 	}
 
-	// Send finalize request using the provided interactionId
+	// generate correlation ID and prepare for response coordination
+	correlationId := uuid.NewString()
+	finalizeResponseChan, err := session.prepareInteractionFinalize(correlationId, 10*time.Second)
+	if err != nil {
+		logger := getLogger()
+		logger.Error("preparing finalize coordination",
+			"error", err.Error(),
+			"interactionId", interactionId)
+		return err
+	}
+
+	// Send finalize request using the provided interactionId and correlationId
 	session.streamSendLock.Lock()
-	err = session.SessionStream.Send(getInteractionFinalizeRequest("", interactionId))
+	err = session.SessionStream.Send(getInteractionFinalizeRequest(correlationId, interactionId))
 	session.streamSendLock.Unlock()
 	if err != nil {
 		session.errorChan <- fmt.Errorf("sending InteractionFinalizeProcessingRequest error: %v", err)
@@ -126,5 +172,15 @@ func (session *SessionObject) FinalizeInteraction(interactionId string) (err err
 		return err
 	}
 
-	return nil
+	// Wait for response
+	select {
+	case responseErr := <-finalizeResponseChan:
+		return responseErr
+	case <-time.After(10 * time.Second):
+		logger := getLogger()
+		logger.Error("timed out waiting for finalize response",
+			"interactionId", interactionId,
+			"correlationId", correlationId)
+		return TimeoutError
+	}
 }

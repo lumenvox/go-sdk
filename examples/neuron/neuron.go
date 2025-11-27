@@ -87,7 +87,9 @@ func main() {
 
 	language := "en-US"
 
-	textToProcess := "i lost my luggage"
+	textToProcess := "i would like to open a new account with you"
+
+	modelName := "banking"
 
 	// Create interaction.
 	var generalInteractionSettings *api.GeneralInteractionSettings = &api.GeneralInteractionSettings{
@@ -95,7 +97,7 @@ func main() {
 		CustomInteractionData: nil,
 		LoggingTag:            nil,
 	}
-	neuronInteraction, err := sessionObject.NewNeuron(language, textToProcess,
+	neuronInteraction, err := sessionObject.NewNeuron(language, textToProcess, modelName,
 		generalInteractionSettings)
 	if err != nil {
 		logger.Error("failed to create interaction",

@@ -5,10 +5,11 @@ import (
 
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
-	"google.golang.org/genproto/googleapis/rpc/status"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
+	"google.golang.org/genproto/googleapis/rpc/status"
 )
 
 // AsrInteractionObject represents an ASR interaction.
@@ -344,7 +345,8 @@ func (asrInteraction *AsrInteractionObject) GetFinalResults(timeout time.Duratio
 
 	if asrInteraction.finalResultsReceived {
 		// If we received final results, verify the status.
-		if asrInteraction.FinalResultStatus == api.FinalResultStatus_FINAL_RESULT_STATUS_GRAMMAR_MATCH {
+		if asrInteraction.FinalResultStatus == api.FinalResultStatus_FINAL_RESULT_STATUS_GRAMMAR_MATCH ||
+			asrInteraction.FinalResultStatus == api.FinalResultStatus_FINAL_RESULT_STATUS_CPA_RESULT {
 			// Successful interaction, return result
 			return asrInteraction.finalResults, nil
 		} else {

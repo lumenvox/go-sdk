@@ -4,12 +4,13 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"time"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
-	"time"
 )
 
 // GrpcConnectionConfig contains configuration options for the gRPC connection.

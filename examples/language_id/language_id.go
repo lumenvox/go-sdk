@@ -116,7 +116,8 @@ func main() {
 	// Create interaction.
 	var requestTimeoutMs *api.OptionalInt32 = nil
 	var generalInteractionSettings *api.GeneralInteractionSettings = nil
-	languageIdInteraction, err := sessionObject.NewLanguageId(requestTimeoutMs,
+	targetLanguages := []string{"en", "es", "fr"} // languages used for identification
+	languageIdInteraction, err := sessionObject.NewLanguageId(targetLanguages, requestTimeoutMs,
 		generalInteractionSettings, audioConsumeSettings)
 
 	if err != nil {

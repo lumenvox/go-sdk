@@ -10,12 +10,21 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 )
 
 var enableVerboseLogging = func() bool {
-	return os.Getenv("LUMENVOX_GO_SDK__ENABLE_VERBOSE_LOGGING") == "true"
+	envString := os.Getenv("LUMENVOX_GO_SDK__ENABLE_VERBOSE_LOGGING")
+	if envString == "" {
+		return false
+	}
+	env, err := strconv.ParseBool(envString)
+	if err != nil {
+		return false
+	}
+	return env
 }()
 
 // AuthSettings defines the configuration required for authentication,

@@ -11,10 +11,11 @@ import (
 
 	"encoding/binary"
 	"errors"
-	"github.com/go-audio/audio"
-	"github.com/go-audio/wav"
 	"os"
 	"time"
+
+	"github.com/go-audio/audio"
+	"github.com/go-audio/wav"
 )
 
 func main() {
@@ -24,7 +25,7 @@ func main() {
 	///////////////////////
 
 	// Get SDK configuration
-	cfg, err := config.GetConfigValues("./config_values.ini")
+	cfg, err := config.GetConfigValues("../../config_values.ini")
 	if err != nil {
 		tmpLogger, _ := logging.GetLogger() // get default logger
 		tmpLogger.Error("unable to get config",
@@ -141,7 +142,7 @@ func main() {
 	///////////////////////
 
 	// Create the output directory if it doesn't already exist.
-	audioOutputFolder := "./examples/synthesized_audio/"
+	audioOutputFolder := "../../examples/synthesized_audio/"
 	_ = os.MkdirAll(audioOutputFolder, os.ModePerm)
 
 	synthesisFilename := audioOutputFolder + "uri-Chris.wav"
@@ -157,8 +158,7 @@ func main() {
 	}
 
 	// Convert the data to WAV.
-	var intData []int
-	intData = twoByteDataToIntSlice(synthesizedAudioData)
+	intData := twoByteDataToIntSlice(synthesizedAudioData)
 	err = saveWavFile(synthesisFilename, audioSampleRate, intData)
 	if err != nil {
 		logger.Error("failed to save audio",

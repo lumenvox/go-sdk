@@ -11,10 +11,11 @@ import (
 
 	"encoding/binary"
 	"errors"
-	"github.com/go-audio/audio"
-	"github.com/go-audio/wav"
 	"os"
 	"time"
+
+	"github.com/go-audio/audio"
+	"github.com/go-audio/wav"
 )
 
 func main() {
@@ -24,7 +25,7 @@ func main() {
 	///////////////////////
 
 	// Get SDK configuration
-	cfg, err := config.GetConfigValues("./config_values.ini")
+	cfg, err := config.GetConfigValues("../../config_values.ini")
 	if err != nil {
 		tmpLogger, _ := logging.GetLogger() // get default logger
 		tmpLogger.Error("unable to get config",
@@ -110,7 +111,7 @@ func main() {
 	}
 
 	// Create interaction.
-	var synthesisTimeoutMs *api.OptionalInt32 = nil
+	var synthesisTimeoutMs *api.OptionalInt32 = &api.OptionalInt32{Value: 60000}
 	var generalInteractionSettings *api.GeneralInteractionSettings = nil
 	var enablePartialResults *api.OptionalBool = nil
 	ttsInteraction, err := sessionObject.NewInlineTts(language, textToSynthesize, inlineSettings,
@@ -121,6 +122,8 @@ func main() {
 		sessionObject.CloseSession()
 		time.Sleep(500 * time.Millisecond) // Delay a little to get any residual messages
 		return
+	} else {
+		logger.Info("created interaction")
 	}
 
 	interactionId := ttsInteraction.InteractionId
@@ -132,7 +135,7 @@ func main() {
 	///////////////////////
 
 	// Wait for the final results to arrive.
-	finalResults, err := ttsInteraction.GetFinalResults(10 * time.Second)
+	finalResults, err := ttsInteraction.GetFinalResults(60 * time.Second) // should be close to synthesisTimeoutMs
 	if err != nil {
 		logger.Error("waiting for final results",
 			"error", err)
@@ -141,7 +144,8 @@ func main() {
 		return
 	} else {
 		logger.Info("got final results",
-			"finalResults", finalResults)
+			"audioFormat", finalResults.AudioFormat.String(),
+			"sampleRate", finalResults.AudioFormat.SampleRateHertz.Value)
 	}
 
 	///////////////////////
@@ -149,10 +153,10 @@ func main() {
 	///////////////////////
 
 	// Create the output directory if it doesn't already exist.
-	audioOutputFolder := "./examples/synthesized_audio/"
+	audioOutputFolder := "../../examples/synthesized_audio/"
 	_ = os.MkdirAll(audioOutputFolder, os.ModePerm)
 
-	synthesisFilename := audioOutputFolder + "inline-Chris.wav"
+	synthesisFilename := audioOutputFolder + "inline-" + voiceName + "-sample.wav"
 
 	// Pull the audio from the synthesis.
 	synthesizedAudioData, err := sessionObject.PullTtsAudio(interactionId, 0, 0, 0)
@@ -164,10 +168,8 @@ func main() {
 		return
 	}
 
-	// Convert the data to WAV.
-	var intData []int
-	intData = twoByteDataToIntSlice(synthesizedAudioData)
-	err = saveWavFile(synthesisFilename, audioSampleRate, intData)
+	err = writeAudioToWav(synthesisFilename, synthesizedAudioData, int(audioSampleRate), 1,
+		synthesizedAudioFormat.StandardAudioFormat)
 	if err != nil {
 		logger.Error("failed to save audio",
 			"error", err.Error())
@@ -191,8 +193,9 @@ func main() {
 
 }
 
-// Saves the specified audio to the specified .wav filename using the specified sample rate
-func saveWavFile(wavFilename string, audioSampleRate int32, pcmData []int) (err error) {
+// Writes audio data to a WAV file in the specified format.
+func writeAudioToWav(wavFilename string, audioData []byte, sampleRate int, numChannels int,
+	audioFormat api.AudioFormat_StandardAudioFormat) (err error) {
 
 	// Create output wav file
 	var outputWavFile *os.File
@@ -202,27 +205,60 @@ func saveWavFile(wavFilename string, audioSampleRate int32, pcmData []int) (err 
 	}
 	defer outputWavFile.Close()
 
-	buffer := audio.IntBuffer{
-		Format:         &audio.Format{SampleRate: 16000, NumChannels: 1},
-		Data:           pcmData,
-		SourceBitDepth: 0,
+	var (
+		audioFormatCode int
+		bitDepth        int
+		buf             *audio.IntBuffer
+	)
+
+	switch audioFormat {
+	case api.AudioFormat_STANDARD_AUDIO_FORMAT_LINEAR16:
+		audioFormatCode = 1 // PCM
+		bitDepth = 16       // 16-bit
+		intData := twoByteDataToIntSlice(audioData)
+
+		buf = &audio.IntBuffer{
+			Format: &audio.Format{
+				NumChannels: numChannels,
+				SampleRate:  sampleRate,
+			},
+			SourceBitDepth: bitDepth,
+			Data:           intData,
+		}
+
+	case api.AudioFormat_STANDARD_AUDIO_FORMAT_ULAW, api.AudioFormat_STANDARD_AUDIO_FORMAT_ALAW:
+		bitDepth = 8
+		if audioFormat == api.AudioFormat_STANDARD_AUDIO_FORMAT_ULAW {
+			audioFormatCode = 7 // μ-law
+		} else {
+			audioFormatCode = 6 // A-law
+		}
+
+		intData := make([]int, len(audioData))
+		for i, b := range audioData {
+			intData[i] = int(b)
+		}
+
+		buf = &audio.IntBuffer{
+			Format: &audio.Format{
+				NumChannels: numChannels,
+				SampleRate:  sampleRate,
+			},
+			SourceBitDepth: bitDepth,
+			Data:           intData,
+		}
+
+	default:
+		return errors.New("unsupported audio format")
 	}
 
-	// Create wav encoder
-	wavEncoder := wav.NewEncoder(outputWavFile,
-		int(audioSampleRate), //buf.Format.SampleRate,
-		int(16),              //wd.BitDepth),
-		1,                    // buf.Format.NumChannels,
-		1,                    //int(wd.WavAudioFormat)
-	)
-	defer wavEncoder.Close()
+	wavEncoder := wav.NewEncoder(outputWavFile, sampleRate, bitDepth, numChannels, audioFormatCode)
 
-	// Write IntBuffer to output file via encoder
-	if err = wavEncoder.Write(&buffer); err != nil {
+	if err = wavEncoder.Write(buf); err != nil {
 		return errors.New("Failed to write .wav file: " + err.Error())
 	}
 
-	return nil
+	return wavEncoder.Close()
 }
 
 // Convert byte slice into slice of 16-bit integers (for use when writing .wav)

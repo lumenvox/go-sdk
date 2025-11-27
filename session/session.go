@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -28,7 +29,15 @@ func (e SdkError) Error() string { return string(e) }
 const InteractionCreateDeadline = 20 * time.Second
 
 var EnableVerboseLogging = func() bool {
-	return os.Getenv("LUMENVOX_GO_SDK__ENABLE_VERBOSE_LOGGING") == "true"
+	envString := os.Getenv("LUMENVOX_GO_SDK__ENABLE_VERBOSE_LOGGING")
+	if envString == "" {
+		return false
+	}
+	env, err := strconv.ParseBool(envString)
+	if err != nil {
+		return false
+	}
+	return env
 }()
 
 // SessionObject contains all state information for a single session.
@@ -54,7 +63,8 @@ type SessionObject struct {
 	audioStreamerCancel      context.CancelFunc
 
 	audioLock      sync.Mutex
-	audioForStream []byte
+	audioForStream []byte       // holds queued audio data for the internal streamer
+	audioBufferLen atomic.Int64 // tracks len(audioForStream) for lock-free empty checks
 
 	StreamLoopExitErr atomic.Pointer[error] // indicates streaming loop exit status
 
@@ -66,10 +76,7 @@ type SessionObject struct {
 	errorChan           chan error
 	stopStreamingAudio  chan struct{}
 
-	// map of channels to handle interactionCreate responses
-	interactionCreateMapLock sync.Mutex
-	interactionCreateMap     map[string]chan *api.SessionResponse
-
+	// locks to handle interactionCreate maps
 	interactionCreateAmdMapLock           sync.Mutex
 	interactionCreateAsrMapLock           sync.Mutex
 	interactionCreateCpaMapLock           sync.Mutex
@@ -81,8 +88,11 @@ type SessionObject struct {
 	interactionCreateTranscriptionMapLock sync.Mutex
 	interactionCreateTtsMapLock           sync.Mutex
 	interactionCreateNeuronMapLock        sync.Mutex
+	interactionCreateSentimentMapLock     sync.Mutex
 	loadSessionGrammarMapLock             sync.Mutex
+	interactionFinalizeMapLock            sync.Mutex
 
+	// maps to handle interactionCreate responses
 	interactionCreateAmdMap           map[string]*interactionCreateAmdHelper
 	interactionCreateAsrMap           map[string]*interactionCreateAsrHelper
 	interactionCreateCpaMap           map[string]*interactionCreateCpaHelper
@@ -94,7 +104,9 @@ type SessionObject struct {
 	interactionCreateTranscriptionMap map[string]*interactionCreateTranscriptionHelper
 	interactionCreateTtsMap           map[string]*interactionCreateTtsHelper
 	interactionCreateNeuronMap        map[string]*interactionCreateNeuronHelper
+	interactionCreateSentimentMap     map[string]*interactionCreateSentimentHelper
 	loadSessionGrammarMap             map[string]*LoadSessionGrammarObject
+	interactionFinalizeMap            map[string]*interactionFinalizeHelper
 
 	// maps to store all active interactions
 	amdInteractionsMap           map[string]*AmdInteractionObject
@@ -108,6 +120,7 @@ type SessionObject struct {
 	transcriptionInteractionsMap map[string]*TranscriptionInteractionObject
 	ttsInteractionsMap           map[string]*TtsInteractionObject
 	neuronInteractionsMap        map[string]*NeuronInteractionObject
+	sentimentInteractionsMap     map[string]*SentimentInteractionObject
 
 	// map of channels to handle TTS audio
 	ttsAudioMapLock sync.Mutex
@@ -155,8 +168,7 @@ func newSessionObject(
 		stopStreamingAudio:     make(chan struct{}, 1),
 		sessionSettingsChannel: make(chan *api.SessionSettings, 100),
 
-		// map of channels to handle interactionCreate responses
-		interactionCreateMap:              make(map[string]chan *api.SessionResponse),
+		// maps to handle interactionCreate responses
 		interactionCreateAmdMap:           make(map[string]*interactionCreateAmdHelper),
 		interactionCreateAsrMap:           make(map[string]*interactionCreateAsrHelper),
 		interactionCreateCpaMap:           make(map[string]*interactionCreateCpaHelper),
@@ -168,7 +180,9 @@ func newSessionObject(
 		interactionCreateTranscriptionMap: make(map[string]*interactionCreateTranscriptionHelper),
 		interactionCreateTtsMap:           make(map[string]*interactionCreateTtsHelper),
 		interactionCreateNeuronMap:        make(map[string]*interactionCreateNeuronHelper),
+		interactionCreateSentimentMap:     make(map[string]*interactionCreateSentimentHelper),
 		loadSessionGrammarMap:             make(map[string]*LoadSessionGrammarObject),
+		interactionFinalizeMap:            make(map[string]*interactionFinalizeHelper),
 
 		// interaction maps
 		amdInteractionsMap:           make(map[string]*AmdInteractionObject),
@@ -182,6 +196,7 @@ func newSessionObject(
 		transcriptionInteractionsMap: make(map[string]*TranscriptionInteractionObject),
 		ttsInteractionsMap:           make(map[string]*TtsInteractionObject),
 		neuronInteractionsMap:        make(map[string]*NeuronInteractionObject),
+		sentimentInteractionsMap:     make(map[string]*SentimentInteractionObject),
 
 		// audio pull map
 		ttsAudioMap: make(map[string]chan *api.AudioPullResponse),
@@ -362,30 +377,6 @@ func (session *SessionObject) HasListeningLoopExited() (bool, error) {
 	}
 
 	return true, *errPtr
-}
-
-// prepareInteractionCreate creates a channel in an internal map to prepare
-// for an interactionCreate response. It expects the correlationId of the
-// relevant interactionCreate request, which is used to route the response. It
-// returns a receive-only channel, as the creating thread should not close the
-// channel.
-func (session *SessionObject) prepareInteractionCreate(correlationId string) (
-	interactionCreateChan <-chan *api.SessionResponse, err error) {
-
-	session.interactionCreateMapLock.Lock()
-	defer session.interactionCreateMapLock.Unlock()
-
-	// if the correlationId already has a channel, return an error
-	if _, ok := session.interactionCreateMap[correlationId]; ok {
-		return nil, errors.New("interaction create channel already exists")
-	}
-
-	// create the channel, put it in the map, and return it
-	createChannel := make(chan *api.SessionResponse, 1)
-	session.interactionCreateMap[correlationId] = createChannel
-	interactionCreateChan = createChannel
-
-	return
 }
 
 // prepareAudioPull creates a channel in an internal map to prepare

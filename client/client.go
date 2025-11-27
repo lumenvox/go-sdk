@@ -5,8 +5,9 @@ import (
 	"github.com/lumenvox/go-sdk/connection"
 	"github.com/lumenvox/go-sdk/session"
 
-	"github.com/google/uuid"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // SdkClient represents a client object with knowledge of API connectivity. It

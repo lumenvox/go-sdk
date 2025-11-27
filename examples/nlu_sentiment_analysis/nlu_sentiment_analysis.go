@@ -1,5 +1,19 @@
 package main
 
+/*
+DEPRECATED: This NLU-based sentiment analysis example is deprecated as of
+LumenVox Containers version 7. Please migrate to ITN-based sentiment analysis.
+
+The ITN-based implementation provides equivalent functionality with improved
+resource efficiency and does not require GPU-enabled containers.
+
+For the recommended ITN-based implementation, please see:
+examples/sentiment_analysis/sentiment_analysis.go
+
+This implementation is maintained for backwards compatibility only and may be
+removed in future versions.
+*/
+
 import (
 	lumenvoxSdk "github.com/lumenvox/go-sdk"
 	"github.com/lumenvox/go-sdk/auth"

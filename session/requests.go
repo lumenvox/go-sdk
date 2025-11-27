@@ -3,6 +3,8 @@ package session
 import (
 	"github.com/lumenvox/protos-go/lumenvox/api"
 
+	"strings"
+
 	"github.com/google/uuid"
 )
 
@@ -238,6 +240,7 @@ func getNeuronRequest(
 	correlationId string,
 	language string,
 	textToProcess string,
+	modelName string,
 	generalInteractionSettings *api.GeneralInteractionSettings,
 ) (neuronRequest *api.SessionRequest) {
 
@@ -254,6 +257,7 @@ func getNeuronRequest(
 					InteractionCreateNeuron: &api.InteractionCreateNeuronRequest{
 						Language:                   language,
 						Transcript:                 textToProcess,
+						ModelName:                  modelName,
 						GeneralInteractionSettings: generalInteractionSettings,
 					},
 				},
@@ -262,6 +266,38 @@ func getNeuronRequest(
 	}
 
 	return neuronRequest
+}
+
+// getSentimentRequest returns a Sentiment interaction request. The specified
+// correlationId will be used if nonempty. Otherwise, one will be auto-generated.
+func getSentimentRequest(
+	correlationId string,
+	language string,
+	textToAnalyze []string,
+	generalInteractionSettings *api.GeneralInteractionSettings,
+) (sentimentRequest *api.SessionRequest) {
+
+	if correlationId == "" {
+		// Create a new correlationId if one is not specified
+		correlationId = uuid.NewString()
+	}
+
+	sentimentRequest = &api.SessionRequest{
+		CorrelationId: &api.OptionalString{Value: correlationId},
+		RequestType: &api.SessionRequest_InteractionRequest{
+			InteractionRequest: &api.InteractionRequestMessage{
+				InteractionRequest: &api.InteractionRequestMessage_InteractionCreateSentiment{
+					InteractionCreateSentiment: &api.InteractionCreateSentimentRequest{
+						Language:                   language,
+						InputText:                  textToAnalyze,
+						GeneralInteractionSettings: generalInteractionSettings,
+					},
+				},
+			},
+		},
+	}
+
+	return sentimentRequest
 }
 
 // getInlineLoadSessionGrammarRequest returns a load session grammar request for
@@ -576,6 +612,7 @@ func getDiarizationRequest(
 // auto-generated.
 func getLanguageIdRequest(
 	correlationId string,
+	targetLanguages []string,
 	requestTimeoutMs *api.OptionalInt32,
 	generalInteractionSettings *api.GeneralInteractionSettings,
 	audioConsumeSettings *api.AudioConsumeSettings,
@@ -587,6 +624,7 @@ func getLanguageIdRequest(
 	}
 
 	requestBody := &api.InteractionCreateLanguageIdRequest{
+		TargetLanguages:            &api.OptionalString{Value: strings.Join(targetLanguages, ",")},
 		RequestTimeoutMs:           requestTimeoutMs,
 		GeneralInteractionSettings: generalInteractionSettings,
 		AudioConsumeSettings:       audioConsumeSettings,
