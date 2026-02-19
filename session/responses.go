@@ -30,7 +30,7 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 	var response *api.SessionResponse
 
 	for {
-		response, err = session.SessionStream.Recv()
+		response, err = session.sessionStream.Recv()
 		if status.Code(err) == codes.Unauthenticated {
 			// Token expiration detected. Handle it accordingly:
 			logger.Error("sessionStream.Recv() failed with gRPC error: Unauthenticated",
@@ -69,8 +69,8 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 					"response", response)
 			} else {
 				logger.Debug("sessionStream.Recv() received audio",
-					"numBytes", len(response.GetAudioPull().GetAudioData()),
-					"correlationId", response.CorrelationId.Value)
+					"num_bytes", len(response.GetAudioPull().GetAudioData()),
+					"correlation_id", response.CorrelationId.Value)
 			}
 		}
 
@@ -78,7 +78,7 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			if response.SessionId.Value != "" {
 				if EnableVerboseLogging {
 					logger.Debug("Recv response",
-						"SessionId", response.SessionId.Value)
+						"session_id", response.SessionId.Value)
 				}
 				if waitingOnSessionId {
 					sessionIdChan <- response.SessionId.Value
@@ -102,7 +102,7 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 
 			if EnableVerboseLogging {
 				logger.Debug("Recv VadEvent",
-					"interactionId", response.GetVadEvent().InteractionId,
+					"interaction_id", response.GetVadEvent().InteractionId,
 					"type", response.GetVadEvent().VadEventType.String())
 			}
 
@@ -136,12 +136,12 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			// validate the correlation ID
 			if response.CorrelationId == nil {
 				logger.Warn("error routing interaction create",
-					"error", "missing correlationId",
+					"error", "missing correlation_id",
 					"response", response)
 				continue
 			} else if response.CorrelationId.Value == "" {
 				logger.Warn("error routing interaction create",
-					"error", "empty correlationId",
+					"error", "empty correlation_id",
 					"response", response)
 				continue
 			}
@@ -196,9 +196,9 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			}
 
 			// add the new interaction object to the map
-			session.Lock() // Protect concurrent map access
+			session.amdInteractionsLock.Lock() // Protect concurrent map access
 			session.amdInteractionsMap[interactionId] = newInteractionObject
-			session.Unlock()
+			session.amdInteractionsLock.Unlock()
 
 			// send the interaction object over the channel
 			createAmdHelper.interactionCreateChannel <- newInteractionObject
@@ -214,12 +214,12 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			// validate the correlation ID
 			if response.CorrelationId == nil {
 				logger.Warn("error routing interaction create",
-					"error", "missing correlationId",
+					"error", "missing correlation_id",
 					"response", response)
 				continue
 			} else if response.CorrelationId.Value == "" {
 				logger.Warn("error routing interaction create",
-					"error", "empty correlationId",
+					"error", "empty correlation_id",
 					"response", response)
 				continue
 			}
@@ -277,12 +277,16 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			newInteractionObject.partialResultsChannels = append(newInteractionObject.partialResultsChannels, make(chan struct{}))
 
 			// add the new interaction object to the map
-			session.Lock() // Protect concurrent map access
+			session.asrInteractionsLock.Lock() // Protect concurrent map access
 			session.asrInteractionsMap[interactionId] = newInteractionObject
-			session.Unlock()
+			session.asrInteractionsLock.Unlock()
 
-			// send the interaction object over the channel
-			createAsrHelper.interactionCreateChannel <- newInteractionObject
+			// send the successful result over the channel
+			result := &asrCreateResult{
+				InteractionObject: newInteractionObject,
+				Error:             nil,
+			}
+			createAsrHelper.interactionCreateChannel <- result
 
 		} else if response.GetInteractionCreateCpa() != nil {
 
@@ -295,12 +299,12 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			// validate the correlation ID
 			if response.CorrelationId == nil {
 				logger.Warn("error routing interaction create",
-					"error", "missing correlationId",
+					"error", "missing correlation_id",
 					"response", response)
 				continue
 			} else if response.CorrelationId.Value == "" {
 				logger.Warn("error routing interaction create",
-					"error", "empty correlationId",
+					"error", "empty correlation_id",
 					"response", response)
 				continue
 			}
@@ -355,9 +359,9 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			}
 
 			// add the new interaction object to the map
-			session.Lock() // Protect concurrent map access
+			session.cpaInteractionsLock.Lock() // Protect concurrent map access
 			session.cpaInteractionsMap[interactionId] = newInteractionObject
-			session.Unlock()
+			session.cpaInteractionsLock.Unlock()
 
 			// send the interaction object over the channel
 			createCpaHelper.interactionCreateChannel <- newInteractionObject
@@ -373,12 +377,12 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			// validate the correlation ID
 			if response.CorrelationId == nil {
 				logger.Warn("error routing interaction create",
-					"error", "missing correlationId",
+					"error", "missing correlation_id",
 					"response", response)
 				continue
 			} else if response.CorrelationId.Value == "" {
 				logger.Warn("error routing interaction create",
-					"error", "empty correlationId",
+					"error", "empty correlation_id",
 					"response", response)
 				continue
 			}
@@ -426,9 +430,9 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			}
 
 			// add the new interaction object to the map
-			session.Lock() // Protect concurrent map access
+			session.diarizationInteractionsLock.Lock() // Protect concurrent map access
 			session.diarizationInteractionsMap[interactionId] = newInteractionObject
-			session.Unlock()
+			session.diarizationInteractionsLock.Unlock()
 
 			// send the interaction object over the channel
 			createDiarizationHelper.interactionCreateChannel <- newInteractionObject
@@ -444,12 +448,12 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			// validate the correlation ID
 			if response.CorrelationId == nil {
 				logger.Warn("error routing interaction create",
-					"error", "missing correlationId",
+					"error", "missing correlation_id",
 					"response", response)
 				continue
 			} else if response.CorrelationId.Value == "" {
 				logger.Warn("error routing interaction create",
-					"error", "empty correlationId",
+					"error", "empty correlation_id",
 					"response", response)
 				continue
 			}
@@ -498,9 +502,9 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			}
 
 			// add the new interaction object to the map
-			session.Lock() // Protect concurrent map access
+			session.grammarParseInteractionsLock.Lock() // Protect concurrent map access
 			session.grammarParseInteractionsMap[interactionId] = newInteractionObject
-			session.Unlock()
+			session.grammarParseInteractionsLock.Unlock()
 
 			// send the interaction object over the channel
 			createGrammarParseHelper.interactionCreateChannel <- newInteractionObject
@@ -516,12 +520,12 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			// validate the correlation ID
 			if response.CorrelationId == nil {
 				logger.Warn("error routing interaction create",
-					"error", "missing correlationId",
+					"error", "missing correlation_id",
 					"response", response)
 				continue
 			} else if response.CorrelationId.Value == "" {
 				logger.Warn("error routing interaction create",
-					"error", "empty correlationId",
+					"error", "empty correlation_id",
 					"response", response)
 				continue
 			}
@@ -569,9 +573,9 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			}
 
 			// add the new interaction object to the map
-			session.Lock() // Protect concurrent map access
+			session.languageIdInteractionsLock.Lock() // Protect concurrent map access
 			session.languageIdInteractionsMap[interactionId] = newInteractionObject
-			session.Unlock()
+			session.languageIdInteractionsLock.Unlock()
 
 			// send the interaction object over the channel
 			createLanguageIdHelper.interactionCreateChannel <- newInteractionObject
@@ -587,12 +591,12 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			// validate the correlation ID
 			if response.CorrelationId == nil {
 				logger.Warn("error routing interaction create",
-					"error", "missing correlationId",
+					"error", "missing correlation_id",
 					"response", response)
 				continue
 			} else if response.CorrelationId.Value == "" {
 				logger.Warn("error routing interaction create",
-					"error", "empty correlationId",
+					"error", "empty correlation_id",
 					"response", response)
 				continue
 			}
@@ -641,9 +645,9 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			}
 
 			// add the new interaction object to the map
-			session.Lock() // Protect concurrent map access
+			session.nluInteractionsLock.Lock() // Protect concurrent map access
 			session.nluInteractionsMap[interactionId] = newInteractionObject
-			session.Unlock()
+			session.nluInteractionsLock.Unlock()
 
 			// send the interaction object over the channel
 			createNluHelper.interactionCreateChannel <- newInteractionObject
@@ -659,12 +663,12 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			// validate the correlation ID
 			if response.CorrelationId == nil {
 				logger.Warn("error routing interaction create",
-					"error", "missing correlationId",
+					"error", "missing correlation_id",
 					"response", response)
 				continue
 			} else if response.CorrelationId.Value == "" {
 				logger.Warn("error routing interaction create",
-					"error", "empty correlationId",
+					"error", "empty correlation_id",
 					"response", response)
 				continue
 			}
@@ -713,9 +717,9 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			}
 
 			// add the new interaction object to the map
-			session.Lock() // Protect concurrent map access
+			session.normalizationInteractionsLock.Lock() // Protect concurrent map access
 			session.normalizationInteractionsMap[interactionId] = newInteractionObject
-			session.Unlock()
+			session.normalizationInteractionsLock.Unlock()
 
 			// send the interaction object over the channel
 			createNormalizationHelper.interactionCreateChannel <- newInteractionObject
@@ -731,12 +735,12 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			// validate the correlation ID
 			if response.CorrelationId == nil {
 				logger.Warn("error routing interaction create",
-					"error", "missing correlationId",
+					"error", "missing correlation_id",
 					"response", response)
 				continue
 			} else if response.CorrelationId.Value == "" {
 				logger.Warn("error routing interaction create",
-					"error", "empty correlationId",
+					"error", "empty correlation_id",
 					"response", response)
 				continue
 			}
@@ -785,9 +789,9 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			}
 
 			// add the new interaction object to the map
-			session.Lock() // Protect concurrent map access
+			session.neuronInteractionsLock.Lock() // Protect concurrent map access
 			session.neuronInteractionsMap[interactionId] = newInteractionObject
-			session.Unlock()
+			session.neuronInteractionsLock.Unlock()
 
 			// send the interaction object over the channel
 			createNeuronHelper.interactionCreateChannel <- newInteractionObject
@@ -803,12 +807,12 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			// validate the correlation ID
 			if response.CorrelationId == nil {
 				logger.Warn("error routing interaction create",
-					"error", "missing correlationId",
+					"error", "missing correlation_id",
 					"response", response)
 				continue
 			} else if response.CorrelationId.Value == "" {
 				logger.Warn("error routing interaction create",
-					"error", "empty correlationId",
+					"error", "empty correlation_id",
 					"response", response)
 				continue
 			}
@@ -857,9 +861,9 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			}
 
 			// add the new interaction object to the map
-			session.Lock() // Protect concurrent map access
+			session.sentimentInteractionsLock.Lock() // Protect concurrent map access
 			session.sentimentInteractionsMap[interactionId] = newInteractionObject
-			session.Unlock()
+			session.sentimentInteractionsLock.Unlock()
 
 			// send the interaction object over the channel
 			createSentimentHelper.interactionCreateChannel <- newInteractionObject
@@ -875,12 +879,12 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			// validate the correlation ID
 			if response.CorrelationId == nil {
 				logger.Warn("error routing interaction create",
-					"error", "missing correlationId",
+					"error", "missing correlation_id",
 					"response", response)
 				continue
 			} else if response.CorrelationId.Value == "" {
 				logger.Warn("error routing interaction create",
-					"error", "empty correlationId",
+					"error", "empty correlation_id",
 					"response", response)
 				continue
 			}
@@ -938,12 +942,16 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			newInteractionObject.vadRecordLog = append(newInteractionObject.vadRecordLog, createEmptyVadInteractionRecord())
 
 			// add the new interaction object to the map
-			session.Lock() // Protect concurrent map access
+			session.transcriptionInteractionsLock.Lock() // Protect concurrent map access
 			session.transcriptionInteractionsMap[interactionId] = newInteractionObject
-			session.Unlock()
+			session.transcriptionInteractionsLock.Unlock()
 
-			// send the interaction object over the channel
-			createTranscriptionHelper.interactionCreateChannel <- newInteractionObject
+			// send the successful result over the channel
+			result := &transcriptionCreateResult{
+				InteractionObject: newInteractionObject,
+				Error:             nil,
+			}
+			createTranscriptionHelper.interactionCreateChannel <- result
 
 		} else if response.GetInteractionCreateTts() != nil {
 
@@ -956,12 +964,12 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			// validate the correlation ID
 			if response.CorrelationId == nil {
 				logger.Warn("error routing interaction create",
-					"error", "missing correlationId",
+					"error", "missing correlation_id",
 					"response", response)
 				continue
 			} else if response.CorrelationId.Value == "" {
 				logger.Warn("error routing interaction create",
-					"error", "empty correlationId",
+					"error", "empty correlation_id",
 					"response", response)
 				continue
 			}
@@ -1011,9 +1019,9 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			newInteractionObject.partialResultsChannels = append(newInteractionObject.partialResultsChannels, make(chan struct{}))
 
 			// add the new interaction object to the map
-			session.Lock() // Protect concurrent map access
+			session.ttsInteractionsLock.Lock() // Protect concurrent map access
 			session.ttsInteractionsMap[interactionId] = newInteractionObject
-			session.Unlock()
+			session.ttsInteractionsLock.Unlock()
 
 			// send the interaction object over the channel
 			createTtsHelper.interactionCreateChannel <- newInteractionObject
@@ -1022,12 +1030,12 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 
 			if EnableVerboseLogging {
 				logger.Debug("Recv GetAudioPull",
-					"numBytes", len(response.GetAudioPull().GetAudioData()))
+					"num_bytes", len(response.GetAudioPull().GetAudioData()))
 			}
 
 			handleAudioPull(session, response)
 
-		} else if response.GetSessionGrammar() != nil {
+		} else if result := response.GetSessionGrammar(); result != nil {
 
 			if EnableVerboseLogging {
 				logger.Debug("Recv SessionLoadGrammarResponse",
@@ -1037,12 +1045,12 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			// validate the correlation ID
 			if response.CorrelationId == nil {
 				logger.Warn("error routing session grammar",
-					"error", "missing correlationId",
+					"error", "missing correlation_id",
 					"response", response)
 				continue
 			} else if response.CorrelationId.Value == "" {
 				logger.Warn("error routing session grammar",
-					"error", "empty correlationId",
+					"error", "empty correlation_id",
 					"response", response)
 				continue
 			}
@@ -1074,7 +1082,6 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 
 			// if we got this far, the response should be OK. update the request object
 			requestObject.loadComplete = true
-			result := response.GetSessionGrammar()
 			requestObject.finalResults = result
 			requestObject.FinalStatus = result.Status
 			close(requestObject.resultsReadyChannel)
@@ -1096,7 +1103,6 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 					logger.Debug("Recv SessionCloseResponse",
 						"response", response)
 				}
-				session.SessionCloseChannel <- struct{}{}
 				err = nil
 				break
 
@@ -1107,64 +1113,7 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 						"response", response)
 				}
 
-				// Check if this SessionEvent is a finalize response by looking for the correlationId in our map
-				if response.CorrelationId != nil && response.CorrelationId.Value != "" {
-					correlationId := response.CorrelationId.Value
-
-					// look for the finalize helper in the map
-					session.interactionFinalizeMapLock.Lock()
-					finalizeHelper, ok := session.interactionFinalizeMap[correlationId]
-					if ok {
-						// each helper should only be used once, so delete the map entry before unlocking
-						delete(session.interactionFinalizeMap, correlationId)
-					}
-					session.interactionFinalizeMapLock.Unlock()
-
-					if ok {
-						// This is a finalize interaction response
-						if EnableVerboseLogging {
-							logger.Debug("Recv finalize interaction response",
-								"response", response)
-						}
-
-						// catch nil helper
-						if finalizeHelper == nil {
-							logger.Warn("error routing finalize interaction response",
-								"error", "finalize helper is nil",
-								"response", response)
-							continue
-						}
-
-						// catch timeout
-						if time.Now().After(finalizeHelper.deadline) {
-							logger.Warn("error routing finalize interaction response",
-								"error", "finalize interaction timed out",
-								"response", response)
-							continue
-						}
-
-						// determine success or failure based on status code
-						var responseErr error
-						if response.GetSessionEvent().StatusMessage != nil && response.GetSessionEvent().StatusMessage.Code != 0 {
-							responseErr = fmt.Errorf("finalize interaction failed: %s (code: %d)",
-								response.GetSessionEvent().StatusMessage.Message,
-								response.GetSessionEvent().StatusMessage.Code)
-						}
-
-						// send the response (nil for success, error for failure)
-						finalizeHelper.responseChannel <- responseErr
-						continue // handled, don't process as other event types
-					}
-				}
-
-				// Handle other SessionEvent types (grammar errors, etc.)
-				if response.GetSessionEvent().StatusMessage != nil {
-					if strings.Contains(response.GetSessionEvent().StatusMessage.Message, "grammar failed to load") {
-						logger.Error("Recv grammar error",
-							"response", response)
-						session.grammarErrorChannel <- response.GetSessionEvent()
-					}
-				}
+				handleSessionEvent(session, response)
 
 			} else {
 				logger.Error("Recv unexpected response type",
@@ -1172,6 +1121,9 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			}
 		}
 	}
+
+	// Signal used by SessionClose method to wait for SessionClose response before closing the stream.
+	session.sessionCloseChannel <- struct{}{}
 
 	// Signal to session object here that we're out of the listening loop
 	// and set the reason that loop exited (could be nil if no error)
@@ -1185,7 +1137,10 @@ func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
 	// Get the interaction id, to find the interaction object.
 	interactionId := response.GetVadEvent().GetInteractionId()
 
+	// Try ASR interactions first
+	session.asrInteractionsLock.RLock()
 	if interactionObject, ok := session.asrInteractionsMap[interactionId]; ok {
+		session.asrInteractionsLock.RUnlock()
 
 		// This is an ASR interaction.
 		switch response.GetVadEvent().VadEventType {
@@ -1215,10 +1170,16 @@ func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
 			close(interactionObject.vadBargeOutTimeoutChannel)
 		default:
 			logger.Warn("unexpected VAD event",
-				"toState", response.GetVadEvent().VadEventType.String())
+				"to_state", response.GetVadEvent().VadEventType.String())
 		}
+		return
+	}
+	session.asrInteractionsLock.RUnlock()
 
-	} else if interactionObject, ok := session.transcriptionInteractionsMap[interactionId]; ok {
+	// Try transcription interactions
+	session.transcriptionInteractionsLock.RLock()
+	if interactionObject, ok := session.transcriptionInteractionsMap[interactionId]; ok {
+		session.transcriptionInteractionsLock.RUnlock()
 
 		// This is a transcription interaction.
 		interactionObject.vadEventsLock.Lock()
@@ -1304,8 +1265,8 @@ func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
 				// We received something that doesn't make sense after a BEGIN_PROCESSING.
 				// In other words, an invalid transition. Log a warning.
 				logger.Warn("ignoring invalid VAD state transition",
-					"fromState", currentVadInteractionState.String(),
-					"toState", response.GetVadEvent().VadEventType.String())
+					"from_state", currentVadInteractionState.String(),
+					"to_state", response.GetVadEvent().VadEventType.String())
 			}
 
 		case api.VadEvent_VAD_EVENT_TYPE_BARGE_IN:
@@ -1356,8 +1317,8 @@ func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
 				// We received something that doesn't make sense after a BARGE_IN. In other
 				// words, an invalid transition. Log a warning.
 				logger.Warn("ignoring invalid VAD state transition",
-					"fromState", currentVadInteractionState.String(),
-					"toState", response.GetVadEvent().VadEventType.String())
+					"from_state", currentVadInteractionState.String(),
+					"to_state", response.GetVadEvent().VadEventType.String())
 			}
 
 		case api.VadEvent_VAD_EVENT_TYPE_END_OF_SPEECH:
@@ -1387,8 +1348,8 @@ func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
 				// We received something that doesn't make sense after an END_OF_SPEECH. In
 				// other words, an invalid transition. Log a warning.
 				logger.Warn("ignoring invalid VAD state transition",
-					"fromState", currentVadInteractionState.String(),
-					"toState", response.GetVadEvent().VadEventType.String())
+					"from_state", currentVadInteractionState.String(),
+					"to_state", response.GetVadEvent().VadEventType.String())
 			}
 
 		case api.VadEvent_VAD_EVENT_TYPE_BARGE_IN_TIMEOUT:
@@ -1418,8 +1379,8 @@ func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
 				// We received something that doesn't make sense after a BARGE_IN_TIMEOUT. In
 				// other words, an invalid transition. Log a warning.
 				logger.Warn("ignoring invalid VAD state transition",
-					"fromState", currentVadInteractionState.String(),
-					"toState", response.GetVadEvent().VadEventType.String())
+					"from_state", currentVadInteractionState.String(),
+					"to_state", response.GetVadEvent().VadEventType.String())
 			}
 
 		case api.VadEvent_VAD_EVENT_TYPE_END_OF_SPEECH_TIMEOUT:
@@ -1452,18 +1413,25 @@ func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
 				// We received something that doesn't make sense after an END_OF_SPEECH_TIMEOUT.
 				// In other words, an invalid transition. Log a warning.
 				logger.Warn("ignoring invalid VAD state transition",
-					"fromState", currentVadInteractionState.String(),
-					"toState", response.GetVadEvent().VadEventType.String())
+					"from_state", currentVadInteractionState.String(),
+					"to_state", response.GetVadEvent().VadEventType.String())
 			}
 
 		default:
 			// Unexpected current state. Should never happen, but just in case, log a warning
 			logger.Warn("unexpected VAD",
-				"current state", currentVadInteractionState.String())
+				"current_state", currentVadInteractionState.String())
 		}
 		interactionObject.vadEventsLock.Unlock()
+		return
+	}
+	session.transcriptionInteractionsLock.RUnlock()
 
-	} else if interactionObject, ok := session.amdInteractionsMap[interactionId]; ok {
+	// Try AMD interactions
+	session.amdInteractionsLock.RLock()
+	if interactionObject, ok := session.amdInteractionsMap[interactionId]; ok {
+		session.amdInteractionsLock.RUnlock()
+
 		// This is an AMD interaction.
 		switch response.GetVadEvent().VadEventType {
 		case api.VadEvent_VAD_EVENT_TYPE_BEGIN_PROCESSING:
@@ -1488,14 +1456,13 @@ func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
 			interactionObject.vadBargeInTimeoutReceived = true
 			close(interactionObject.vadBargeInTimeoutChannel)
 		}
-
-	} else {
-
-		// We did not find the interaction.
-		logger.Error("Recv VadEvent: interaction not found",
-			"interactionId", interactionId)
-
+		return
 	}
+	session.amdInteractionsLock.RUnlock()
+
+	// We did not find the interaction.
+	logger.Error("Recv VadEvent: interaction not found",
+		"interaction_id", interactionId)
 }
 
 func handleFinalResult(session *SessionObject, response *api.SessionResponse) {
@@ -1505,153 +1472,213 @@ func handleFinalResult(session *SessionObject, response *api.SessionResponse) {
 	// Get the interaction id, to find the interaction object.
 	interactionId := response.GetFinalResult().GetInteractionId()
 	finalResult := response.GetFinalResult()
-
-	{
-		// Protect concurrent access to maps
-		session.Lock()
-		defer session.Unlock()
-
-		if interactionObject, interactionFound := session.asrInteractionsMap[interactionId]; interactionFound {
-
-			// This is an ASR interaction.
-			// We support grammar-based alternatives for multiple interaction types, so we need to figure
-			// out which was active here.
-			if finalResult.GetFinalResult().GetCpaInteractionResult() != nil {
-				newAsrInteractionResult := &api.AsrInteractionResult{
-					NBests: []*api.AsrGrammarResult{finalResult.GetFinalResult().GetCpaInteractionResult().CpaResult},
-				}
-				interactionObject.finalResults = newAsrInteractionResult
-			} else if finalResult.GetFinalResult().GetAmdInteractionResult() != nil {
-				newAsrInteractionResult := &api.AsrInteractionResult{
-					NBests: []*api.AsrGrammarResult{finalResult.GetFinalResult().GetAmdInteractionResult().AmdResult},
-				}
-				interactionObject.finalResults = newAsrInteractionResult
-			} else {
-				// If we didn't detect CPA or AMD interaction results, assume a plain ASR interaction.
-				interactionObject.finalResults = finalResult.GetFinalResult().GetAsrInteractionResult()
-			}
-			interactionObject.FinalStatus = finalResult.Status
-			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
-			interactionObject.finalResultsReceived = true
-			close(interactionObject.resultsReadyChannel)
-			delete(session.asrInteractionsMap, interactionId)
-
-		} else if interactionObject, interactionFound := session.transcriptionInteractionsMap[interactionId]; interactionFound {
-
-			// This is a transcription interaction.
-			interactionObject.finalResults = finalResult.GetFinalResult().GetTranscriptionInteractionResult()
-			interactionObject.FinalStatus = finalResult.Status
-			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
-			interactionObject.finalResultsReceived = true
-			close(interactionObject.resultsReadyChannel)
-			delete(session.transcriptionInteractionsMap, interactionId)
-
-		} else if interactionObject, interactionFound := session.nluInteractionsMap[interactionId]; interactionFound {
-
-			// This is an NLU interaction.
-			interactionObject.finalResults = finalResult.GetFinalResult().GetNluInteractionResult()
-			interactionObject.FinalStatus = finalResult.Status
-			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
-			interactionObject.finalResultsReceived = true
-			close(interactionObject.resultsReadyChannel)
-			delete(session.nluInteractionsMap, interactionId)
-
-		} else if interactionObject, interactionFound := session.grammarParseInteractionsMap[interactionId]; interactionFound {
-
-			// This is a grammar parse interaction.
-			interactionObject.finalResults = finalResult.GetFinalResult().GetGrammarParseInteractionResult()
-			interactionObject.FinalStatus = finalResult.Status
-			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
-			interactionObject.finalResultsReceived = true
-			close(interactionObject.resultsReadyChannel)
-			delete(session.grammarParseInteractionsMap, interactionId)
-
-		} else if interactionObject, interactionFound := session.amdInteractionsMap[interactionId]; interactionFound {
-
-			// This is an AMD interaction.
-			interactionObject.finalResults = finalResult.GetFinalResult().GetAmdInteractionResult()
-			interactionObject.FinalStatus = finalResult.Status
-			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
-			interactionObject.finalResultsReceived = true
-			close(interactionObject.resultsReadyChannel)
-			delete(session.amdInteractionsMap, interactionId)
-
-		} else if interactionObject, interactionFound := session.cpaInteractionsMap[interactionId]; interactionFound {
-
-			// This is a CPA interaction.
-			interactionObject.finalResults = finalResult.GetFinalResult().GetCpaInteractionResult()
-			interactionObject.FinalStatus = finalResult.Status
-			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
-			interactionObject.finalResultsReceived = true
-			close(interactionObject.resultsReadyChannel)
-			delete(session.cpaInteractionsMap, interactionId)
-
-		} else if interactionObject, interactionFound := session.normalizationInteractionsMap[interactionId]; interactionFound {
-
-			// This is a normalization interaction.
-			interactionObject.finalResults = finalResult.GetFinalResult().GetNormalizeTextResult()
-			interactionObject.FinalStatus = finalResult.Status
-			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
-			interactionObject.finalResultsReceived = true
-			close(interactionObject.resultsReadyChannel)
-			delete(session.normalizationInteractionsMap, interactionId)
-
-		} else if interactionObject, interactionFound := session.neuronInteractionsMap[interactionId]; interactionFound {
-
-			// This is a neuron interaction.
-			interactionObject.finalResults = finalResult.GetFinalResult().GetNeuronInteractionResult()
-			interactionObject.FinalStatus = finalResult.Status
-			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
-			interactionObject.finalResultsReceived = true
-			close(interactionObject.resultsReadyChannel)
-			delete(session.neuronInteractionsMap, interactionId)
-
-		} else if interactionObject, interactionFound := session.sentimentInteractionsMap[interactionId]; interactionFound {
-
-			// This is a sentiment interaction.
-			interactionObject.finalResults = finalResult.GetFinalResult().GetSentimentInteractionResult()
-			interactionObject.FinalStatus = finalResult.Status
-			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
-			interactionObject.finalResultsReceived = true
-			close(interactionObject.resultsReadyChannel)
-			delete(session.sentimentInteractionsMap, interactionId)
-
-		} else if interactionObject, interactionFound := session.ttsInteractionsMap[interactionId]; interactionFound {
-
-			// This is a TTS interaction.
-			interactionObject.finalResults = finalResult.GetFinalResult().GetTtsInteractionResult()
-			interactionObject.FinalStatus = finalResult.Status
-			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
-			interactionObject.finalResultsReceived = true
-			close(interactionObject.resultsReadyChannel)
-			delete(session.ttsInteractionsMap, interactionId)
-
-		} else if interactionObject, interactionFound := session.diarizationInteractionsMap[interactionId]; interactionFound {
-
-			// This is a diarization interaction.
-			interactionObject.finalResults = finalResult.GetFinalResult().GetDiarizationInteractionResult()
-			interactionObject.FinalStatus = finalResult.Status
-			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
-			interactionObject.finalResultsReceived = true
-			close(interactionObject.resultsReadyChannel)
-			delete(session.diarizationInteractionsMap, interactionId)
-
-		} else if interactionObject, interactionFound := session.languageIdInteractionsMap[interactionId]; interactionFound {
-
-			// This is a diarization interaction.
-			interactionObject.finalResults = finalResult.GetFinalResult().GetLanguageIdInteractionResult()
-			interactionObject.FinalStatus = finalResult.Status
-			interactionObject.FinalResultStatus = finalResult.FinalResultStatus
-			interactionObject.finalResultsReceived = true
-			close(interactionObject.resultsReadyChannel)
-			delete(session.languageIdInteractionsMap, interactionId)
-
-		} else {
-			// We did not find the interaction.
-			logger.Error("Recv FinalResult: interaction not found",
-				"interactionId", interactionId)
-		}
+	if finalResult == nil {
+		logger.Warn("handleFinalResult received nil FinalResult",
+			"interaction_id", interactionId)
+		return
 	}
+
+	// Try ASR interactions first
+	session.asrInteractionsLock.Lock()
+	if interactionObject, interactionFound := session.asrInteractionsMap[interactionId]; interactionFound {
+		// This is an ASR interaction.
+		// We support grammar-based alternatives for multiple interaction types, so we need to figure
+		// out which was active here.
+		if finalResult.GetFinalResult().GetCpaInteractionResult() != nil {
+			newAsrInteractionResult := &api.AsrInteractionResult{
+				NBests: []*api.AsrGrammarResult{finalResult.GetFinalResult().GetCpaInteractionResult().CpaResult},
+			}
+			interactionObject.finalResults = newAsrInteractionResult
+		} else if finalResult.GetFinalResult().GetAmdInteractionResult() != nil {
+			newAsrInteractionResult := &api.AsrInteractionResult{
+				NBests: []*api.AsrGrammarResult{finalResult.GetFinalResult().GetAmdInteractionResult().AmdResult},
+			}
+			interactionObject.finalResults = newAsrInteractionResult
+		} else {
+			// If we didn't detect CPA or AMD interaction results, assume a plain ASR interaction.
+			interactionObject.finalResults = finalResult.GetFinalResult().GetAsrInteractionResult()
+		}
+		interactionObject.FinalStatus = finalResult.Status
+		interactionObject.FinalResultStatus = finalResult.FinalResultStatus
+		interactionObject.finalResultsReceived = true
+		close(interactionObject.resultsReadyChannel)
+		delete(session.asrInteractionsMap, interactionId)
+		session.asrInteractionsLock.Unlock()
+		return
+	}
+	session.asrInteractionsLock.Unlock()
+
+	// Try transcription interactions
+	session.transcriptionInteractionsLock.Lock()
+	if interactionObject, interactionFound := session.transcriptionInteractionsMap[interactionId]; interactionFound {
+		// This is a transcription interaction.
+		interactionObject.finalResults = finalResult.GetFinalResult().GetTranscriptionInteractionResult()
+		interactionObject.FinalStatus = finalResult.Status
+		interactionObject.FinalResultStatus = finalResult.FinalResultStatus
+		interactionObject.finalResultsReceived = true
+		close(interactionObject.resultsReadyChannel)
+		delete(session.transcriptionInteractionsMap, interactionId)
+		session.transcriptionInteractionsLock.Unlock()
+		return
+	}
+	session.transcriptionInteractionsLock.Unlock()
+
+	// Try NLU interactions
+	session.nluInteractionsLock.Lock()
+	if interactionObject, interactionFound := session.nluInteractionsMap[interactionId]; interactionFound {
+		// This is an NLU interaction.
+		interactionObject.finalResults = finalResult.GetFinalResult().GetNluInteractionResult()
+		interactionObject.FinalStatus = finalResult.Status
+		interactionObject.FinalResultStatus = finalResult.FinalResultStatus
+		interactionObject.finalResultsReceived = true
+		close(interactionObject.resultsReadyChannel)
+		delete(session.nluInteractionsMap, interactionId)
+		session.nluInteractionsLock.Unlock()
+		return
+	}
+	session.nluInteractionsLock.Unlock()
+
+	// Try grammar parse interactions
+	session.grammarParseInteractionsLock.Lock()
+	if interactionObject, interactionFound := session.grammarParseInteractionsMap[interactionId]; interactionFound {
+		// This is a grammar parse interaction.
+		interactionObject.finalResults = finalResult.GetFinalResult().GetGrammarParseInteractionResult()
+		interactionObject.FinalStatus = finalResult.Status
+		interactionObject.FinalResultStatus = finalResult.FinalResultStatus
+		interactionObject.finalResultsReceived = true
+		close(interactionObject.resultsReadyChannel)
+		delete(session.grammarParseInteractionsMap, interactionId)
+		session.grammarParseInteractionsLock.Unlock()
+		return
+	}
+	session.grammarParseInteractionsLock.Unlock()
+
+	// Try AMD interactions
+	session.amdInteractionsLock.Lock()
+	if interactionObject, interactionFound := session.amdInteractionsMap[interactionId]; interactionFound {
+		// This is an AMD interaction.
+		interactionObject.finalResults = finalResult.GetFinalResult().GetAmdInteractionResult()
+		interactionObject.FinalStatus = finalResult.Status
+		interactionObject.FinalResultStatus = finalResult.FinalResultStatus
+		interactionObject.finalResultsReceived = true
+		close(interactionObject.resultsReadyChannel)
+		delete(session.amdInteractionsMap, interactionId)
+
+		session.amdInteractionsLock.Unlock()
+		return
+	}
+	session.amdInteractionsLock.Unlock()
+
+	// Try CPA interactions
+	session.cpaInteractionsLock.Lock()
+	if interactionObject, interactionFound := session.cpaInteractionsMap[interactionId]; interactionFound {
+		// This is a CPA interaction.
+		interactionObject.finalResults = finalResult.GetFinalResult().GetCpaInteractionResult()
+		interactionObject.FinalStatus = finalResult.Status
+		interactionObject.FinalResultStatus = finalResult.FinalResultStatus
+		interactionObject.finalResultsReceived = true
+		close(interactionObject.resultsReadyChannel)
+		delete(session.cpaInteractionsMap, interactionId)
+		session.cpaInteractionsLock.Unlock()
+		return
+	}
+	session.cpaInteractionsLock.Unlock()
+
+	// Try normalization interactions
+	session.normalizationInteractionsLock.Lock()
+	if interactionObject, interactionFound := session.normalizationInteractionsMap[interactionId]; interactionFound {
+		// This is a normalization interaction.
+		interactionObject.finalResults = finalResult.GetFinalResult().GetNormalizeTextResult()
+		interactionObject.FinalStatus = finalResult.Status
+		interactionObject.FinalResultStatus = finalResult.FinalResultStatus
+		interactionObject.finalResultsReceived = true
+		close(interactionObject.resultsReadyChannel)
+		delete(session.normalizationInteractionsMap, interactionId)
+		session.normalizationInteractionsLock.Unlock()
+		return
+	}
+	session.normalizationInteractionsLock.Unlock()
+
+	// Try neuron interactions
+	session.neuronInteractionsLock.Lock()
+	if interactionObject, interactionFound := session.neuronInteractionsMap[interactionId]; interactionFound {
+		// This is a neuron interaction.
+		interactionObject.finalResults = finalResult.GetFinalResult().GetNeuronInteractionResult()
+		interactionObject.FinalStatus = finalResult.Status
+		interactionObject.FinalResultStatus = finalResult.FinalResultStatus
+		interactionObject.finalResultsReceived = true
+		close(interactionObject.resultsReadyChannel)
+		delete(session.neuronInteractionsMap, interactionId)
+
+		session.neuronInteractionsLock.Unlock()
+		return
+	}
+	session.neuronInteractionsLock.Unlock()
+
+	// Try sentiment interactions
+	session.sentimentInteractionsLock.Lock()
+	if interactionObject, interactionFound := session.sentimentInteractionsMap[interactionId]; interactionFound {
+		// This is a sentiment interaction.
+		interactionObject.finalResults = finalResult.GetFinalResult().GetSentimentInteractionResult()
+		interactionObject.FinalStatus = finalResult.Status
+		interactionObject.FinalResultStatus = finalResult.FinalResultStatus
+		interactionObject.finalResultsReceived = true
+		close(interactionObject.resultsReadyChannel)
+		delete(session.sentimentInteractionsMap, interactionId)
+		session.sentimentInteractionsLock.Unlock()
+		return
+	}
+	session.sentimentInteractionsLock.Unlock()
+
+	// Try TTS interactions
+	session.ttsInteractionsLock.Lock()
+	if interactionObject, interactionFound := session.ttsInteractionsMap[interactionId]; interactionFound {
+		// This is a TTS interaction.
+		interactionObject.finalResults = finalResult.GetFinalResult().GetTtsInteractionResult()
+		interactionObject.FinalStatus = finalResult.Status
+		interactionObject.FinalResultStatus = finalResult.FinalResultStatus
+		interactionObject.finalResultsReceived = true
+		close(interactionObject.resultsReadyChannel)
+		delete(session.ttsInteractionsMap, interactionId)
+		session.ttsInteractionsLock.Unlock()
+		return
+	}
+	session.ttsInteractionsLock.Unlock()
+
+	// Try diarization interactions
+	session.diarizationInteractionsLock.Lock()
+	if interactionObject, interactionFound := session.diarizationInteractionsMap[interactionId]; interactionFound {
+		// This is a diarization interaction.
+		interactionObject.finalResults = finalResult.GetFinalResult().GetDiarizationInteractionResult()
+		interactionObject.FinalStatus = finalResult.Status
+		interactionObject.FinalResultStatus = finalResult.FinalResultStatus
+		interactionObject.finalResultsReceived = true
+		close(interactionObject.resultsReadyChannel)
+		delete(session.diarizationInteractionsMap, interactionId)
+
+		session.diarizationInteractionsLock.Unlock()
+		return
+	}
+	session.diarizationInteractionsLock.Unlock()
+
+	// Try language ID interactions
+	session.languageIdInteractionsLock.Lock()
+	if interactionObject, interactionFound := session.languageIdInteractionsMap[interactionId]; interactionFound {
+		// This is a language ID interaction.
+		interactionObject.finalResults = finalResult.GetFinalResult().GetLanguageIdInteractionResult()
+		interactionObject.FinalStatus = finalResult.Status
+		interactionObject.FinalResultStatus = finalResult.FinalResultStatus
+		interactionObject.finalResultsReceived = true
+		close(interactionObject.resultsReadyChannel)
+		delete(session.languageIdInteractionsMap, interactionId)
+		session.languageIdInteractionsLock.Unlock()
+		return
+	}
+	session.languageIdInteractionsLock.Unlock()
+
+	// We did not find the interaction.
+	logger.Error("Recv FinalResult: interaction not found",
+		"interaction_id", interactionId)
 }
 
 func handlePartialResult(session *SessionObject, response *api.SessionResponse) {
@@ -1661,7 +1688,10 @@ func handlePartialResult(session *SessionObject, response *api.SessionResponse) 
 	// Get the interaction id, to find the interaction object.
 	interactionId := response.GetPartialResult().GetInteractionId()
 
+	// Try ASR interactions first
+	session.asrInteractionsLock.RLock()
 	if interactionObject, ok := session.asrInteractionsMap[interactionId]; ok {
+		session.asrInteractionsLock.RUnlock()
 
 		// This is an ASR interaction.
 
@@ -1680,8 +1710,14 @@ func handlePartialResult(session *SessionObject, response *api.SessionResponse) 
 		close(interactionObject.partialResultsChannels[partialResultIdx])
 		// Done with updates; release lock.
 		interactionObject.partialResultLock.Unlock()
+		return
+	}
+	session.asrInteractionsLock.RUnlock()
 
-	} else if interactionObject, ok := session.transcriptionInteractionsMap[interactionId]; ok {
+	// Try transcription interactions
+	session.transcriptionInteractionsLock.RLock()
+	if interactionObject, ok := session.transcriptionInteractionsMap[interactionId]; ok {
+		session.transcriptionInteractionsLock.RUnlock()
 
 		// This is a transcription interaction.
 
@@ -1700,8 +1736,14 @@ func handlePartialResult(session *SessionObject, response *api.SessionResponse) 
 		close(interactionObject.partialResultsChannels[partialResultIdx])
 		// Done with updates; release lock.
 		interactionObject.partialResultLock.Unlock()
+		return
+	}
+	session.transcriptionInteractionsLock.RUnlock()
 
-	} else if interactionObject, ok := session.ttsInteractionsMap[interactionId]; ok {
+	// Try TTS interactions
+	session.ttsInteractionsLock.RLock()
+	if interactionObject, ok := session.ttsInteractionsMap[interactionId]; ok {
+		session.ttsInteractionsLock.RUnlock()
 
 		// This is a TTS interaction.
 
@@ -1720,11 +1762,220 @@ func handlePartialResult(session *SessionObject, response *api.SessionResponse) 
 		close(interactionObject.partialResultsChannels[partialResultIdx])
 		// Done with updates; release lock.
 		interactionObject.partialResultLock.Unlock()
+		return
+	}
+	session.ttsInteractionsLock.RUnlock()
 
+	// We did not find the interaction.
+	logger.Error("Recv PartialResult: interaction not found",
+		"interaction_id", interactionId)
+}
+
+func handleSessionEvent(session *SessionObject, response *api.SessionResponse) {
+	// Check if this SessionEvent has a correlation ID for routing to specific handlers
+	if response.CorrelationId != nil && response.CorrelationId.Value != "" {
+		correlationId := response.CorrelationId.Value
+
+		// Check for interaction create ASR error response
+		if handleInteractionCreateAsrError(session, response, correlationId) {
+			return
+		}
+
+		// Check for interaction create transcription error response
+		if handleInteractionCreateTranscriptionError(session, response, correlationId) {
+			return
+		}
+
+		// Check for finalize interaction response
+		if handleFinalizeInteractionResponse(session, response, correlationId) {
+			return
+		}
+
+		// Add other correlation-based handlers here as needed
+	}
+
+	// Handle other SessionEvent types (grammar errors, etc.)
+	handleOtherSessionEvents(session, response)
+}
+
+func handleInteractionCreateAsrError(session *SessionObject, response *api.SessionResponse, correlationId string) bool {
+	logger := getLogger()
+
+	session.interactionCreateAsrMapLock.Lock()
+	createAsrHelper, exists := session.interactionCreateAsrMap[correlationId]
+	if exists {
+		// each helper should only be used once, so delete the map entry before unlocking
+		delete(session.interactionCreateAsrMap, correlationId)
+	}
+	session.interactionCreateAsrMapLock.Unlock()
+
+	if !exists {
+		return false // not an ASR create error
+	}
+
+	if EnableVerboseLogging {
+		logger.Debug("Recv interaction create ASR error response",
+			"response", response)
+	}
+
+	// catch nil helper
+	if createAsrHelper == nil {
+		logger.Warn("error routing interaction create ASR response",
+			"error", "ASR helper is nil",
+			"response", response)
+		return true
+	}
+
+	// catch timeout
+	if time.Now().After(createAsrHelper.deadline) {
+		logger.Warn("error routing interaction create ASR response",
+			"error", "interaction create ASR timed out",
+			"response", response)
+		return true
+	}
+
+	// Create error from API response
+	var apiError error
+	if response.GetSessionEvent().StatusMessage != nil {
+		logger.Error("interaction create ASR failed",
+			"error", response.GetSessionEvent().StatusMessage.Message,
+			"code", response.GetSessionEvent().StatusMessage.Code,
+			"correlation_id", correlationId)
+
+		apiError = fmt.Errorf("ASR interaction creation failed: %s (code: %d)",
+			response.GetSessionEvent().StatusMessage.Message,
+			response.GetSessionEvent().StatusMessage.Code)
 	} else {
-		// We did not find the interaction.
-		logger.Error("Recv PartialResult: interaction not found",
-			"interactionId", interactionId)
+		apiError = errors.New("ASR interaction creation failed: unknown error")
+	}
+
+	// Send the error result through the channel
+	result := &asrCreateResult{
+		InteractionObject: nil,
+		Error:             apiError,
+	}
+	createAsrHelper.interactionCreateChannel <- result
+	return true
+}
+
+func handleInteractionCreateTranscriptionError(session *SessionObject, response *api.SessionResponse, correlationId string) bool {
+	logger := getLogger()
+
+	session.interactionCreateTranscriptionMapLock.Lock()
+	createTranscriptionHelper, exists := session.interactionCreateTranscriptionMap[correlationId]
+	if exists {
+		// each helper should only be used once, so delete the map entry before unlocking
+		delete(session.interactionCreateTranscriptionMap, correlationId)
+	}
+	session.interactionCreateTranscriptionMapLock.Unlock()
+
+	if !exists {
+		return false // not a transcription create error
+	}
+
+	if EnableVerboseLogging {
+		logger.Debug("Recv interaction create transcription error response",
+			"response", response)
+	}
+
+	// catch nil helper
+	if createTranscriptionHelper == nil {
+		logger.Warn("error routing interaction create transcription response",
+			"error", "transcription helper is nil",
+			"response", response)
+		return true
+	}
+
+	// catch timeout
+	if time.Now().After(createTranscriptionHelper.deadline) {
+		logger.Warn("error routing interaction create transcription response",
+			"error", "interaction create transcription timed out",
+			"response", response)
+		return true
+	}
+
+	// Create error from API response
+	var apiError error
+	if response.GetSessionEvent().StatusMessage != nil {
+		logger.Error("interaction create transcription failed",
+			"error", response.GetSessionEvent().StatusMessage.Message,
+			"code", response.GetSessionEvent().StatusMessage.Code,
+			"correlation_id", correlationId)
+
+		apiError = fmt.Errorf("transcription interaction creation failed: %s (code: %d)",
+			response.GetSessionEvent().StatusMessage.Message,
+			response.GetSessionEvent().StatusMessage.Code)
+	} else {
+		apiError = errors.New("transcription interaction creation failed: unknown error")
+	}
+
+	// Send the error result through the channel
+	result := &transcriptionCreateResult{
+		InteractionObject: nil,
+		Error:             apiError,
+	}
+	createTranscriptionHelper.interactionCreateChannel <- result
+	return true
+}
+
+func handleFinalizeInteractionResponse(session *SessionObject, response *api.SessionResponse, correlationId string) bool {
+	logger := getLogger()
+
+	session.interactionFinalizeMapLock.Lock()
+	finalizeHelper, exists := session.interactionFinalizeMap[correlationId]
+	if exists {
+		// each helper should only be used once, so delete the map entry before unlocking
+		delete(session.interactionFinalizeMap, correlationId)
+	}
+	session.interactionFinalizeMapLock.Unlock()
+
+	if !exists {
+		return false // not a finalize response
+	}
+
+	if EnableVerboseLogging {
+		logger.Debug("Recv finalize interaction response",
+			"response", response)
+	}
+
+	// catch nil helper
+	if finalizeHelper == nil {
+		logger.Warn("error routing finalize interaction response",
+			"error", "finalize helper is nil",
+			"response", response)
+		return true
+	}
+
+	// catch timeout
+	if time.Now().After(finalizeHelper.deadline) {
+		logger.Warn("error routing finalize interaction response",
+			"error", "finalize interaction timed out",
+			"response", response)
+		return true
+	}
+
+	// determine success or failure based on status code
+	var responseErr error
+	if response.GetSessionEvent().StatusMessage != nil && response.GetSessionEvent().StatusMessage.Code != 0 {
+		responseErr = fmt.Errorf("finalize interaction failed: %s (code: %d)",
+			response.GetSessionEvent().StatusMessage.Message,
+			response.GetSessionEvent().StatusMessage.Code)
+	}
+
+	// send the response (nil for success, error for failure)
+	finalizeHelper.responseChannel <- responseErr
+	return true
+}
+
+func handleOtherSessionEvents(session *SessionObject, response *api.SessionResponse) {
+	// Handle grammar errors and other non-correlation-based session events
+	if response.GetSessionEvent().StatusMessage != nil {
+		if strings.Contains(response.GetSessionEvent().StatusMessage.Message, "grammar failed to load") {
+			logger := getLogger()
+			logger.Error("Recv grammar error",
+				"response", response)
+			session.grammarErrorChannel <- response.GetSessionEvent()
+		}
 	}
 }
 
@@ -1752,7 +2003,7 @@ func handleAudioPull(session *SessionObject, response *api.SessionResponse) {
 	audioPullChannel, ok := session.ttsAudioMap[correlationId]
 	if ok == false {
 		logger.Error("Recv AudioPull: audio pull channel not found",
-			"correlationId", correlationId)
+			"correlation_id", correlationId)
 		session.ttsAudioMapLock.Unlock()
 		return
 	}
@@ -1769,6 +2020,6 @@ func handleAudioPull(session *SessionObject, response *api.SessionResponse) {
 	case audioPullChannel <- audioPullResponse:
 	default:
 		logger.Error("Recv AudioPull: audio pull channel full",
-			"correlationId", correlationId)
+			"correlation_id", correlationId)
 	}
 }

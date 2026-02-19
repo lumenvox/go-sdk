@@ -138,6 +138,7 @@ func (client *SdkClient) GetAmdSettings(useAmd bool,
 	busyEnable *api.OptionalBool,
 	BusyInputText *api.OptionalString,
 	toneDetectTimeoutMs *api.OptionalInt32,
+	screeningEnable *api.OptionalBool,
 ) (amdSettings *api.AmdSettings) {
 
 	amdSettings = &api.AmdSettings{
@@ -156,6 +157,7 @@ func (client *SdkClient) GetAmdSettings(useAmd bool,
 		BusyEnable:                   busyEnable,
 		BusyInputText:                BusyInputText,
 		ToneDetectTimeoutMs:          toneDetectTimeoutMs,
+		ScreeningEnable:              screeningEnable,
 	}
 
 	return amdSettings
@@ -168,6 +170,8 @@ func (client *SdkClient) GetCpaSettings(
 	humanBusinessTimeMs *api.OptionalInt32,
 	unknownSilenceTimeoutMs *api.OptionalInt32,
 	maxTimeFromConnectMs *api.OptionalInt32,
+	promptEndDetect *api.OptionalBool,
+	promptEndTimeoutMs *api.OptionalInt32,
 ) (cpaSettings *api.CpaSettings) {
 
 	cpaSettings = &api.CpaSettings{
@@ -175,6 +179,8 @@ func (client *SdkClient) GetCpaSettings(
 		HumanBusinessTimeMs:     humanBusinessTimeMs,
 		UnknownSilenceTimeoutMs: unknownSilenceTimeoutMs,
 		MaxTimeFromConnectMs:    maxTimeFromConnectMs,
+		PromptEndDetect:         promptEndDetect,
+		PromptEndTimeoutMs:      promptEndTimeoutMs,
 	}
 
 	return cpaSettings

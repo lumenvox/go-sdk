@@ -73,8 +73,8 @@ func (authSettings AuthSettings) validate() (err error) {
 	return nil
 }
 
-// CognitoProvider uses AWS Cognito to fetch tokens
-type CognitoProvider struct {
+// cognitoProvider uses AWS Cognito to fetch tokens
+type cognitoProvider struct {
 	Settings AuthSettings
 	Client   *http.Client
 
@@ -85,18 +85,26 @@ type CognitoProvider struct {
 
 // Global cognito provider and initializer controls
 var (
-	globalCognitoProvider *CognitoProvider
+	globalCognitoProvider *cognitoProvider
 	globalOnce            sync.Once
 	tokenRefreshMinimum   = 30 * time.Minute
 )
 
-// GetGlobalCognitoProvider initializes a single global instance safely
+// GetToken retrieves an OAuth access token for the given auth settings.
+// It uses a cached global token provider and returns a cached token when
+// possible, only refreshing when the token is near expiry.
+func GetToken(ctx context.Context, settings AuthSettings) (string, error) {
+	provider := getGlobalCognitoProvider(settings)
+	return provider.getToken(ctx)
+}
+
+// getGlobalCognitoProvider initializes a single global instance safely
 // and returns the same instance each subsequent call.
-func GetGlobalCognitoProvider(settings AuthSettings) *CognitoProvider {
+func getGlobalCognitoProvider(settings AuthSettings) *cognitoProvider {
 
 	// Allow 10 seconds for a response from AWS Cognito
 	globalOnce.Do(func() {
-		globalCognitoProvider = &CognitoProvider{
+		globalCognitoProvider = &cognitoProvider{
 			Settings: settings,
 			Client:   &http.Client{Timeout: 10 * time.Second},
 		}
@@ -119,8 +127,8 @@ type cognitoAuthResponse struct {
 	ChallengeName string `json:"ChallengeName"`
 }
 
-// GetToken requests a token from AWS Cognito
-func (cognitoProvider *CognitoProvider) GetToken(ctx context.Context) (string, error) {
+// getToken requests a token from AWS Cognito
+func (cognitoProvider *cognitoProvider) getToken(ctx context.Context) (string, error) {
 
 	cognitoProvider.mu.RLock()
 	token := cognitoProvider.cachedToken

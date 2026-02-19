@@ -20,7 +20,7 @@ func main() {
 	///////////////////////
 
 	// Get SDK configuration
-	cfg, err := config.GetConfigValues("./config_values.ini")
+	cfg, err := config.GetConfigValues("../../config_values.ini")
 	if err != nil {
 		tmpLogger, _ := logging.GetLogger() // get default logger
 		tmpLogger.Error("unable to get config",
@@ -88,11 +88,11 @@ func main() {
 	language := "en-US"
 
 	// Configure normalization settings.
-	enableInverseText := false
-	enableCapitalization := true
-	enableRedaction := false
-	enableSrtGeneration := false
-	enableVttGeneration := false
+	const enableInverseText = false
+	const enableCapitalization = true
+	const enableRedaction = false
+	const enableSrtGeneration = false
+	const enableVttGeneration = false
 	var requestTimeoutMs *api.OptionalInt32 = nil
 	normalizationSettings := client.GetNormalizationSettings(enableInverseText, enableCapitalization,
 		enableRedaction, enableSrtGeneration, enableVttGeneration, requestTimeoutMs)
@@ -119,8 +119,8 @@ func main() {
 	}
 
 	interactionId := normalizationInteraction.InteractionId
-	logger.Info("received interactionId",
-		"interactionId", interactionId)
+	logger.Info("received interaction_id",
+		"interaction_id", interactionId)
 
 	///////////////////////
 	// Get results
@@ -133,7 +133,7 @@ func main() {
 			"error", err)
 	} else {
 		logger.Info("got final results",
-			"finalResults", finalResults)
+			"final_results", finalResults)
 	}
 
 	///////////////////////

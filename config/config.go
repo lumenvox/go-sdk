@@ -71,7 +71,7 @@ func (configValues *ConfigValues) load(iniFilepath string) (err error) {
 		configFromFile, err := ini.Load(iniFilepath)
 		if err != nil {
 			logger.Error("failed to load settings from file",
-				"iniFilepath", iniFilepath,
+				"ini_filepath", iniFilepath,
 				"error", err)
 		} else {
 			configValues.loadedFile = iniFilepath

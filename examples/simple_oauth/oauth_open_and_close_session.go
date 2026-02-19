@@ -20,7 +20,7 @@ func main() {
 	///////////////////////
 
 	// Get SDK configuration
-	cfg, err := config.GetConfigValues("./config_values.ini")
+	cfg, err := config.GetConfigValues("../../config_values.ini")
 	if err != nil {
 		tmpLogger, _ := logging.GetLogger() // get default logger
 		tmpLogger.Error("unable to get config",
@@ -79,7 +79,7 @@ func main() {
 	}
 
 	logger.Info("received session response",
-		"SessionId", sessionObject.SessionId)
+		"session_id", sessionObject.SessionId)
 
 	///////////////////////
 	// Session close

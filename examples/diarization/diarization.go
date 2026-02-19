@@ -20,7 +20,7 @@ func main() {
 	///////////////////////
 
 	// Get SDK configuration
-	cfg, err := config.GetConfigValues("./config_values.ini")
+	cfg, err := config.GetConfigValues("../../config_values.ini")
 	if err != nil {
 		tmpLogger, _ := logging.GetLogger() // get default logger
 		tmpLogger.Error("unable to get config",
@@ -89,16 +89,23 @@ func main() {
 	var audioData []byte
 
 	// Read data from disk.
-	audioFilePath := "./examples/test_data/Capacity-AI-Powered-Support-Automation-Platform-English-1min.ulaw"
+	audioFilePath := "../../examples/test_data/Capacity-AI-Powered-Support-Automation-Platform-English-1min.ulaw"
 	audioData, err = os.ReadFile(audioFilePath)
 	if err != nil {
 		logger.Error("reading audio file",
 			"error", err.Error())
+		sessionObject.CloseSession()
 		os.Exit(1)
 	}
 
-	// Queue the audio for the internal streamer.
-	sessionObject.AddAudio(audioData)
+	// Push all audio data to the API. As we are in batch mode, this is a blocking call.
+	err = sessionObject.AddAudio(audioData)
+	if err != nil {
+		logger.Error("failed to upload audio",
+			"error", err.Error())
+		sessionObject.CloseSession()
+		os.Exit(1)
+	}
 
 	///////////////////////
 	// Create diarization interaction
@@ -131,8 +138,8 @@ func main() {
 	}
 
 	interactionId := diarizationInteraction.InteractionId
-	logger.Info("received interactionId",
-		"interactionId", interactionId)
+	logger.Info("received interaction_id",
+		"interaction_id", interactionId)
 
 	///////////////////////
 	// Get results
@@ -145,7 +152,7 @@ func main() {
 			"error", err)
 	} else {
 		logger.Info("got final results",
-			"finalResults", finalResults)
+			"final_results", finalResults)
 	}
 
 	///////////////////////

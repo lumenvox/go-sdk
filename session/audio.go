@@ -5,6 +5,7 @@ import (
 
 	"context"
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -77,13 +78,13 @@ func streamBatchAudio(session *SessionObject, producerCtx context.Context, audio
 	// Catch invalid chunk parameters
 	if chunkSize < 0 {
 		logger.Warn("invalid BatchChunkSize (should be non-negative) - using default",
-			"chunkSpecified", chunkSize,
+			"chunk_specified", chunkSize,
 			"default", defaultBatchChunkSize)
 		chunkSize = 0 // value assigned below
 	}
 	if chunkDelayMs < 0 {
 		logger.Warn("invalid BatchChunkDelayMs (should be non-negative) - using default",
-			"chunkDelayMsSpecified", chunkDelayMs,
+			"chunk_delay_ms_specified", chunkDelayMs,
 			"default", defaultBatchChunkDelayMs)
 		chunkDelayMs = 0 // value assigned below
 	}
@@ -102,7 +103,7 @@ func streamBatchAudio(session *SessionObject, producerCtx context.Context, audio
 		firstChunkSize = len(audioData)
 	}
 	session.streamSendLock.Lock()
-	err := session.SessionStream.Send(getAudioPushRequest("", audioData[:firstChunkSize]))
+	err := session.sessionStream.Send(getAudioPushRequest("", audioData[:firstChunkSize]))
 	session.streamSendLock.Unlock()
 	if err != nil {
 		logger.Error("sending audio to API",
@@ -133,7 +134,7 @@ audioStreamLoop:
 
 			// Send the chunk
 			session.streamSendLock.Lock()
-			err := session.SessionStream.Send(getAudioPushRequest("", remainingAudioData[:nextChunkSize]))
+			err := session.sessionStream.Send(getAudioPushRequest("", remainingAudioData[:nextChunkSize]))
 			session.streamSendLock.Unlock()
 			if err != nil {
 				logger.Error("sending audio to API",
@@ -206,7 +207,7 @@ audioStreamLoop:
 
 			// Send the chunk
 			session.streamSendLock.Lock()
-			err := session.SessionStream.Send(getAudioPushRequest("", chunkBuffer[:nextChunkSizeBytes]))
+			err := session.sessionStream.Send(getAudioPushRequest("", chunkBuffer[:nextChunkSizeBytes]))
 			session.streamSendLock.Unlock()
 			if err != nil {
 				logger.Error("sending audio to API",
@@ -254,7 +255,7 @@ func streamStreamAudio(session *SessionObject, audioData []byte) error {
 		chunkSizeMs := session.audioConfig.StreamingChunkSizeMs
 		if chunkSizeMs < 0 {
 			logger.Warn("invalid StreamingChunkSizeMs (should be non-negative) - using default",
-				"chunkSizeMs", chunkSizeMs,
+				"chunk_size_ms", chunkSizeMs,
 				"default", defaultStreamingChunkSizeMs)
 			chunkSizeMs = 0
 		}
@@ -283,7 +284,8 @@ func streamStreamAudio(session *SessionObject, audioData []byte) error {
 		case api.AudioFormat_STANDARD_AUDIO_FORMAT_ALAW:
 		default:
 			session.audioStreamerLock.Unlock()
-			return errors.New("unsupported audio format")
+			formatName := api.AudioFormat_StandardAudioFormat_name[int32(format)]
+			return fmt.Errorf("unsupported audio format for streaming: %s", formatName)
 		}
 
 		// By creating the context here, we avoid creating a new context for every AddAudio call (which

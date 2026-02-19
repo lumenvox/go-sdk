@@ -86,17 +86,17 @@ func (session *SessionObject) NewAmd(
 	correlationId := uuid.NewString()
 
 	// Create a channel to wait for the response
-	interactionCreateChan, err := session.prepareInteractionCreateAmd(correlationId, InteractionCreateDeadline)
+	interactionCreateChan, err := session.prepareInteractionCreateAmd(correlationId, interactionCreateDeadline)
 	if err != nil {
 		logger.Error(err.Error(),
-			"correlationId", correlationId,
-			"sessionId", session.SessionId)
+			"correlation_id", correlationId,
+			"session_id", session.SessionId)
 		return nil, err
 	}
 
 	// send the interaction create request
 	session.streamSendLock.Lock()
-	err = session.SessionStream.Send(getAmdRequest(correlationId,
+	err = session.sessionStream.Send(getAmdRequest(correlationId,
 		amdSettings, audioConsumeSettings, vadSettings, generalInteractionSettings))
 	session.streamSendLock.Unlock()
 	if err != nil {
@@ -109,25 +109,25 @@ func (session *SessionObject) NewAmd(
 	// Wait for the new interaction object.
 	select {
 	case interactionObject = <-interactionCreateChan:
-	case <-time.After(InteractionCreateDeadline):
+	case <-time.After(interactionCreateDeadline):
 		logger.Error("timed out waiting for interaction object",
 			"type", "amd",
-			"correlationId", correlationId,
-			"sessionId", session.SessionId)
+			"correlation_id", correlationId,
+			"session_id", session.SessionId)
 		return nil, errors.New("timed out waiting for interaction object")
 	}
 
 	if interactionObject == nil {
 		logger.Error("received nil interaction object",
 			"type", "amd",
-			"correlationId", correlationId,
-			"sessionId", session.SessionId)
+			"correlation_id", correlationId,
+			"session_id", session.SessionId)
 		return nil, errors.New("received nil interaction object")
 	}
 
 	if EnableVerboseLogging {
 		logger.Debug("created new AMD interaction",
-			"interactionId", interactionObject.InteractionId)
+			"interaction_id", interactionObject.InteractionId)
 	}
 
 	return interactionObject, err

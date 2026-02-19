@@ -127,8 +127,8 @@ func main() {
 	}
 
 	interactionId := ttsInteraction.InteractionId
-	logger.Info("received interactionId",
-		"interactionId", interactionId)
+	logger.Info("received interaction_id",
+		"interaction_id", interactionId)
 
 	///////////////////////
 	// Get results
@@ -144,8 +144,8 @@ func main() {
 		return
 	} else {
 		logger.Info("got final results",
-			"audioFormat", finalResults.AudioFormat.String(),
-			"sampleRate", finalResults.AudioFormat.SampleRateHertz.Value)
+			"audio_format", finalResults.AudioFormat.String(),
+			"sample_rate", finalResults.AudioFormat.SampleRateHertz.Value)
 	}
 
 	///////////////////////
@@ -179,8 +179,8 @@ func main() {
 	}
 
 	logger.Info("TTS file generated",
-		"synthesisFilename", synthesisFilename,
-		"bytesGenerated", len(synthesizedAudioData))
+		"synthesis_filename", synthesisFilename,
+		"bytes_generated", len(synthesizedAudioData))
 
 	///////////////////////
 	// Session close

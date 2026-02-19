@@ -50,8 +50,13 @@ type AsrInteractionObject struct {
 	resultsReadyChannel  chan struct{}
 }
 
+type asrCreateResult struct {
+	InteractionObject *AsrInteractionObject
+	Error             error
+}
+
 type interactionCreateAsrHelper struct {
-	interactionCreateChannel chan *AsrInteractionObject
+	interactionCreateChannel chan *asrCreateResult
 	deadline                 time.Time
 }
 
@@ -61,7 +66,7 @@ type interactionCreateAsrHelper struct {
 // well as a deadline to receive the response. It returns a receive-only channel,
 // as the creating thread should not close the channel.
 func (session *SessionObject) prepareInteractionCreateAsr(correlationId string, deadline time.Duration) (
-	interactionCreateChan <-chan *AsrInteractionObject, err error) {
+	interactionCreateChan <-chan *asrCreateResult, err error) {
 
 	session.interactionCreateAsrMapLock.Lock()
 	defer session.interactionCreateAsrMapLock.Unlock()
@@ -73,7 +78,7 @@ func (session *SessionObject) prepareInteractionCreateAsr(correlationId string, 
 
 	// create the helper, put it in the map, and return the channel
 	interactionCreateHelper := &interactionCreateAsrHelper{
-		interactionCreateChannel: make(chan *AsrInteractionObject, 1),
+		interactionCreateChannel: make(chan *asrCreateResult, 1),
 		deadline:                 time.Now().Add(deadline),
 	}
 	session.interactionCreateAsrMap[correlationId] = interactionCreateHelper
@@ -100,17 +105,17 @@ func (session *SessionObject) NewAsr(
 	correlationId := uuid.NewString()
 
 	// Create a helper struct to wait for the new interaction object
-	interactionCreateChan, err := session.prepareInteractionCreateAsr(correlationId, InteractionCreateDeadline)
+	interactionCreateChan, err := session.prepareInteractionCreateAsr(correlationId, interactionCreateDeadline)
 	if err != nil {
 		logger.Error(err.Error(),
-			"correlationId", correlationId,
-			"sessionId", session.SessionId)
+			"correlation_id", correlationId,
+			"session_id", session.SessionId)
 		return nil, err
 	}
 
 	// send the interaction create request
 	session.streamSendLock.Lock()
-	err = session.SessionStream.Send(getAsrRequest(correlationId, language, grammars, grammarSettings,
+	err = session.sessionStream.Send(getAsrRequest(correlationId, language, grammars, grammarSettings,
 		recognitionSettings, vadSettings, audioConsumeSettings, generalInteractionSettings))
 	session.streamSendLock.Unlock()
 	if err != nil {
@@ -120,28 +125,36 @@ func (session *SessionObject) NewAsr(
 		return nil, err
 	}
 
-	// Wait for the new interaction object.
+	// Wait for the new interaction object or error.
+	var result *asrCreateResult
 	select {
-	case interactionObject = <-interactionCreateChan:
-	case <-time.After(InteractionCreateDeadline):
+	case result = <-interactionCreateChan:
+	case <-time.After(interactionCreateDeadline):
 		logger.Error("timed out waiting for interaction object",
 			"type", "asr",
-			"correlationId", correlationId,
-			"sessionId", session.SessionId)
+			"correlation_id", correlationId,
+			"session_id", session.SessionId)
 		return nil, errors.New("timed out waiting for interaction object")
 	}
 
-	if interactionObject == nil {
-		logger.Error("received nil interaction object",
+	if result.Error != nil {
+		// API returned an error, return it to the caller
+		return nil, result.Error
+	}
+
+	if result.InteractionObject == nil {
+		logger.Error("received nil interaction object without error",
 			"type", "asr",
-			"correlationId", correlationId,
-			"sessionId", session.SessionId)
+			"correlation_id", correlationId,
+			"session_id", session.SessionId)
 		return nil, errors.New("received nil interaction object")
 	}
 
+	interactionObject = result.InteractionObject
+
 	if EnableVerboseLogging {
 		logger.Debug("created new ASR interaction",
-			"interactionId", interactionObject.InteractionId)
+			"interaction_id", interactionObject.InteractionId)
 	}
 
 	return interactionObject, err
@@ -346,7 +359,8 @@ func (asrInteraction *AsrInteractionObject) GetFinalResults(timeout time.Duratio
 	if asrInteraction.finalResultsReceived {
 		// If we received final results, verify the status.
 		if asrInteraction.FinalResultStatus == api.FinalResultStatus_FINAL_RESULT_STATUS_GRAMMAR_MATCH ||
-			asrInteraction.FinalResultStatus == api.FinalResultStatus_FINAL_RESULT_STATUS_CPA_RESULT {
+			asrInteraction.FinalResultStatus == api.FinalResultStatus_FINAL_RESULT_STATUS_CPA_RESULT ||
+			asrInteraction.FinalResultStatus == api.FinalResultStatus_FINAL_RESULT_STATUS_AMD_TONE {
 			// Successful interaction, return result
 			return asrInteraction.finalResults, nil
 		} else {

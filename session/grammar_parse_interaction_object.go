@@ -63,7 +63,8 @@ func (session *SessionObject) NewGrammarParse(language string,
 	grammars []*api.Grammar,
 	grammarSettings *api.GrammarSettings,
 	parseTimeoutMs *api.OptionalInt32,
-	generalInteractionSettings *api.GeneralInteractionSettings) (interactionObject *GrammarParseInteractionObject, err error) {
+	generalInteractionSettings *api.GeneralInteractionSettings,
+	includeParseTrees bool) (interactionObject *GrammarParseInteractionObject, err error) {
 
 	logger := getLogger()
 
@@ -71,18 +72,18 @@ func (session *SessionObject) NewGrammarParse(language string,
 	correlationId := uuid.NewString()
 
 	// Create a helper struct to wait for the new interaction object
-	interactionCreateChan, err := session.prepareInteractionCreateGrammarParse(correlationId, InteractionCreateDeadline)
+	interactionCreateChan, err := session.prepareInteractionCreateGrammarParse(correlationId, interactionCreateDeadline)
 	if err != nil {
 		logger.Error(err.Error(),
-			"correlationId", correlationId,
-			"sessionId", session.SessionId)
+			"correlation_id", correlationId,
+			"session_id", session.SessionId)
 		return nil, err
 	}
 
 	// send the interaction create request
 	session.streamSendLock.Lock()
-	err = session.SessionStream.Send(getGrammarParseRequest(correlationId, language, inputText, grammars,
-		grammarSettings, parseTimeoutMs, generalInteractionSettings))
+	err = session.sessionStream.Send(getGrammarParseRequest(correlationId, language, inputText, grammars,
+		grammarSettings, parseTimeoutMs, generalInteractionSettings, includeParseTrees))
 	session.streamSendLock.Unlock()
 	if err != nil {
 		session.errorChan <- fmt.Errorf("sending InteractionCreateGrammarParseRequest error: %v", err)
@@ -94,25 +95,25 @@ func (session *SessionObject) NewGrammarParse(language string,
 	// Wait for the new interaction object.
 	select {
 	case interactionObject = <-interactionCreateChan:
-	case <-time.After(InteractionCreateDeadline):
+	case <-time.After(interactionCreateDeadline):
 		logger.Error("timed out waiting for interaction object",
 			"type", "grammar parse",
-			"correlationId", correlationId,
-			"sessionId", session.SessionId)
+			"correlation_id", correlationId,
+			"session_id", session.SessionId)
 		return nil, errors.New("timed out waiting for interaction object")
 	}
 
 	if interactionObject == nil {
 		logger.Error("received nil interaction object",
 			"type", "grammar parse",
-			"correlationId", correlationId,
-			"sessionId", session.SessionId)
+			"correlation_id", correlationId,
+			"session_id", session.SessionId)
 		return nil, errors.New("received nil interaction object")
 	}
 
 	if EnableVerboseLogging {
 		logger.Debug("created new grammar parse interaction",
-			"interactionId", interactionObject.InteractionId)
+			"interaction_id", interactionObject.InteractionId)
 	}
 
 	return interactionObject, err

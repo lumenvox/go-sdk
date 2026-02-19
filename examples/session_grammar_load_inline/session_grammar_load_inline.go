@@ -20,7 +20,7 @@ func main() {
 	///////////////////////
 
 	// Get SDK configuration
-	cfg, err := config.GetConfigValues("./config_values.ini")
+	cfg, err := config.GetConfigValues("../../config_values.ini")
 	if err != nil {
 		tmpLogger, _ := logging.GetLogger() // get default logger
 		tmpLogger.Error("unable to get config",
@@ -88,7 +88,7 @@ func main() {
 	language := "en-US"
 	grammarLabel := "digits-grammar"
 
-	grammarBytes, err := os.ReadFile("examples/test_data/en_digits.grxml")
+	grammarBytes, err := os.ReadFile("../../examples/test_data/en_digits.grxml")
 	if err != nil {
 		logger.Error("reading grammar file",
 			"error", err.Error())
@@ -122,7 +122,7 @@ func main() {
 			"error", err)
 	} else {
 		logger.Info("got final results",
-			"finalResults", finalResults)
+			"final_results", finalResults)
 	}
 
 	///////////////////////

@@ -34,7 +34,7 @@ func main() {
 	///////////////////////
 
 	// Get SDK configuration
-	cfg, err := config.GetConfigValues("./config_values.ini")
+	cfg, err := config.GetConfigValues("../../config_values.ini")
 	if err != nil {
 		tmpLogger, _ := logging.GetLogger() // get default logger
 		tmpLogger.Error("unable to get config",
@@ -106,10 +106,10 @@ func main() {
 	var summarizationWords int32 = 0
 	translateFromLanguage := ""
 	translateToLanguage := ""
-	enableLanguageDetect := false
-	enableTopicDetect := false
+	const enableLanguageDetect = false
+	const enableTopicDetect = false
 	detectOutcomeType := api.NluSettings_UNDEFINED
-	enableSentimentAnalysis := true
+	const enableSentimentAnalysis = true
 	var requestTimeoutMs *api.OptionalInt32 = nil
 	nluSettings := client.GetNluSettings(summarizationBulletPoints, summarizationWords,
 		translateFromLanguage, translateToLanguage, enableLanguageDetect, enableTopicDetect,
@@ -135,8 +135,8 @@ func main() {
 	}
 
 	interactionId := nluInteraction.InteractionId
-	logger.Info("received interactionId",
-		"interactionId", interactionId)
+	logger.Info("received interaction_id",
+		"interaction_id", interactionId)
 
 	///////////////////////
 	// Get results
@@ -149,7 +149,7 @@ func main() {
 			"error", err)
 	} else {
 		logger.Info("got final results",
-			"finalResults", finalResults)
+			"final_results", finalResults)
 	}
 
 	///////////////////////

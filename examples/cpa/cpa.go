@@ -20,7 +20,7 @@ func main() {
 	///////////////////////
 
 	// Get SDK configuration
-	cfg, err := config.GetConfigValues("./config_values.ini")
+	cfg, err := config.GetConfigValues("../../config_values.ini")
 	if err != nil {
 		tmpLogger, _ := logging.GetLogger() // get default logger
 		tmpLogger.Error("unable to get config",
@@ -89,16 +89,23 @@ func main() {
 	var audioData []byte
 
 	// Read data from disk.
-	audioFilePath := "./examples/test_data/human_business.ulaw"
+	audioFilePath := "../../examples/test_data/human_business.ulaw"
 	audioData, err = os.ReadFile(audioFilePath)
 	if err != nil {
 		logger.Error("reading audio file",
 			"error", err.Error())
+		sessionObject.CloseSession()
 		os.Exit(1)
 	}
 
 	// Queue the audio for the internal streamer.
-	sessionObject.AddAudio(audioData)
+	err = sessionObject.AddAudio(audioData)
+	if err != nil {
+		logger.Error("failed to queue audio",
+			"error", err.Error())
+		sessionObject.CloseSession()
+		os.Exit(1)
+	}
 
 	///////////////////////
 	// Create CPA interaction
@@ -109,12 +116,14 @@ func main() {
 	var humanBusinessTimeMs *api.OptionalInt32 = nil
 	var humanSilenceTimeoutMs *api.OptionalInt32 = nil
 	var maxTimeFromConnectMs *api.OptionalInt32 = nil
+	var promptEndDetect *api.OptionalBool = nil
+	var promptEndTimeoutMs *api.OptionalInt32 = nil
 	cpaSettings := client.GetCpaSettings(humanResidenceTimeMs, humanBusinessTimeMs,
-		humanSilenceTimeoutMs, maxTimeFromConnectMs)
+		humanSilenceTimeoutMs, maxTimeFromConnectMs, promptEndDetect, promptEndTimeoutMs)
 
 	// Configure VAD settings.
-	useVad := false
-	bargeInTimeout := int32(30000) // 30 second default
+	const useVad = false
+	bargeInTimeout := int32(30000) // 30-second default
 	eosDelay := int32(1000)
 	var endOfSpeechTimeoutMs *api.OptionalInt32 = nil
 	noiseReductionMode := api.VadSettings_NOISE_REDUCTION_MODE_DISABLED
@@ -128,7 +137,7 @@ func main() {
 
 	// Configure audio consume settings.
 	var audioChannel int32 = 0
-	audioConsumeMode := api.AudioConsumeSettings_AUDIO_CONSUME_MODE_BATCH
+	audioConsumeMode := api.AudioConsumeSettings_AUDIO_CONSUME_MODE_STREAMING
 	streamStartLocation := api.AudioConsumeSettings_STREAM_START_LOCATION_STREAM_BEGIN
 	var startOffsetMs *api.OptionalInt32 = nil
 	var audioConsumeMaxMs *api.OptionalInt32 = nil
@@ -149,8 +158,8 @@ func main() {
 	}
 
 	interactionId := cpaInteraction.InteractionId
-	logger.Info("received interactionId",
-		"interactionId", interactionId)
+	logger.Info("received interaction_id",
+		"interaction_id", interactionId)
 
 	///////////////////////
 	// Get results
@@ -163,7 +172,7 @@ func main() {
 			"error", err)
 	} else {
 		logger.Info("got final results",
-			"finalResults", finalResults)
+			"final_results", finalResults)
 	}
 
 	///////////////////////

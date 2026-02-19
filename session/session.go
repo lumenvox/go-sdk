@@ -26,7 +26,7 @@ type SdkError string
 
 func (e SdkError) Error() string { return string(e) }
 
-const InteractionCreateDeadline = 20 * time.Second
+const interactionCreateDeadline = 20 * time.Second
 
 var EnableVerboseLogging = func() bool {
 	envString := os.Getenv("LUMENVOX_GO_SDK__ENABLE_VERBOSE_LOGGING")
@@ -46,11 +46,11 @@ type SessionObject struct {
 
 	// session/stream information
 	streamContext context.Context
-	SessionCancel context.CancelFunc
-	SessionStream api.LumenVox_SessionClient
+	sessionCancel context.CancelFunc
+	sessionStream api.LumenVox_SessionClient
 	audioConfig   AudioConfig
 	SessionId     string
-	StreamTimeout time.Duration
+	streamTimeout time.Duration
 	DeploymentId  string
 	OperatorId    string
 
@@ -71,7 +71,7 @@ type SessionObject struct {
 	// channels
 	audioPullChannel    chan *api.AudioPullResponse
 	sessionLoadChannel  chan *api.SessionLoadGrammarResponse
-	SessionCloseChannel chan struct{}
+	sessionCloseChannel chan struct{}
 	grammarErrorChannel chan *api.SessionEvent
 	errorChan           chan error
 	stopStreamingAudio  chan struct{}
@@ -107,6 +107,20 @@ type SessionObject struct {
 	interactionCreateSentimentMap     map[string]*interactionCreateSentimentHelper
 	loadSessionGrammarMap             map[string]*LoadSessionGrammarObject
 	interactionFinalizeMap            map[string]*interactionFinalizeHelper
+
+	// locks for individual interaction maps to reduce contention
+	amdInteractionsLock           sync.RWMutex
+	asrInteractionsLock           sync.RWMutex
+	cpaInteractionsLock           sync.RWMutex
+	diarizationInteractionsLock   sync.RWMutex
+	grammarParseInteractionsLock  sync.RWMutex
+	languageIdInteractionsLock    sync.RWMutex
+	nluInteractionsLock           sync.RWMutex
+	normalizationInteractionsLock sync.RWMutex
+	transcriptionInteractionsLock sync.RWMutex
+	ttsInteractionsLock           sync.RWMutex
+	neuronInteractionsLock        sync.RWMutex
+	sentimentInteractionsLock     sync.RWMutex
 
 	// maps to store all active interactions
 	amdInteractionsMap           map[string]*AmdInteractionObject
@@ -152,9 +166,9 @@ func newSessionObject(
 
 	return &SessionObject{
 		streamContext: streamContext,
-		SessionStream: sessionStream,
-		SessionCancel: streamCancel,
-		StreamTimeout: streamTimeout,
+		sessionStream: sessionStream,
+		sessionCancel: streamCancel,
+		streamTimeout: streamTimeout,
 		DeploymentId:  deploymentId,
 		OperatorId:    operatorId,
 		audioConfig:   audioConfig,
@@ -162,7 +176,7 @@ func newSessionObject(
 		// channels
 		audioPullChannel:       make(chan *api.AudioPullResponse, 100),
 		sessionLoadChannel:     make(chan *api.SessionLoadGrammarResponse, 100),
-		SessionCloseChannel:    make(chan struct{}, 1),
+		sessionCloseChannel:    make(chan struct{}, 1),
 		grammarErrorChannel:    make(chan *api.SessionEvent, 100),
 		errorChan:              make(chan error, 10),
 		stopStreamingAudio:     make(chan struct{}, 1),
@@ -231,9 +245,7 @@ func CreateNewSession(
 	if authSettings != nil {
 		// Authentication enabled
 
-		tokenProvider := auth.GetGlobalCognitoProvider(*authSettings)
-
-		authToken, err = tokenProvider.GetToken(streamContext)
+		authToken, err = auth.GetToken(streamContext, *authSettings)
 		if err != nil {
 			streamCancel()
 			return nil, err
@@ -270,7 +282,7 @@ func CreateNewSession(
 
 	// Request new session from API.
 	newSession.streamSendLock.Lock()
-	err = newSession.SessionStream.Send(getSessionCreateRequest("",
+	err = newSession.sessionStream.Send(getSessionCreateRequest("",
 		newSession.DeploymentId, newSession.OperatorId))
 	newSession.streamSendLock.Unlock()
 	if err != nil {
@@ -311,16 +323,22 @@ func CreateNewSession(
 		return nil, errors.New("empty session ID")
 	}
 
-	// Set audio format if not NO_AUDIO_RESOURCE.
-	if audioConfig.Format != api.AudioFormat_STANDARD_AUDIO_FORMAT_NO_AUDIO_RESOURCE {
+	// Send audio format to the API unless the format is UNSPECIFIED (zero value),
+	// which indicates the caller did not configure audio. UNSPECIFIED is not a valid
+	// protobuf enum choice per Google API design guidelines, so we skip the request
+	// and log a warning.
+	if audioConfig.Format == api.AudioFormat_STANDARD_AUDIO_FORMAT_UNSPECIFIED {
+		logger.Warn("audio format is UNSPECIFIED; skipping SessionInboundAudioFormatRequest. " +
+			"Use STANDARD_AUDIO_FORMAT_NO_AUDIO_RESOURCE for sessions that do not require audio")
+	} else {
 		newSession.streamSendLock.Lock()
-		err = newSession.SessionStream.Send(getAudioFormatRequest("", audioConfig))
+		err = newSession.sessionStream.Send(getAudioFormatRequest("", audioConfig))
 		newSession.streamSendLock.Unlock()
 		if err != nil {
 			newSession.errorChan <- fmt.Errorf("sending SessionInboundAudioFormatRequest error: %v", err)
 			logger.Error("stream.Send failed setting audio format",
 				"error", err)
-			newSession.SessionCancel()
+			newSession.sessionCancel()
 			return nil, err
 		}
 	}
@@ -348,18 +366,22 @@ func (session *SessionObject) CloseSession() {
 	}
 
 	session.streamSendLock.Lock()
-	err := session.SessionStream.Send(getSessionCloseRequest(""))
+	err := session.sessionStream.Send(getSessionCloseRequest(""))
 	session.streamSendLock.Unlock()
 	if err != nil {
 		logger.Error("sending session close request",
-			"sessionId", sessionId,
+			"session_id", sessionId,
 			"error", err.Error())
 	}
 
-	// Pause to allow the close session message to be sent.
-	time.Sleep(100 * time.Millisecond)
+	// Briefly wait for the session close response
+	select {
+	case <-session.sessionCloseChannel:
+	case <-time.After(time.Second):
+		logger.Warn("timed out waiting for session close response; continuing")
+	}
 
-	session.SessionCancel()
+	session.sessionCancel()
 
 	activeSessionsMap.Lock()
 	delete(activeSessionsMap.OpenSessions, sessionId)

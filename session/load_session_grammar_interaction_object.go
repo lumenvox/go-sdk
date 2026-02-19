@@ -64,14 +64,14 @@ func (session *SessionObject) NewInlineLoadSessionGrammar(language string,
 	err = session.prepareLoadSessionGrammar(correlationId, requestObject)
 	if err != nil {
 		logger.Error(err.Error(),
-			"correlationId", correlationId,
-			"sessionId", session.SessionId)
+			"correlation_id", correlationId,
+			"session_id", session.SessionId)
 		return nil, err
 	}
 
 	// send the request
 	session.streamSendLock.Lock()
-	err = session.SessionStream.Send(getInlineLoadSessionGrammarRequest(correlationId, language, grammarLabel,
+	err = session.sessionStream.Send(getInlineLoadSessionGrammarRequest(correlationId, language, grammarLabel,
 		grammarText, grammarSettings))
 	session.streamSendLock.Unlock()
 	if err != nil {
@@ -83,7 +83,7 @@ func (session *SessionObject) NewInlineLoadSessionGrammar(language string,
 
 	if EnableVerboseLogging {
 		logger.Debug("created new load session grammar request",
-			"correlationId", requestObject.correlationId)
+			"correlation_id", requestObject.correlationId)
 	}
 
 	return requestObject, err
@@ -111,14 +111,14 @@ func (session *SessionObject) NewUriLoadSessionGrammar(language string,
 	err = session.prepareLoadSessionGrammar(correlationId, requestObject)
 	if err != nil {
 		logger.Error(err.Error(),
-			"correlationId", correlationId,
-			"sessionId", session.SessionId)
+			"correlation_id", correlationId,
+			"session_id", session.SessionId)
 		return nil, err
 	}
 
 	// send the request
 	session.streamSendLock.Lock()
-	err = session.SessionStream.Send(getUriLoadSessionGrammarRequest(correlationId, language, grammarLabel,
+	err = session.sessionStream.Send(getUriLoadSessionGrammarRequest(correlationId, language, grammarLabel,
 		grammarUri, grammarSettings))
 	session.streamSendLock.Unlock()
 	if err != nil {
@@ -130,7 +130,7 @@ func (session *SessionObject) NewUriLoadSessionGrammar(language string,
 
 	if EnableVerboseLogging {
 		logger.Debug("created new load session grammar request",
-			"correlationId", requestObject.correlationId)
+			"correlation_id", requestObject.correlationId)
 	}
 
 	return requestObject, err

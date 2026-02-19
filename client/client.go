@@ -2,7 +2,7 @@ package client
 
 import (
 	"github.com/lumenvox/go-sdk/auth"
-	"github.com/lumenvox/go-sdk/connection"
+	"github.com/lumenvox/go-sdk/internal/connection"
 	"github.com/lumenvox/go-sdk/session"
 
 	"time"

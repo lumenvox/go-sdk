@@ -20,7 +20,7 @@ func main() {
 	///////////////////////
 
 	// Get SDK configuration
-	cfg, err := config.GetConfigValues("./config_values.ini")
+	cfg, err := config.GetConfigValues("../../config_values.ini")
 	if err != nil {
 		tmpLogger, _ := logging.GetLogger() // get default logger
 		tmpLogger.Error("unable to get config",
@@ -89,16 +89,23 @@ func main() {
 	var audioData []byte
 
 	// Read data from disk.
-	audioFilePath := "./examples/test_data/en_phone_number.alaw"
+	audioFilePath := "../../examples/test_data/en_phone_number.alaw"
 	audioData, err = os.ReadFile(audioFilePath)
 	if err != nil {
 		logger.Error("reading audio file",
 			"error", err.Error())
+		sessionObject.CloseSession()
 		os.Exit(1)
 	}
 
-	// Queue the audio for the internal streamer.
-	sessionObject.AddAudio(audioData)
+	// Push all audio data to the API. As we are in batch mode, this is a blocking call.
+	err = sessionObject.AddAudio(audioData)
+	if err != nil {
+		logger.Error("failed to upload audio",
+			"error", err.Error())
+		sessionObject.CloseSession()
+		os.Exit(1)
+	}
 
 	///////////////////////
 	// Create transcription interaction
@@ -107,8 +114,8 @@ func main() {
 	language := "en-US"
 
 	// Configure VAD settings.
-	useVad := false
-	bargeInTimeout := int32(30000) // 30 second default
+	const useVad = false
+	bargeInTimeout := int32(30000) // 30-second default
 	eosDelay := int32(1000)
 	var endOfSpeechTimeoutMs *api.OptionalInt32 = nil
 	noiseReductionMode := api.VadSettings_NOISE_REDUCTION_MODE_DISABLED
@@ -122,7 +129,7 @@ func main() {
 
 	// Configure recognition settings.
 	decodeTimeout := int32(10000)
-	enablePartialResults := false
+	const enablePartialResults = false
 	var maxAlternatives *api.OptionalInt32 = nil
 	var trimSilence *api.OptionalInt32 = nil
 	var confidenceThreshold *api.OptionalInt32 = nil
@@ -140,11 +147,11 @@ func main() {
 
 	// Configure normalization settings for redaction.
 	// Redaction will be seen in verbalized_redacted and final_redacted fields in the final result.
-	enableInverseText := true
-	enableCapitalization := false
-	enableRedaction := true
-	enableSrtGeneration := false
-	enableVttGeneration := false
+	const enableInverseText = true
+	const enableCapitalization = false
+	const enableRedaction = true
+	const enableSrtGeneration = false
+	const enableVttGeneration = false
 	var requestTimeoutMs *api.OptionalInt32 = nil
 	normalizationSettings := client.GetNormalizationSettings(enableInverseText, enableCapitalization,
 		enableRedaction, enableSrtGeneration, enableVttGeneration, requestTimeoutMs)
@@ -171,8 +178,8 @@ func main() {
 	}
 
 	interactionId := transcriptionInteraction.InteractionId
-	logger.Info("received interactionId",
-		"interactionId", interactionId)
+	logger.Info("received interaction_id",
+		"interaction_id", interactionId)
 
 	///////////////////////
 	// Get results
@@ -185,7 +192,7 @@ func main() {
 			"error", err)
 	} else {
 		logger.Info("got final results",
-			"finalResults", finalResults)
+			"final_results", finalResults)
 	}
 
 	///////////////////////

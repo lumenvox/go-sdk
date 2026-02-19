@@ -20,7 +20,7 @@ func main() {
 	///////////////////////
 
 	// Get SDK configuration
-	cfg, err := config.GetConfigValues("./config_values.ini")
+	cfg, err := config.GetConfigValues("../../config_values.ini")
 	if err != nil {
 		tmpLogger, _ := logging.GetLogger() // get default logger
 		tmpLogger.Error("unable to get config",
@@ -89,16 +89,23 @@ func main() {
 	var audioData []byte
 
 	// Read data from disk.
-	audioFilePath := "./examples/test_data/the_great_gatsby_1_minute.ulaw"
+	audioFilePath := "../../examples/test_data/the_great_gatsby_1_minute.ulaw"
 	audioData, err = os.ReadFile(audioFilePath)
 	if err != nil {
 		logger.Error("reading audio file",
 			"error", err.Error())
+		sessionObject.CloseSession()
 		os.Exit(1)
 	}
 
 	// Queue the audio for the internal streamer.
-	sessionObject.AddAudio(audioData)
+	err = sessionObject.AddAudio(audioData)
+	if err != nil {
+		logger.Error("failed to queue audio",
+			"error", err.Error())
+		sessionObject.CloseSession()
+		os.Exit(1)
+	}
 
 	///////////////////////
 	// Create transcription interaction
@@ -107,7 +114,7 @@ func main() {
 	language := "en-US"
 
 	// Configure VAD settings.
-	useVad := true
+	const useVad = true
 	bargeInTimeout := int32(-1) // unlimited
 	eosDelay := int32(1000)
 	var endOfSpeechTimeoutMs *api.OptionalInt32 = nil
@@ -122,7 +129,7 @@ func main() {
 
 	// Configure recognition settings.
 	decodeTimeout := int32(30000)
-	enablePartialResults := false
+	const enablePartialResults = false
 	var maxAlternatives *api.OptionalInt32 = nil
 	var trimSilence *api.OptionalInt32 = nil
 	var confidenceThreshold *api.OptionalInt32 = nil
@@ -163,8 +170,8 @@ func main() {
 	}
 
 	interactionId := transcriptionInteraction.InteractionId
-	logger.Info("received interactionId",
-		"interactionId", interactionId)
+	logger.Info("received interaction_id",
+		"interaction_id", interactionId)
 
 	///////////////////////
 	// Get results
@@ -229,10 +236,15 @@ func main() {
 				// the transcriptionResult here has lots of fields. For the example, we're only looking
 				// at the transcript.
 				transcriptionResult := partialResult.PartialResult.GetTranscriptionInteractionResult()
+				if transcriptionResult == nil {
+					logger.Warn("nil partial transcription result",
+						"result_idx", resultIdx)
+					continue
+				}
 				if len(transcriptionResult.NBests) > 0 {
 					transcript := transcriptionResult.NBests[0].AsrResultMetaData.Transcript
 					logger.Info("partial result",
-						"resultIdx", resultIdx,
+						"result_idx", resultIdx,
 						"transcript", transcript)
 				}
 			}

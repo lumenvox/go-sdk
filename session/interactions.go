@@ -76,15 +76,15 @@ func (session *SessionObject) PullTtsAudio(interactionId string, audioChannel in
 	audioPullChannel, err := session.prepareAudioPull(correlationId)
 	if err != nil {
 		logger.Error(err.Error(),
-			"correlationId", correlationId,
-			"interactionId", interactionId,
-			"sessionId", session.SessionId)
+			"correlation_id", correlationId,
+			"interaction_id", interactionId,
+			"session_id", session.SessionId)
 		return nil, err
 	}
 
 	// Send audio pull request using the provided interactionId, adding specified parameters
 	session.streamSendLock.Lock()
-	err = session.SessionStream.Send(getAudioPullRequest(correlationId, interactionId, audioChannel, audioStartMs, audioLengthMs))
+	err = session.sessionStream.Send(getAudioPullRequest(correlationId, interactionId, audioChannel, audioStartMs, audioLengthMs))
 	session.streamSendLock.Unlock()
 	if err != nil {
 		session.errorChan <- fmt.Errorf("sending AudioPullRequest error: %v", err)
@@ -101,8 +101,8 @@ func (session *SessionObject) PullTtsAudio(interactionId string, audioChannel in
 		case <-time.After(5 * time.Second):
 			// timed out - log error and return any data received so far
 			logger.Error("timed out waiting for final audio chunk",
-				"interactionId", interactionId,
-				"audioChannel", audioChannel)
+				"interaction_id", interactionId,
+				"audio_channel", audioChannel)
 			return audioData, TimeoutError
 		}
 
@@ -127,7 +127,7 @@ func (session *SessionObject) BeginProcessingInteraction(interactionId string) (
 
 	// assuming the request is valid, send the begin-processing request
 	session.streamSendLock.Lock()
-	err = session.SessionStream.Send(getInteractionBeginProcessingRequest("", interactionId))
+	err = session.sessionStream.Send(getInteractionBeginProcessingRequest("", interactionId))
 	session.streamSendLock.Unlock()
 	if err != nil {
 		session.errorChan <- fmt.Errorf("sending InteractionFinalizeProcessingRequest error: %v", err)
@@ -156,13 +156,13 @@ func (session *SessionObject) FinalizeInteraction(interactionId string) (err err
 		logger := getLogger()
 		logger.Error("preparing finalize coordination",
 			"error", err.Error(),
-			"interactionId", interactionId)
+			"interaction_id", interactionId)
 		return err
 	}
 
 	// Send finalize request using the provided interactionId and correlationId
 	session.streamSendLock.Lock()
-	err = session.SessionStream.Send(getInteractionFinalizeRequest(correlationId, interactionId))
+	err = session.sessionStream.Send(getInteractionFinalizeRequest(correlationId, interactionId))
 	session.streamSendLock.Unlock()
 	if err != nil {
 		session.errorChan <- fmt.Errorf("sending InteractionFinalizeProcessingRequest error: %v", err)
@@ -179,8 +179,8 @@ func (session *SessionObject) FinalizeInteraction(interactionId string) (err err
 	case <-time.After(10 * time.Second):
 		logger := getLogger()
 		logger.Error("timed out waiting for finalize response",
-			"interactionId", interactionId,
-			"correlationId", correlationId)
+			"interaction_id", interactionId,
+			"correlation_id", correlationId)
 		return TimeoutError
 	}
 }

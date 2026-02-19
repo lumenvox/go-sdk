@@ -38,8 +38,8 @@ func (client *SdkClient) GetTtsInlineSynthesisSettings(
 				synthSettings.SynthVoiceGender = &api.OptionalString{Value: voiceGender}
 			} else {
 				// Some unsupported value. Warn, but do not return an error.
-				logger.Warn("invalid voiceGender (should be \"neutral\", \"male\", or \"female\")",
-					"voiceGender", voiceGender)
+				logger.Warn("invalid voice_gender (should be \"neutral\", \"male\", or \"female\")",
+					"voice_gender", voiceGender)
 			}
 		}
 	}

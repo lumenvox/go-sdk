@@ -20,7 +20,7 @@ func main() {
 	///////////////////////
 
 	// Get SDK configuration
-	cfg, err := config.GetConfigValues("./config_values.ini")
+	cfg, err := config.GetConfigValues("../../config_values.ini")
 	if err != nil {
 		tmpLogger, _ := logging.GetLogger() // get default logger
 		tmpLogger.Error("unable to get config",
@@ -104,10 +104,11 @@ func main() {
 	var grammarSettings *api.GrammarSettings = nil
 	var generalInteractionSettings *api.GeneralInteractionSettings = nil
 	parseTimeoutMs := &api.OptionalInt32{Value: 10000}
+	const includeParseTrees = false // set true to return the optional parse trees in results if needed (rare)
 
 	// Create interaction.
 	grammarParseInteraction, err := sessionObject.NewGrammarParse(language, inputText, grammars, grammarSettings,
-		parseTimeoutMs, generalInteractionSettings)
+		parseTimeoutMs, generalInteractionSettings, includeParseTrees)
 	if err != nil {
 		logger.Error("failed to create interaction",
 			"error", err)
@@ -117,8 +118,8 @@ func main() {
 	}
 
 	interactionId := grammarParseInteraction.InteractionId
-	logger.Info("received interactionId",
-		"interactionId", interactionId)
+	logger.Info("received interaction_id",
+		"interaction_id", interactionId)
 
 	///////////////////////
 	// Get results
@@ -131,7 +132,7 @@ func main() {
 			"error", err)
 	} else {
 		logger.Info("got final results",
-			"finalResults", finalResults)
+			"final_results", finalResults)
 	}
 
 	///////////////////////

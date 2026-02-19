@@ -117,8 +117,8 @@ func main() {
 	}
 
 	interactionId := ttsInteraction.InteractionId
-	logger.Info("received interactionId",
-		"interactionId", interactionId)
+	logger.Info("received interaction_id",
+		"interaction_id", interactionId)
 
 	///////////////////////
 	// Get results
@@ -134,7 +134,7 @@ func main() {
 		return
 	} else {
 		logger.Info("got final results",
-			"finalResults", finalResults)
+			"final_results", finalResults)
 	}
 
 	///////////////////////
@@ -169,8 +169,8 @@ func main() {
 	}
 
 	logger.Info("TTS file generated",
-		"synthesisFilename", synthesisFilename,
-		"bytesGenerated", len(synthesizedAudioData))
+		"synthesis_filename", synthesisFilename,
+		"bytes_generated", len(synthesizedAudioData))
 
 	///////////////////////
 	// Session close

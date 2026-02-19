@@ -44,8 +44,13 @@ type TranscriptionInteractionObject struct {
 	isContinuousTranscription bool
 }
 
+type transcriptionCreateResult struct {
+	InteractionObject *TranscriptionInteractionObject
+	Error             error
+}
+
 type interactionCreateTranscriptionHelper struct {
-	interactionCreateChannel  chan *TranscriptionInteractionObject
+	interactionCreateChannel  chan *transcriptionCreateResult
 	deadline                  time.Time
 	isContinuousTranscription bool
 }
@@ -56,7 +61,7 @@ type interactionCreateTranscriptionHelper struct {
 // well as a deadline to receive the response. It returns a receive-only channel,
 // as the creating thread should not close the channel.
 func (session *SessionObject) prepareInteractionCreateTranscription(correlationId string, deadline time.Duration, isContinuous bool) (
-	interactionCreateChan <-chan *TranscriptionInteractionObject, err error) {
+	interactionCreateChan <-chan *transcriptionCreateResult, err error) {
 
 	session.interactionCreateTranscriptionMapLock.Lock()
 	defer session.interactionCreateTranscriptionMapLock.Unlock()
@@ -68,7 +73,7 @@ func (session *SessionObject) prepareInteractionCreateTranscription(correlationI
 
 	// create the helper, put it in the map, and return the channel
 	interactionCreateHelper := &interactionCreateTranscriptionHelper{
-		interactionCreateChannel:  make(chan *TranscriptionInteractionObject, 1),
+		interactionCreateChannel:  make(chan *transcriptionCreateResult, 1),
 		deadline:                  time.Now().Add(deadline),
 		isContinuousTranscription: isContinuous,
 	}
@@ -103,17 +108,17 @@ func (session *SessionObject) NewTranscription(
 	isContinuousTranscription := enableContinuousTranscription != nil && enableContinuousTranscription.Value
 
 	// Create a helper struct to wait for the new interaction object
-	interactionCreateChan, err := session.prepareInteractionCreateTranscription(correlationId, InteractionCreateDeadline, isContinuousTranscription)
+	interactionCreateChan, err := session.prepareInteractionCreateTranscription(correlationId, interactionCreateDeadline, isContinuousTranscription)
 	if err != nil {
 		logger.Error(err.Error(),
-			"correlationId", correlationId,
-			"sessionId", session.SessionId)
+			"correlation_id", correlationId,
+			"session_id", session.SessionId)
 		return nil, err
 	}
 
 	// send the interaction create request
 	session.streamSendLock.Lock()
-	err = session.SessionStream.Send(getTranscriptionRequest(correlationId, language, phrases, embeddedGrammars,
+	err = session.sessionStream.Send(getTranscriptionRequest(correlationId, language, phrases, embeddedGrammars,
 		vadSettings, audioConsumeSettings, normalizationSettings, recognitionSettings,
 		languageModelName, acousticModelName, enablePostProcessing, enableContinuousTranscription))
 	session.streamSendLock.Unlock()
@@ -124,28 +129,36 @@ func (session *SessionObject) NewTranscription(
 		return nil, err
 	}
 
-	// Wait for the new interaction object.
+	// Wait for the new interaction object or error.
+	var result *transcriptionCreateResult
 	select {
-	case interactionObject = <-interactionCreateChan:
-	case <-time.After(InteractionCreateDeadline):
+	case result = <-interactionCreateChan:
+	case <-time.After(interactionCreateDeadline):
 		logger.Error("timed out waiting for interaction object",
 			"type", "transcription",
-			"correlationId", correlationId,
-			"sessionId", session.SessionId)
+			"correlation_id", correlationId,
+			"session_id", session.SessionId)
 		return nil, errors.New("timed out waiting for interaction object")
 	}
 
-	if interactionObject == nil {
-		logger.Error("received nil interaction object",
+	if result.Error != nil {
+		// API returned an error, return it to the caller
+		return nil, result.Error
+	}
+
+	if result.InteractionObject == nil {
+		logger.Error("received nil interaction object without error",
 			"type", "transcription",
-			"correlationId", correlationId,
-			"sessionId", session.SessionId)
+			"correlation_id", correlationId,
+			"session_id", session.SessionId)
 		return nil, errors.New("received nil interaction object")
 	}
 
+	interactionObject = result.InteractionObject
+
 	if EnableVerboseLogging {
 		logger.Debug("created new transcription interaction",
-			"interactionId", interactionObject.InteractionId)
+			"interaction_id", interactionObject.InteractionId)
 	}
 
 	return interactionObject, err

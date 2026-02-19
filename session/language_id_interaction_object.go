@@ -71,17 +71,17 @@ func (session *SessionObject) NewLanguageId(
 	correlationId := uuid.NewString()
 
 	// Create a helper struct to wait for the new interaction object
-	interactionCreateChan, err := session.prepareInteractionCreateLanguageId(correlationId, InteractionCreateDeadline)
+	interactionCreateChan, err := session.prepareInteractionCreateLanguageId(correlationId, interactionCreateDeadline)
 	if err != nil {
 		logger.Error(err.Error(),
-			"correlationId", correlationId,
-			"sessionId", session.SessionId)
+			"correlation_id", correlationId,
+			"session_id", session.SessionId)
 		return nil, err
 	}
 
 	// send the interaction create request
 	session.streamSendLock.Lock()
-	err = session.SessionStream.Send(getLanguageIdRequest(correlationId, targetLanguages,
+	err = session.sessionStream.Send(getLanguageIdRequest(correlationId, targetLanguages,
 		requestTimeoutMs, generalInteractionSettings, audioConsumeSettings))
 	session.streamSendLock.Unlock()
 	if err != nil {
@@ -94,25 +94,25 @@ func (session *SessionObject) NewLanguageId(
 	// Wait for the new interaction object.
 	select {
 	case interactionObject = <-interactionCreateChan:
-	case <-time.After(InteractionCreateDeadline):
+	case <-time.After(interactionCreateDeadline):
 		logger.Error("timed out waiting for interaction object",
 			"type", "lid",
-			"correlationId", correlationId,
-			"sessionId", session.SessionId)
+			"correlation_id", correlationId,
+			"session_id", session.SessionId)
 		return nil, errors.New("timed out waiting for interaction object")
 	}
 
 	if interactionObject == nil {
 		logger.Error("received nil interaction object",
 			"type", "lid",
-			"correlationId", correlationId,
-			"sessionId", session.SessionId)
+			"correlation_id", correlationId,
+			"session_id", session.SessionId)
 		return nil, errors.New("received nil interaction object")
 	}
 
 	if EnableVerboseLogging {
 		logger.Debug("created new language id interaction",
-			"interactionId", interactionObject.InteractionId)
+			"interaction_id", interactionObject.InteractionId)
 	}
 
 	return interactionObject, err

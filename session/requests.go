@@ -172,6 +172,7 @@ func getGrammarParseRequest(
 	grammarSettings *api.GrammarSettings,
 	parseTimeoutMs *api.OptionalInt32,
 	generalInteractionSettings *api.GeneralInteractionSettings,
+	includeParseTrees bool,
 ) (grammarParseRequest *api.SessionRequest) {
 
 	if correlationId == "" {
@@ -191,6 +192,7 @@ func getGrammarParseRequest(
 						GrammarSettings:            grammarSettings,
 						ParseTimeoutMs:             parseTimeoutMs,
 						GeneralInteractionSettings: generalInteractionSettings,
+						IncludeParseTrees:          includeParseTrees,
 					},
 				},
 			},
