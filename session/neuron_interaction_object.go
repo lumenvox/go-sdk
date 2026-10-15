@@ -1,14 +1,14 @@
 package session
 
 import (
-	"github.com/lumenvox/protos-go/lumenvox/api"
-
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/genproto/googleapis/rpc/status"
+
+	"github.com/lumenvox/protos-go/lumenvox/api"
 )
 
 // NeuronInteractionObject represents a neuron interaction.
@@ -23,8 +23,13 @@ type NeuronInteractionObject struct {
 	resultsReadyChannel  chan struct{}
 }
 
+type neuronCreateResult struct {
+	InteractionObject *NeuronInteractionObject
+	Error             error
+}
+
 type interactionCreateNeuronHelper struct {
-	interactionCreateChannel chan *NeuronInteractionObject
+	interactionCreateChannel chan *neuronCreateResult
 	deadline                 time.Time
 }
 
@@ -34,7 +39,7 @@ type interactionCreateNeuronHelper struct {
 // well as a deadline to receive the response. It returns a receive-only channel,
 // as the creating thread should not close the channel.
 func (session *SessionObject) prepareInteractionCreateNeuron(correlationId string, deadline time.Duration) (
-	interactionCreateChan <-chan *NeuronInteractionObject, err error) {
+	interactionCreateChan <-chan *neuronCreateResult, err error) {
 
 	session.interactionCreateNeuronMapLock.Lock()
 	defer session.interactionCreateNeuronMapLock.Unlock()
@@ -46,7 +51,7 @@ func (session *SessionObject) prepareInteractionCreateNeuron(correlationId strin
 
 	// create the helper, put it in the map, and return the channel
 	interactionCreateHelper := &interactionCreateNeuronHelper{
-		interactionCreateChannel: make(chan *NeuronInteractionObject, 1),
+		interactionCreateChannel: make(chan *neuronCreateResult, 1),
 		deadline:                 time.Now().Add(deadline),
 	}
 	session.interactionCreateNeuronMap[correlationId] = interactionCreateHelper
@@ -88,9 +93,10 @@ func (session *SessionObject) NewNeuron(language string,
 		return nil, err
 	}
 
-	// Wait for the new interaction object.
+	// Wait for the new interaction object or API error.
+	var result *neuronCreateResult
 	select {
-	case interactionObject = <-interactionCreateChan:
+	case result = <-interactionCreateChan:
 	case <-time.After(interactionCreateDeadline):
 		logger.Error("timed out waiting for interaction object",
 			"type", "itn",
@@ -99,13 +105,19 @@ func (session *SessionObject) NewNeuron(language string,
 		return nil, errors.New("timed out waiting for interaction object")
 	}
 
-	if interactionObject == nil {
+	if result != nil && result.Error != nil {
+		return nil, result.Error
+	}
+
+	if result == nil || result.InteractionObject == nil {
 		logger.Error("received nil interaction object",
 			"type", "itn",
 			"correlation_id", correlationId,
 			"session_id", session.SessionId)
 		return nil, errors.New("received nil interaction object")
 	}
+
+	interactionObject = result.InteractionObject
 
 	if EnableVerboseLogging {
 		logger.Debug("created new neuron interaction",

@@ -1,14 +1,6 @@
 package main
 
 import (
-	lumenvoxSdk "github.com/lumenvox/go-sdk"
-	"github.com/lumenvox/go-sdk/auth"
-	"github.com/lumenvox/go-sdk/config"
-	"github.com/lumenvox/go-sdk/logging"
-	"github.com/lumenvox/go-sdk/session"
-
-	"github.com/lumenvox/protos-go/lumenvox/api"
-
 	"encoding/binary"
 	"errors"
 	"os"
@@ -16,6 +8,14 @@ import (
 
 	"github.com/go-audio/audio"
 	"github.com/go-audio/wav"
+
+	"github.com/lumenvox/protos-go/lumenvox/api"
+
+	lumenvoxSdk "github.com/lumenvox/go-sdk/v2"
+	"github.com/lumenvox/go-sdk/v2/auth"
+	"github.com/lumenvox/go-sdk/v2/config"
+	"github.com/lumenvox/go-sdk/v2/logging"
+	"github.com/lumenvox/go-sdk/v2/session"
 )
 
 func main() {
@@ -118,7 +118,8 @@ func main() {
 	var generalInteractionSettings *api.GeneralInteractionSettings = nil
 	enablePartialResults := &api.OptionalBool{Value: true}
 	ttsInteraction, err := sessionObject.NewInlineTts(language, textToSynthesize, inlineSettings,
-		synthesizedAudioFormat, synthesisTimeoutMs, generalInteractionSettings, enablePartialResults)
+		synthesizedAudioFormat, synthesisTimeoutMs, generalInteractionSettings, enablePartialResults,
+		api.InteractionCreateTtsRequest_TTS_ENGINE_UNSPECIFIED)
 	if err != nil {
 		logger.Error("failed to create interaction",
 			"error", err)

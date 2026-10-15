@@ -14,13 +14,13 @@ The LumenVox Go SDK provides a Go client for the [LumenVox AI API](https://devel
 
 ## Requirements
 
-- Go 1.26 or later
+- Go 1.27 or later
 - Access to a LumenVox API endpoint (SaaS or on-prem)
 
 ## Installation
 
 ```bash
-go get github.com/lumenvox/go-sdk
+go get github.com/lumenvox/go-sdk/v2
 ```
 
 ## Quick Start
@@ -44,7 +44,7 @@ cp config_values.ini config_values.ini.bak
 ### 1. Initialize the Logger
 
 ```go
-import "github.com/lumenvox/go-sdk/logging"
+import "github.com/lumenvox/go-sdk/v2/logging"
 
 logger := logging.CreateLogger("info", "my-app")
 ```
@@ -55,8 +55,8 @@ Call this before any other SDK operations. The SDK uses Go's `log/slog` for stru
 
 ```go
 import (
-    lumenvoxSdk "github.com/lumenvox/go-sdk"
-    "github.com/lumenvox/go-sdk/auth"
+    lumenvoxSdk "github.com/lumenvox/go-sdk/v2"
+    "github.com/lumenvox/go-sdk/v2/auth"
 )
 
 // Create a gRPC connection
@@ -81,7 +81,7 @@ A single connection can be shared across multiple clients.
 
 ```go
 import (
-    "github.com/lumenvox/go-sdk/session"
+    "github.com/lumenvox/go-sdk/v2/session"
     "github.com/lumenvox/protos-go/lumenvox/api"
 )
 
@@ -184,7 +184,7 @@ On-prem deployments that do not use OAuth should pass `nil` for the auth setting
 The `config` package provides an optional helper for loading settings from INI files:
 
 ```go
-import "github.com/lumenvox/go-sdk/config"
+import "github.com/lumenvox/go-sdk/v2/config"
 
 cfg, err := config.GetConfigValues("../../config_values.ini")
 ```
@@ -204,12 +204,12 @@ See `config_values.ini` for the full list of supported keys.
 
 | Package | Import Path | Description |
 |---|---|---|
-| Root | `github.com/lumenvox/go-sdk` | Entry point — `CreateConnection`, `CreateClient` |
-| auth | `github.com/lumenvox/go-sdk/auth` | `AuthSettings` struct for OAuth configuration |
-| client | `github.com/lumenvox/go-sdk/client` | `SdkClient` type, session creation, settings builders |
-| config | `github.com/lumenvox/go-sdk/config` | Optional INI config loader |
-| logging | `github.com/lumenvox/go-sdk/logging` | Logger initialization and injection |
-| session | `github.com/lumenvox/go-sdk/session` | Session lifecycle, interaction objects, audio management |
+| Root | `github.com/lumenvox/go-sdk/v2` | Entry point — `CreateConnection`, `CreateClient` |
+| auth | `github.com/lumenvox/go-sdk/v2/auth` | `AuthSettings` struct for OAuth configuration |
+| client | `github.com/lumenvox/go-sdk/v2/client` | `SdkClient` type, session creation, settings builders |
+| config | `github.com/lumenvox/go-sdk/v2/config` | Optional INI config loader |
+| logging | `github.com/lumenvox/go-sdk/v2/logging` | Logger initialization and injection |
+| session | `github.com/lumenvox/go-sdk/v2/session` | Session lifecycle, interaction objects, audio management |
 
 ## Examples
 

@@ -1,11 +1,11 @@
 package session
 
 import (
-	"github.com/lumenvox/protos-go/lumenvox/api"
-
 	"strings"
 
 	"github.com/google/uuid"
+
+	"github.com/lumenvox/protos-go/lumenvox/api"
 )
 
 // getSessionCreateRequest returns a create session request. The specified
@@ -110,6 +110,7 @@ func getTranscriptionRequest(
 	correlationId string,
 	language string,
 	phrases []*api.TranscriptionPhraseList,
+	phraseListSettings *api.PhraseListSettings,
 	embeddedGrammars []*api.Grammar,
 	vadSettings *api.VadSettings,
 	audioConsumeSettings *api.AudioConsumeSettings,
@@ -118,7 +119,8 @@ func getTranscriptionRequest(
 	languageModelName string,
 	acousticModelName string,
 	enablePostProcessing string,
-	enableContinuousTranscription *api.OptionalBool) (transcriptionRequest *api.SessionRequest) {
+	enableContinuousTranscription *api.OptionalBool,
+	neuronModelName string) (transcriptionRequest *api.SessionRequest) {
 
 	if correlationId == "" {
 		// Create a new correlationId if one is not specified
@@ -133,6 +135,8 @@ func getTranscriptionRequest(
 		NormalizationSettings: normalizationSettings,
 		RecognitionSettings:   recognitionSettings,
 		Phrases:               phrases,
+		PhraseListSettings:    phraseListSettings,
+		NeuronModel:           nil,
 	}
 
 	if languageModelName != "" {
@@ -146,6 +150,9 @@ func getTranscriptionRequest(
 	}
 	if enableContinuousTranscription != nil {
 		interactionCreateTranscriptionRequest.ContinuousUtteranceTranscription = enableContinuousTranscription
+	}
+	if neuronModelName != "" {
+		interactionCreateTranscriptionRequest.NeuronModel = &api.OptionalString{Value: neuronModelName}
 	}
 
 	transcriptionRequest = &api.SessionRequest{
@@ -489,6 +496,7 @@ func getInlineTtsRequest(
 	inlineSynthesisSettings *api.TtsInlineSynthesisSettings,
 	generalInteractionSettings *api.GeneralInteractionSettings,
 	enablePartialResults *api.OptionalBool,
+	ttsEngine api.InteractionCreateTtsRequest_TtsEngine,
 ) (ttsRequest *api.SessionRequest) {
 
 	if correlationId == "" {
@@ -508,6 +516,7 @@ func getInlineTtsRequest(
 			},
 		},
 		EnablePartialResults: enablePartialResults,
+		Engine:               ttsEngine,
 	}
 
 	ttsRequest = &api.SessionRequest{
@@ -535,6 +544,7 @@ func getUrlTtsRequest(
 	sslVerifyPeer *api.OptionalBool,
 	generalInteractionSettings *api.GeneralInteractionSettings,
 	enablePartialResults *api.OptionalBool,
+	ttsEngine api.InteractionCreateTtsRequest_TtsEngine,
 ) (ttsRequest *api.SessionRequest) {
 
 	if correlationId == "" {
@@ -554,6 +564,7 @@ func getUrlTtsRequest(
 			},
 		},
 		EnablePartialResults: enablePartialResults,
+		Engine:               ttsEngine,
 	}
 
 	ttsRequest = &api.SessionRequest{
@@ -762,6 +773,54 @@ func getAudioPullRequest(correlationId string, interactionId string, audioChanne
 	}
 
 	return audioPullRequest
+}
+
+// getGetSessionSettingsRequest returns a get session settings request.
+// The specified correlationId will be used if nonempty. Otherwise, one
+// will be auto-generated.
+func getGetSessionSettingsRequest(correlationId string) (sessionSettingsRequest *api.SessionRequest) {
+
+	if correlationId == "" {
+		// Create a new correlationId if one is not specified
+		correlationId = uuid.NewString()
+	}
+
+	sessionSettingsRequest = &api.SessionRequest{
+		CorrelationId: &api.OptionalString{Value: correlationId},
+		RequestType: &api.SessionRequest_SessionRequest{
+			SessionRequest: &api.SessionRequestMessage{
+				Name: &api.SessionRequestMessage_SessionGetSettings{
+					SessionGetSettings: &api.SessionGetSettingsRequest{},
+				},
+			},
+		},
+	}
+
+	return sessionSettingsRequest
+}
+
+// getSetSessionSettingsRequest returns a set session settings request.
+// The specified correlationId will be used if nonempty. Otherwise, one
+// will be auto-generated.
+func getSetSessionSettingsRequest(correlationId string, settings *api.SessionSettings) (sessionSettingsRequest *api.SessionRequest) {
+
+	if correlationId == "" {
+		// Create a new correlationId if one is not specified
+		correlationId = uuid.NewString()
+	}
+
+	sessionSettingsRequest = &api.SessionRequest{
+		CorrelationId: &api.OptionalString{Value: correlationId},
+		RequestType: &api.SessionRequest_SessionRequest{
+			SessionRequest: &api.SessionRequestMessage{
+				Name: &api.SessionRequestMessage_SessionSetSettings{
+					SessionSetSettings: settings,
+				},
+			},
+		},
+	}
+
+	return sessionSettingsRequest
 }
 
 // getSessionCloseRequest returns a session close request.

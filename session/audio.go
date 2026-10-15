@@ -1,12 +1,12 @@
 package session
 
 import (
-	"github.com/lumenvox/protos-go/lumenvox/api"
-
 	"context"
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/lumenvox/protos-go/lumenvox/api"
 )
 
 var (

@@ -1,9 +1,9 @@
 package client
 
 import (
-	"github.com/lumenvox/protos-go/lumenvox/api"
-
 	"errors"
+
+	"github.com/lumenvox/protos-go/lumenvox/api"
 )
 
 // GetAudioConsumeSettings returns an api.AudioConsumeSettings object, populated

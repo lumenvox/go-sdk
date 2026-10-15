@@ -1,8 +1,6 @@
 package session
 
 import (
-	"github.com/lumenvox/protos-go/lumenvox/api"
-
 	"errors"
 	"fmt"
 	"io"
@@ -11,6 +9,8 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/lumenvox/protos-go/lumenvox/api"
 )
 
 // sessionResponseListener handles all responses from the specified session.
@@ -98,6 +98,17 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 				break
 			}
 
+			// The server may echo session_id on many stream messages. If a SessionEvent
+			// is present (e.g. interaction create failure), it must still be routed;
+			// otherwise only this branch runs and handleSessionEvent is never reached.
+			if response.GetSessionEvent() != nil {
+				if EnableVerboseLogging {
+					logger.Debug("Recv session event",
+						"response", response)
+				}
+				handleSessionEvent(session, response)
+			}
+
 		} else if response.GetVadEvent() != nil {
 
 			if EnableVerboseLogging {
@@ -181,19 +192,7 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 
 			// if we got this far, the response should be OK. create the interaction object
 			interactionId := response.GetInteractionCreateAmd().InteractionId
-			newInteractionObject := &AmdInteractionObject{
-				InteractionId:             interactionId,
-				vadBeginProcessingChannel: make(chan struct{}, 1),
-				vadBargeInChannel:         make(chan int, 1),
-				vadBargeInReceived:        -1,
-				vadBargeOutChannel:        make(chan int, 1),
-				vadBargeOutReceived:       -1,
-				vadBargeInTimeoutChannel:  make(chan struct{}),
-				vadBargeInTimeoutReceived: false,
-				finalResultsReceived:      false,
-				finalResults:              nil,
-				resultsReadyChannel:       make(chan struct{}),
-			}
+			newInteractionObject := newAmdInteractionObject(interactionId)
 
 			// add the new interaction object to the map
 			session.amdInteractionsLock.Lock() // Protect concurrent map access
@@ -201,7 +200,10 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			session.amdInteractionsLock.Unlock()
 
 			// send the interaction object over the channel
-			createAmdHelper.interactionCreateChannel <- newInteractionObject
+			createAmdHelper.interactionCreateChannel <- &amdCreateResult{
+				InteractionObject: newInteractionObject,
+				Error:             nil,
+			}
 
 		} else if response.GetInteractionCreateAsr() != nil {
 
@@ -259,22 +261,7 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 
 			// if we got this far, the response should be OK. create the interaction object
 			interactionId := response.GetInteractionCreateAsr().InteractionId
-			newInteractionObject := &AsrInteractionObject{
-				InteractionId:              interactionId,
-				vadBeginProcessingChannel:  make(chan struct{}, 1),
-				vadBargeInChannel:          make(chan int, 1),
-				vadBargeInReceived:         -1,
-				vadBargeOutChannel:         make(chan int, 1),
-				vadBargeOutReceived:        -1,
-				vadBargeInTimeoutChannel:   make(chan struct{}),
-				vadBargeInTimeoutReceived:  false,
-				vadBargeOutTimeoutChannel:  make(chan struct{}),
-				vadBargeOutTimeoutReceived: false,
-				finalResultsReceived:       false,
-				finalResults:               nil,
-				resultsReadyChannel:        make(chan struct{}),
-			}
-			newInteractionObject.partialResultsChannels = append(newInteractionObject.partialResultsChannels, make(chan struct{}))
+			newInteractionObject := newAsrInteractionObject(interactionId)
 
 			// add the new interaction object to the map
 			session.asrInteractionsLock.Lock() // Protect concurrent map access
@@ -344,19 +331,7 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 
 			// if we got this far, the response should be OK. create the interaction object
 			interactionId := response.GetInteractionCreateCpa().InteractionId
-			newInteractionObject := &CpaInteractionObject{
-				InteractionId:             interactionId,
-				vadBeginProcessingChannel: make(chan struct{}, 1),
-				vadBargeInChannel:         make(chan int, 1),
-				vadBargeInReceived:        -1,
-				vadBargeOutChannel:        make(chan int, 1),
-				vadBargeOutReceived:       -1,
-				vadBargeInTimeoutChannel:  make(chan struct{}),
-				vadBargeInTimeoutReceived: false,
-				finalResultsReceived:      false,
-				finalResults:              nil,
-				resultsReadyChannel:       make(chan struct{}),
-			}
+			newInteractionObject := newCpaInteractionObject(interactionId)
 
 			// add the new interaction object to the map
 			session.cpaInteractionsLock.Lock() // Protect concurrent map access
@@ -364,7 +339,10 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			session.cpaInteractionsLock.Unlock()
 
 			// send the interaction object over the channel
-			createCpaHelper.interactionCreateChannel <- newInteractionObject
+			createCpaHelper.interactionCreateChannel <- &cpaCreateResult{
+				InteractionObject: newInteractionObject,
+				Error:             nil,
+			}
 
 		} else if response.GetInteractionCreateDiarization() != nil {
 
@@ -435,7 +413,10 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			session.diarizationInteractionsLock.Unlock()
 
 			// send the interaction object over the channel
-			createDiarizationHelper.interactionCreateChannel <- newInteractionObject
+			createDiarizationHelper.interactionCreateChannel <- &diarizationCreateResult{
+				InteractionObject: newInteractionObject,
+				Error:             nil,
+			}
 
 		} else if response.GetInteractionCreateGrammarParse() != nil {
 
@@ -507,7 +488,10 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			session.grammarParseInteractionsLock.Unlock()
 
 			// send the interaction object over the channel
-			createGrammarParseHelper.interactionCreateChannel <- newInteractionObject
+			createGrammarParseHelper.interactionCreateChannel <- &grammarParseCreateResult{
+				InteractionObject: newInteractionObject,
+				Error:             nil,
+			}
 
 		} else if response.GetInteractionCreateLanguageId() != nil {
 
@@ -578,7 +562,10 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			session.languageIdInteractionsLock.Unlock()
 
 			// send the interaction object over the channel
-			createLanguageIdHelper.interactionCreateChannel <- newInteractionObject
+			createLanguageIdHelper.interactionCreateChannel <- &languageIdCreateResult{
+				InteractionObject: newInteractionObject,
+				Error:             nil,
+			}
 
 		} else if response.GetInteractionCreateNlu() != nil {
 
@@ -650,7 +637,10 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			session.nluInteractionsLock.Unlock()
 
 			// send the interaction object over the channel
-			createNluHelper.interactionCreateChannel <- newInteractionObject
+			createNluHelper.interactionCreateChannel <- &nluCreateResult{
+				InteractionObject: newInteractionObject,
+				Error:             nil,
+			}
 
 		} else if response.GetInteractionCreateNormalizeText() != nil {
 
@@ -722,7 +712,10 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			session.normalizationInteractionsLock.Unlock()
 
 			// send the interaction object over the channel
-			createNormalizationHelper.interactionCreateChannel <- newInteractionObject
+			createNormalizationHelper.interactionCreateChannel <- &normalizationCreateResult{
+				InteractionObject: newInteractionObject,
+				Error:             nil,
+			}
 
 		} else if response.GetInteractionCreateNeuron() != nil {
 
@@ -793,8 +786,11 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			session.neuronInteractionsMap[interactionId] = newInteractionObject
 			session.neuronInteractionsLock.Unlock()
 
-			// send the interaction object over the channel
-			createNeuronHelper.interactionCreateChannel <- newInteractionObject
+			// send the successful result over the channel
+			createNeuronHelper.interactionCreateChannel <- &neuronCreateResult{
+				InteractionObject: newInteractionObject,
+				Error:             nil,
+			}
 
 		} else if response.GetInteractionCreateSentiment() != nil {
 
@@ -866,7 +862,10 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			session.sentimentInteractionsLock.Unlock()
 
 			// send the interaction object over the channel
-			createSentimentHelper.interactionCreateChannel <- newInteractionObject
+			createSentimentHelper.interactionCreateChannel <- &sentimentCreateResult{
+				InteractionObject: newInteractionObject,
+				Error:             nil,
+			}
 
 		} else if response.GetInteractionCreateTranscription() != nil {
 
@@ -1024,7 +1023,10 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 			session.ttsInteractionsLock.Unlock()
 
 			// send the interaction object over the channel
-			createTtsHelper.interactionCreateChannel <- newInteractionObject
+			createTtsHelper.interactionCreateChannel <- &ttsCreateResult{
+				InteractionObject: newInteractionObject,
+				Error:             nil,
+			}
 
 		} else if response.GetAudioPull() != nil {
 
@@ -1093,7 +1095,58 @@ func sessionResponseListener(session *SessionObject, sessionIdChan chan string) 
 					"response", response)
 			}
 
-			session.sessionSettingsChannel <- response.GetSessionGetSettings()
+			// validate the correlation ID
+			if response.CorrelationId == nil {
+				logger.Warn("error routing session settings",
+					"error", "missing correlation_id",
+					"response", response)
+				continue
+			} else if response.CorrelationId.Value == "" {
+				logger.Warn("error routing session settings",
+					"error", "empty correlation_id",
+					"response", response)
+				continue
+			}
+			correlationId := response.CorrelationId.Value
+
+			// look for the request object in the map
+			session.sessionGetSettingsMapLock.Lock()
+			requestObject, ok := session.sessionGetSettingsMap[correlationId]
+			// there should only be one response per request, so delete the map
+			// entry before unlocking.
+			delete(session.sessionGetSettingsMap, correlationId)
+			session.sessionGetSettingsMapLock.Unlock()
+
+			// catch missing map entry
+			if ok == false {
+				logger.Warn("error routing session settings",
+					"error", "request object does not exist",
+					"response", response)
+				continue
+			}
+
+			// catch nil object
+			if requestObject == nil {
+				logger.Warn("error routing session settings",
+					"error", "request object is nil",
+					"response", response)
+				continue
+			}
+
+			// catch timeout
+			if time.Now().After(requestObject.deadline) {
+				logger.Warn("error routing session settings",
+					"error", "session settings timed out",
+					"response", response)
+				continue
+			}
+
+			// send the successful result over the channel
+			result := &sessionSettingsResult{
+				SessionSettings: response.GetSessionGetSettings(),
+				Error:           nil,
+			}
+			requestObject.sessionSettingsChannel <- result
 
 		} else {
 
@@ -1143,35 +1196,7 @@ func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
 		session.asrInteractionsLock.RUnlock()
 
 		// This is an ASR interaction.
-		switch response.GetVadEvent().VadEventType {
-		case api.VadEvent_VAD_EVENT_TYPE_BEGIN_PROCESSING:
-			interactionObject.vadBeginProcessingReceived = true
-			interactionObject.vadBeginProcessingChannel <- struct{}{}
-		case api.VadEvent_VAD_EVENT_TYPE_BARGE_IN:
-			bargeInAudioOffset := response.GetVadEvent().AudioOffset
-			var bargeInTime int
-			if bargeInAudioOffset == nil {
-				bargeInTime = 0
-				logger.Warn("VAD BARGE-IN event detected with empty AudioOffset. Using 0.")
-			} else {
-				bargeInTime = int(bargeInAudioOffset.Value)
-			}
-			interactionObject.vadBargeInReceived = bargeInTime
-			interactionObject.vadBargeInChannel <- bargeInTime
-		case api.VadEvent_VAD_EVENT_TYPE_END_OF_SPEECH:
-			bargeOutTime := int(response.GetVadEvent().AudioOffset.Value)
-			interactionObject.vadBargeOutReceived = bargeOutTime
-			interactionObject.vadBargeOutChannel <- bargeOutTime
-		case api.VadEvent_VAD_EVENT_TYPE_BARGE_IN_TIMEOUT:
-			interactionObject.vadBargeInTimeoutReceived = true
-			close(interactionObject.vadBargeInTimeoutChannel)
-		case api.VadEvent_VAD_EVENT_TYPE_END_OF_SPEECH_TIMEOUT:
-			interactionObject.vadBargeOutTimeoutReceived = true
-			close(interactionObject.vadBargeOutTimeoutChannel)
-		default:
-			logger.Warn("unexpected VAD event",
-				"to_state", response.GetVadEvent().VadEventType.String())
-		}
+		interactionObject.handleVadEvent(response.GetVadEvent())
 		return
 	}
 	session.asrInteractionsLock.RUnlock()
@@ -1340,6 +1365,7 @@ func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
 				interactionObject.vadBargeInChannels = append(interactionObject.vadBargeInChannels, make(chan struct{}))
 				interactionObject.vadBargeOutChannels = append(interactionObject.vadBargeOutChannels, make(chan struct{}))
 				interactionObject.vadBargeInTimeoutChannels = append(interactionObject.vadBargeInTimeoutChannels, make(chan struct{}))
+				interactionObject.vadBargeOutTimeoutChannels = append(interactionObject.vadBargeOutTimeoutChannels, make(chan struct{}))
 				interactionObject.vadRecordLog = append(interactionObject.vadRecordLog, createEmptyVadInteractionRecord())
 				// Now that the event has been recorded, signal the channel
 				close(interactionObject.vadBeginProcessingChannels[currentVadInteractionIndex])
@@ -1371,6 +1397,7 @@ func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
 				interactionObject.vadBargeInChannels = append(interactionObject.vadBargeInChannels, make(chan struct{}))
 				interactionObject.vadBargeOutChannels = append(interactionObject.vadBargeOutChannels, make(chan struct{}))
 				interactionObject.vadBargeInTimeoutChannels = append(interactionObject.vadBargeInTimeoutChannels, make(chan struct{}))
+				interactionObject.vadBargeOutTimeoutChannels = append(interactionObject.vadBargeOutTimeoutChannels, make(chan struct{}))
 				interactionObject.vadRecordLog = append(interactionObject.vadRecordLog, createEmptyVadInteractionRecord())
 				// Now that the event has been recorded, signal the channel
 				close(interactionObject.vadBeginProcessingChannels[currentVadInteractionIndex])
@@ -1405,6 +1432,7 @@ func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
 				interactionObject.vadBargeInChannels = append(interactionObject.vadBargeInChannels, make(chan struct{}))
 				interactionObject.vadBargeOutChannels = append(interactionObject.vadBargeOutChannels, make(chan struct{}))
 				interactionObject.vadBargeInTimeoutChannels = append(interactionObject.vadBargeInTimeoutChannels, make(chan struct{}))
+				interactionObject.vadBargeOutTimeoutChannels = append(interactionObject.vadBargeOutTimeoutChannels, make(chan struct{}))
 				interactionObject.vadRecordLog = append(interactionObject.vadRecordLog, createEmptyVadInteractionRecord())
 				// Now that the event has been recorded, signal the channel
 				close(interactionObject.vadBeginProcessingChannels[currentVadInteractionIndex])
@@ -1433,32 +1461,21 @@ func handleVadEvent(session *SessionObject, response *api.SessionResponse) {
 		session.amdInteractionsLock.RUnlock()
 
 		// This is an AMD interaction.
-		switch response.GetVadEvent().VadEventType {
-		case api.VadEvent_VAD_EVENT_TYPE_BEGIN_PROCESSING:
-			interactionObject.vadBeginProcessingReceived = true
-			interactionObject.vadBeginProcessingChannel <- struct{}{}
-		case api.VadEvent_VAD_EVENT_TYPE_BARGE_IN:
-			bargeInAudioOffset := response.GetVadEvent().AudioOffset
-			var bargeInTime int
-			if bargeInAudioOffset == nil {
-				bargeInTime = 0
-				logger.Warn("VAD BARGE-IN event detected with empty AudioOffset. Using 0.")
-			} else {
-				bargeInTime = int(bargeInAudioOffset.Value)
-			}
-			interactionObject.vadBargeInReceived = bargeInTime
-			interactionObject.vadBargeInChannel <- bargeInTime
-		case api.VadEvent_VAD_EVENT_TYPE_END_OF_SPEECH:
-			bargeOutTime := int(response.GetVadEvent().AudioOffset.Value)
-			interactionObject.vadBargeOutReceived = bargeOutTime
-			interactionObject.vadBargeOutChannel <- bargeOutTime
-		case api.VadEvent_VAD_EVENT_TYPE_BARGE_IN_TIMEOUT:
-			interactionObject.vadBargeInTimeoutReceived = true
-			close(interactionObject.vadBargeInTimeoutChannel)
-		}
+		interactionObject.handleVadEvent(response.GetVadEvent())
 		return
 	}
 	session.amdInteractionsLock.RUnlock()
+
+	// Try CPA interactions
+	session.cpaInteractionsLock.RLock()
+	if interactionObject, ok := session.cpaInteractionsMap[interactionId]; ok {
+		session.cpaInteractionsLock.RUnlock()
+
+		// This is a CPA interaction.
+		interactionObject.handleVadEvent(response.GetVadEvent())
+		return
+	}
+	session.cpaInteractionsLock.RUnlock()
 
 	// We did not find the interaction.
 	logger.Error("Recv VadEvent: interaction not found",
@@ -1786,8 +1803,68 @@ func handleSessionEvent(session *SessionObject, response *api.SessionResponse) {
 			return
 		}
 
+		// Check for interaction create neuron error response
+		if handleInteractionCreateNeuronError(session, response, correlationId) {
+			return
+		}
+
+		// Check for interaction create AMD error response
+		if handleInteractionCreateAmdError(session, response, correlationId) {
+			return
+		}
+
+		// Check for interaction create CPA error response
+		if handleInteractionCreateCpaError(session, response, correlationId) {
+			return
+		}
+
+		// Check for interaction create diarization error response
+		if handleInteractionCreateDiarizationError(session, response, correlationId) {
+			return
+		}
+
+		// Check for interaction create grammar parse error response
+		if handleInteractionCreateGrammarParseError(session, response, correlationId) {
+			return
+		}
+
+		// Check for interaction create language id error response
+		if handleInteractionCreateLanguageIdError(session, response, correlationId) {
+			return
+		}
+
+		// Check for interaction create NLU error response
+		if handleInteractionCreateNluError(session, response, correlationId) {
+			return
+		}
+
+		// Check for interaction create normalization error response
+		if handleInteractionCreateNormalizationError(session, response, correlationId) {
+			return
+		}
+
+		// Check for interaction create sentiment error response
+		if handleInteractionCreateSentimentError(session, response, correlationId) {
+			return
+		}
+
+		// Check for interaction create TTS error response
+		if handleInteractionCreateTtsError(session, response, correlationId) {
+			return
+		}
+
 		// Check for finalize interaction response
 		if handleFinalizeInteractionResponse(session, response, correlationId) {
+			return
+		}
+
+		// Check for session set settings response
+		if handleSessionSetSettingsResponse(session, response, correlationId) {
+			return
+		}
+
+		// Check for audio pull error response
+		if handleAudioPullError(session, response, correlationId) {
 			return
 		}
 
@@ -1796,6 +1873,31 @@ func handleSessionEvent(session *SessionObject, response *api.SessionResponse) {
 
 	// Handle other SessionEvent types (grammar errors, etc.)
 	handleOtherSessionEvents(session, response)
+}
+
+// interactionCreateError builds the error returned to a caller whose interaction
+// create request failed. The server's status (code, message, and details) is
+// preserved so callers can inspect it via status.FromError.
+func interactionCreateError(response *api.SessionResponse, interactionType string, correlationId string) error {
+	se := response.GetSessionEvent()
+	if se == nil || se.StatusMessage == nil {
+		return status.Errorf(codes.Internal, "%s interaction creation failed: unknown error", interactionType)
+	}
+
+	sm := se.StatusMessage
+	getLogger().Error("interaction create "+interactionType+" failed",
+		"error", sm.Message,
+		"code", sm.Code,
+		"correlation_id", correlationId)
+
+	if codes.Code(sm.Code) == codes.OK {
+		// status.ErrorProto returns nil for OK, so report it as Internal instead.
+		// Proto() returns a copy, leaving the response itself unchanged.
+		st := status.FromProto(sm).Proto()
+		st.Code = int32(codes.Internal)
+		return status.ErrorProto(st)
+	}
+	return status.ErrorProto(sm)
 }
 
 func handleInteractionCreateAsrError(session *SessionObject, response *api.SessionResponse, correlationId string) bool {
@@ -1835,19 +1937,7 @@ func handleInteractionCreateAsrError(session *SessionObject, response *api.Sessi
 	}
 
 	// Create error from API response
-	var apiError error
-	if response.GetSessionEvent().StatusMessage != nil {
-		logger.Error("interaction create ASR failed",
-			"error", response.GetSessionEvent().StatusMessage.Message,
-			"code", response.GetSessionEvent().StatusMessage.Code,
-			"correlation_id", correlationId)
-
-		apiError = fmt.Errorf("ASR interaction creation failed: %s (code: %d)",
-			response.GetSessionEvent().StatusMessage.Message,
-			response.GetSessionEvent().StatusMessage.Code)
-	} else {
-		apiError = errors.New("ASR interaction creation failed: unknown error")
-	}
+	apiError := interactionCreateError(response, "ASR", correlationId)
 
 	// Send the error result through the channel
 	result := &asrCreateResult{
@@ -1895,19 +1985,7 @@ func handleInteractionCreateTranscriptionError(session *SessionObject, response 
 	}
 
 	// Create error from API response
-	var apiError error
-	if response.GetSessionEvent().StatusMessage != nil {
-		logger.Error("interaction create transcription failed",
-			"error", response.GetSessionEvent().StatusMessage.Message,
-			"code", response.GetSessionEvent().StatusMessage.Code,
-			"correlation_id", correlationId)
-
-		apiError = fmt.Errorf("transcription interaction creation failed: %s (code: %d)",
-			response.GetSessionEvent().StatusMessage.Message,
-			response.GetSessionEvent().StatusMessage.Code)
-	} else {
-		apiError = errors.New("transcription interaction creation failed: unknown error")
-	}
+	apiError := interactionCreateError(response, "transcription", correlationId)
 
 	// Send the error result through the channel
 	result := &transcriptionCreateResult{
@@ -1918,15 +1996,479 @@ func handleInteractionCreateTranscriptionError(session *SessionObject, response 
 	return true
 }
 
+func handleInteractionCreateNeuronError(session *SessionObject, response *api.SessionResponse, correlationId string) bool {
+	logger := getLogger()
+
+	session.interactionCreateNeuronMapLock.Lock()
+	createNeuronHelper, exists := session.interactionCreateNeuronMap[correlationId]
+	if exists {
+		delete(session.interactionCreateNeuronMap, correlationId)
+	}
+	session.interactionCreateNeuronMapLock.Unlock()
+
+	if !exists {
+		return false
+	}
+
+	if EnableVerboseLogging {
+		logger.Debug("Recv interaction create neuron error response",
+			"response", response)
+	}
+
+	if createNeuronHelper == nil {
+		logger.Warn("error routing interaction create neuron response",
+			"error", "neuron helper is nil",
+			"response", response)
+		return true
+	}
+
+	if time.Now().After(createNeuronHelper.deadline) {
+		logger.Warn("error routing interaction create neuron response",
+			"error", "interaction create neuron timed out",
+			"response", response)
+		return true
+	}
+
+	// Create error from API response
+	apiError := interactionCreateError(response, "neuron", correlationId)
+
+	createNeuronHelper.interactionCreateChannel <- &neuronCreateResult{
+		InteractionObject: nil,
+		Error:             apiError,
+	}
+	return true
+}
+
+func handleInteractionCreateAmdError(session *SessionObject, response *api.SessionResponse, correlationId string) bool {
+	logger := getLogger()
+
+	session.interactionCreateAmdMapLock.Lock()
+	createAmdHelper, exists := session.interactionCreateAmdMap[correlationId]
+	if exists {
+		// each helper should only be used once, so delete the map entry before unlocking
+		delete(session.interactionCreateAmdMap, correlationId)
+	}
+	session.interactionCreateAmdMapLock.Unlock()
+
+	if !exists {
+		return false // not an AMD create error
+	}
+
+	if EnableVerboseLogging {
+		logger.Debug("Recv interaction create AMD error response",
+			"response", response)
+	}
+
+	// catch nil helper
+	if createAmdHelper == nil {
+		logger.Warn("error routing interaction create AMD response",
+			"error", "AMD helper is nil",
+			"response", response)
+		return true
+	}
+
+	// catch timeout
+	if time.Now().After(createAmdHelper.deadline) {
+		logger.Warn("error routing interaction create AMD response",
+			"error", "interaction create AMD timed out",
+			"response", response)
+		return true
+	}
+
+	// Create error from API response
+	apiError := interactionCreateError(response, "AMD", correlationId)
+
+	// Send the error result through the channel
+	createAmdHelper.interactionCreateChannel <- &amdCreateResult{
+		InteractionObject: nil,
+		Error:             apiError,
+	}
+	return true
+}
+
+func handleInteractionCreateCpaError(session *SessionObject, response *api.SessionResponse, correlationId string) bool {
+	logger := getLogger()
+
+	session.interactionCreateCpaMapLock.Lock()
+	createCpaHelper, exists := session.interactionCreateCpaMap[correlationId]
+	if exists {
+		// each helper should only be used once, so delete the map entry before unlocking
+		delete(session.interactionCreateCpaMap, correlationId)
+	}
+	session.interactionCreateCpaMapLock.Unlock()
+
+	if !exists {
+		return false // not a CPA create error
+	}
+
+	if EnableVerboseLogging {
+		logger.Debug("Recv interaction create CPA error response",
+			"response", response)
+	}
+
+	// catch nil helper
+	if createCpaHelper == nil {
+		logger.Warn("error routing interaction create CPA response",
+			"error", "CPA helper is nil",
+			"response", response)
+		return true
+	}
+
+	// catch timeout
+	if time.Now().After(createCpaHelper.deadline) {
+		logger.Warn("error routing interaction create CPA response",
+			"error", "interaction create CPA timed out",
+			"response", response)
+		return true
+	}
+
+	// Create error from API response
+	apiError := interactionCreateError(response, "CPA", correlationId)
+
+	// Send the error result through the channel
+	createCpaHelper.interactionCreateChannel <- &cpaCreateResult{
+		InteractionObject: nil,
+		Error:             apiError,
+	}
+	return true
+}
+
+func handleInteractionCreateDiarizationError(session *SessionObject, response *api.SessionResponse, correlationId string) bool {
+	logger := getLogger()
+
+	session.interactionCreateDiarizationMapLock.Lock()
+	createDiarizationHelper, exists := session.interactionCreateDiarizationMap[correlationId]
+	if exists {
+		// each helper should only be used once, so delete the map entry before unlocking
+		delete(session.interactionCreateDiarizationMap, correlationId)
+	}
+	session.interactionCreateDiarizationMapLock.Unlock()
+
+	if !exists {
+		return false // not a diarization create error
+	}
+
+	if EnableVerboseLogging {
+		logger.Debug("Recv interaction create diarization error response",
+			"response", response)
+	}
+
+	// catch nil helper
+	if createDiarizationHelper == nil {
+		logger.Warn("error routing interaction create diarization response",
+			"error", "diarization helper is nil",
+			"response", response)
+		return true
+	}
+
+	// catch timeout
+	if time.Now().After(createDiarizationHelper.deadline) {
+		logger.Warn("error routing interaction create diarization response",
+			"error", "interaction create diarization timed out",
+			"response", response)
+		return true
+	}
+
+	// Create error from API response
+	apiError := interactionCreateError(response, "diarization", correlationId)
+
+	// Send the error result through the channel
+	createDiarizationHelper.interactionCreateChannel <- &diarizationCreateResult{
+		InteractionObject: nil,
+		Error:             apiError,
+	}
+	return true
+}
+
+func handleInteractionCreateGrammarParseError(session *SessionObject, response *api.SessionResponse, correlationId string) bool {
+	logger := getLogger()
+
+	session.interactionCreateGrammarParseMapLock.Lock()
+	createGrammarParseHelper, exists := session.interactionCreateGrammarParseMap[correlationId]
+	if exists {
+		// each helper should only be used once, so delete the map entry before unlocking
+		delete(session.interactionCreateGrammarParseMap, correlationId)
+	}
+	session.interactionCreateGrammarParseMapLock.Unlock()
+
+	if !exists {
+		return false // not a grammar parse create error
+	}
+
+	if EnableVerboseLogging {
+		logger.Debug("Recv interaction create grammar parse error response",
+			"response", response)
+	}
+
+	// catch nil helper
+	if createGrammarParseHelper == nil {
+		logger.Warn("error routing interaction create grammar parse response",
+			"error", "grammar parse helper is nil",
+			"response", response)
+		return true
+	}
+
+	// catch timeout
+	if time.Now().After(createGrammarParseHelper.deadline) {
+		logger.Warn("error routing interaction create grammar parse response",
+			"error", "interaction create grammar parse timed out",
+			"response", response)
+		return true
+	}
+
+	// Create error from API response
+	apiError := interactionCreateError(response, "grammar parse", correlationId)
+
+	// Send the error result through the channel
+	createGrammarParseHelper.interactionCreateChannel <- &grammarParseCreateResult{
+		InteractionObject: nil,
+		Error:             apiError,
+	}
+	return true
+}
+
+func handleInteractionCreateLanguageIdError(session *SessionObject, response *api.SessionResponse, correlationId string) bool {
+	logger := getLogger()
+
+	session.interactionCreateLanguageIdMapLock.Lock()
+	createLanguageIdHelper, exists := session.interactionCreateLanguageIdMap[correlationId]
+	if exists {
+		// each helper should only be used once, so delete the map entry before unlocking
+		delete(session.interactionCreateLanguageIdMap, correlationId)
+	}
+	session.interactionCreateLanguageIdMapLock.Unlock()
+
+	if !exists {
+		return false // not a language id create error
+	}
+
+	if EnableVerboseLogging {
+		logger.Debug("Recv interaction create language id error response",
+			"response", response)
+	}
+
+	// catch nil helper
+	if createLanguageIdHelper == nil {
+		logger.Warn("error routing interaction create language id response",
+			"error", "language id helper is nil",
+			"response", response)
+		return true
+	}
+
+	// catch timeout
+	if time.Now().After(createLanguageIdHelper.deadline) {
+		logger.Warn("error routing interaction create language id response",
+			"error", "interaction create language id timed out",
+			"response", response)
+		return true
+	}
+
+	// Create error from API response
+	apiError := interactionCreateError(response, "language id", correlationId)
+
+	// Send the error result through the channel
+	createLanguageIdHelper.interactionCreateChannel <- &languageIdCreateResult{
+		InteractionObject: nil,
+		Error:             apiError,
+	}
+	return true
+}
+
+func handleInteractionCreateNluError(session *SessionObject, response *api.SessionResponse, correlationId string) bool {
+	logger := getLogger()
+
+	session.interactionCreateNluMapLock.Lock()
+	createNluHelper, exists := session.interactionCreateNluMap[correlationId]
+	if exists {
+		// each helper should only be used once, so delete the map entry before unlocking
+		delete(session.interactionCreateNluMap, correlationId)
+	}
+	session.interactionCreateNluMapLock.Unlock()
+
+	if !exists {
+		return false // not an NLU create error
+	}
+
+	if EnableVerboseLogging {
+		logger.Debug("Recv interaction create NLU error response",
+			"response", response)
+	}
+
+	// catch nil helper
+	if createNluHelper == nil {
+		logger.Warn("error routing interaction create NLU response",
+			"error", "NLU helper is nil",
+			"response", response)
+		return true
+	}
+
+	// catch timeout
+	if time.Now().After(createNluHelper.deadline) {
+		logger.Warn("error routing interaction create NLU response",
+			"error", "interaction create NLU timed out",
+			"response", response)
+		return true
+	}
+
+	// Create error from API response
+	apiError := interactionCreateError(response, "NLU", correlationId)
+
+	// Send the error result through the channel
+	createNluHelper.interactionCreateChannel <- &nluCreateResult{
+		InteractionObject: nil,
+		Error:             apiError,
+	}
+	return true
+}
+
+func handleInteractionCreateNormalizationError(session *SessionObject, response *api.SessionResponse, correlationId string) bool {
+	logger := getLogger()
+
+	session.interactionCreateNormalizeTextMapLock.Lock()
+	createNormalizationHelper, exists := session.interactionCreateNormalizeTextMap[correlationId]
+	if exists {
+		// each helper should only be used once, so delete the map entry before unlocking
+		delete(session.interactionCreateNormalizeTextMap, correlationId)
+	}
+	session.interactionCreateNormalizeTextMapLock.Unlock()
+
+	if !exists {
+		return false // not a normalization create error
+	}
+
+	if EnableVerboseLogging {
+		logger.Debug("Recv interaction create normalization error response",
+			"response", response)
+	}
+
+	// catch nil helper
+	if createNormalizationHelper == nil {
+		logger.Warn("error routing interaction create normalization response",
+			"error", "normalization helper is nil",
+			"response", response)
+		return true
+	}
+
+	// catch timeout
+	if time.Now().After(createNormalizationHelper.deadline) {
+		logger.Warn("error routing interaction create normalization response",
+			"error", "interaction create normalization timed out",
+			"response", response)
+		return true
+	}
+
+	// Create error from API response
+	apiError := interactionCreateError(response, "normalization", correlationId)
+
+	// Send the error result through the channel
+	createNormalizationHelper.interactionCreateChannel <- &normalizationCreateResult{
+		InteractionObject: nil,
+		Error:             apiError,
+	}
+	return true
+}
+
+func handleInteractionCreateSentimentError(session *SessionObject, response *api.SessionResponse, correlationId string) bool {
+	logger := getLogger()
+
+	session.interactionCreateSentimentMapLock.Lock()
+	createSentimentHelper, exists := session.interactionCreateSentimentMap[correlationId]
+	if exists {
+		// each helper should only be used once, so delete the map entry before unlocking
+		delete(session.interactionCreateSentimentMap, correlationId)
+	}
+	session.interactionCreateSentimentMapLock.Unlock()
+
+	if !exists {
+		return false // not a sentiment create error
+	}
+
+	if EnableVerboseLogging {
+		logger.Debug("Recv interaction create sentiment error response",
+			"response", response)
+	}
+
+	// catch nil helper
+	if createSentimentHelper == nil {
+		logger.Warn("error routing interaction create sentiment response",
+			"error", "sentiment helper is nil",
+			"response", response)
+		return true
+	}
+
+	// catch timeout
+	if time.Now().After(createSentimentHelper.deadline) {
+		logger.Warn("error routing interaction create sentiment response",
+			"error", "interaction create sentiment timed out",
+			"response", response)
+		return true
+	}
+
+	// Create error from API response
+	apiError := interactionCreateError(response, "sentiment", correlationId)
+
+	// Send the error result through the channel
+	createSentimentHelper.interactionCreateChannel <- &sentimentCreateResult{
+		InteractionObject: nil,
+		Error:             apiError,
+	}
+	return true
+}
+
+func handleInteractionCreateTtsError(session *SessionObject, response *api.SessionResponse, correlationId string) bool {
+	logger := getLogger()
+
+	session.interactionCreateTtsMapLock.Lock()
+	createTtsHelper, exists := session.interactionCreateTtsMap[correlationId]
+	if exists {
+		// each helper should only be used once, so delete the map entry before unlocking
+		delete(session.interactionCreateTtsMap, correlationId)
+	}
+	session.interactionCreateTtsMapLock.Unlock()
+
+	if !exists {
+		return false // not a TTS create error
+	}
+
+	if EnableVerboseLogging {
+		logger.Debug("Recv interaction create TTS error response",
+			"response", response)
+	}
+
+	// catch nil helper
+	if createTtsHelper == nil {
+		logger.Warn("error routing interaction create TTS response",
+			"error", "TTS helper is nil",
+			"response", response)
+		return true
+	}
+
+	// catch timeout
+	if time.Now().After(createTtsHelper.deadline) {
+		logger.Warn("error routing interaction create TTS response",
+			"error", "interaction create TTS timed out",
+			"response", response)
+		return true
+	}
+
+	// Create error from API response
+	apiError := interactionCreateError(response, "TTS", correlationId)
+
+	// Send the error result through the channel
+	createTtsHelper.interactionCreateChannel <- &ttsCreateResult{
+		InteractionObject: nil,
+		Error:             apiError,
+	}
+	return true
+}
+
 func handleFinalizeInteractionResponse(session *SessionObject, response *api.SessionResponse, correlationId string) bool {
 	logger := getLogger()
 
 	session.interactionFinalizeMapLock.Lock()
 	finalizeHelper, exists := session.interactionFinalizeMap[correlationId]
-	if exists {
-		// each helper should only be used once, so delete the map entry before unlocking
-		delete(session.interactionFinalizeMap, correlationId)
-	}
+	// each helper should only be used once, so delete the map entry before unlocking
+	delete(session.interactionFinalizeMap, correlationId)
 	session.interactionFinalizeMapLock.Unlock()
 
 	if !exists {
@@ -1967,6 +2509,104 @@ func handleFinalizeInteractionResponse(session *SessionObject, response *api.Ses
 	return true
 }
 
+func handleSessionSetSettingsResponse(session *SessionObject, response *api.SessionResponse, correlationId string) bool {
+
+	logger := getLogger()
+
+	// check the coordination map for the correlationId
+	session.sessionSetSettingsMapLock.Lock()
+	setSettingsHelper, exists := session.sessionSetSettingsMap[correlationId]
+	delete(session.sessionSetSettingsMap, correlationId)
+	session.sessionSetSettingsMapLock.Unlock()
+
+	if !exists {
+		return false // not a set settings response
+	}
+
+	if EnableVerboseLogging {
+		logger.Debug("Recv session set settings response",
+			"response", response)
+	}
+
+	// catch nil helper
+	if setSettingsHelper == nil {
+		logger.Warn("error routing session set settings response",
+			"error", "set settings helper is nil",
+			"response", response)
+		return true
+	}
+
+	// catch timeout
+	if time.Now().After(setSettingsHelper.deadline) {
+		logger.Warn("error routing session set settings response",
+			"error", "session set settings timed out",
+			"response", response)
+		return true
+	}
+
+	// determine success or failure based on status code
+	var responseErr error
+	if response.GetSessionEvent().StatusMessage != nil && response.GetSessionEvent().StatusMessage.Code != 0 {
+		responseErr = fmt.Errorf("session set settings failed: %s (code: %d)",
+			response.GetSessionEvent().StatusMessage.Message,
+			response.GetSessionEvent().StatusMessage.Code)
+	}
+
+	// send the response (nil for success, error for failure)
+	setSettingsHelper.responseChannel <- responseErr
+	return true
+}
+
+func handleAudioPullError(session *SessionObject, response *api.SessionResponse, correlationId string) bool {
+
+	logger := getLogger()
+
+	session.ttsAudioMapLock.Lock()
+	audioPullChannel, exists := session.ttsAudioMap[correlationId]
+	if !exists {
+		session.ttsAudioMapLock.Unlock()
+		return false // not an audio pull response
+	}
+
+	// the API may send empty SessionEvents with a zero status code. these are
+	// not errors, so ignore them and leave the audio pull channel in place.
+	statusMessage := response.GetSessionEvent().StatusMessage
+	if statusMessage == nil || statusMessage.Code == 0 {
+		session.ttsAudioMapLock.Unlock()
+		if EnableVerboseLogging {
+			logger.Debug("Recv audio pull session event with no error, ignoring",
+				"response", response)
+		}
+		return true
+	}
+
+	// the audio pull has failed, so the channel won't be used again. delete
+	// the map entry before unlocking.
+	delete(session.ttsAudioMap, correlationId)
+	session.ttsAudioMapLock.Unlock()
+
+	logger.Error("audio pull failed",
+		"error", statusMessage.Message,
+		"code", statusMessage.Code,
+		"correlation_id", correlationId)
+
+	result := &audioPullResult{
+		Response: nil,
+		Error: fmt.Errorf("audio pull failed: %s (code: %d)",
+			statusMessage.Message,
+			statusMessage.Code),
+	}
+
+	// pass the error through the channel
+	select {
+	case audioPullChannel <- result:
+	default:
+		logger.Error("Recv audio pull error: audio pull channel full",
+			"correlation_id", correlationId)
+	}
+	return true
+}
+
 func handleOtherSessionEvents(session *SessionObject, response *api.SessionResponse) {
 	// Handle grammar errors and other non-correlation-based session events
 	if response.GetSessionEvent().StatusMessage != nil {
@@ -1995,6 +2635,7 @@ func handleAudioPull(session *SessionObject, response *api.SessionResponse) {
 	if response.CorrelationId == nil || response.CorrelationId.Value == "" {
 		logger.Error("Recv AudioPull: empty or missing correlation id",
 			"response", response)
+		return
 	}
 	correlationId := response.CorrelationId.Value
 
@@ -2017,7 +2658,7 @@ func handleAudioPull(session *SessionObject, response *api.SessionResponse) {
 
 	// pass the audio response through the channel
 	select {
-	case audioPullChannel <- audioPullResponse:
+	case audioPullChannel <- &audioPullResult{Response: audioPullResponse}:
 	default:
 		logger.Error("Recv AudioPull: audio pull channel full",
 			"correlation_id", correlationId)

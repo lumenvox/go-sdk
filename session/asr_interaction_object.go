@@ -1,8 +1,6 @@
 package session
 
 import (
-	"github.com/lumenvox/protos-go/lumenvox/api"
-
 	"errors"
 	"fmt"
 	"sync"
@@ -10,31 +8,16 @@ import (
 
 	"github.com/google/uuid"
 	"google.golang.org/genproto/googleapis/rpc/status"
+
+	"github.com/lumenvox/protos-go/lumenvox/api"
 )
 
 // AsrInteractionObject represents an ASR interaction.
 type AsrInteractionObject struct {
 	InteractionId string
 
-	// VAD begin processing tracking
-	vadBeginProcessingReceived bool
-	vadBeginProcessingChannel  chan struct{}
-
-	// VAD barge-in tracking
-	vadBargeInReceived int
-	vadBargeInChannel  chan int
-
-	// VAD barge-out tracking
-	vadBargeOutReceived int
-	vadBargeOutChannel  chan int
-
-	// VAD barge-in timeout tracking
-	vadBargeInTimeoutReceived bool
-	vadBargeInTimeoutChannel  chan struct{}
-
-	// VAD barge-out timeout tracking
-	vadBargeOutTimeoutReceived bool
-	vadBargeOutTimeoutChannel  chan struct{}
+	// VAD event tracking. Each signal fires at most once per interaction.
+	vadSignals
 
 	// Partial result tracking
 	partialResultLock      sync.Mutex
@@ -48,6 +31,20 @@ type AsrInteractionObject struct {
 	FinalStatus          *status.Status
 	FinalResultStatus    api.FinalResultStatus
 	resultsReadyChannel  chan struct{}
+}
+
+// newAsrInteractionObject creates an ASR interaction object, ready to receive
+// VAD events and results for the given interaction.
+func newAsrInteractionObject(interactionId string) *AsrInteractionObject {
+
+	interactionObject := &AsrInteractionObject{
+		InteractionId:       interactionId,
+		vadSignals:          newVadSignals(),
+		resultsReadyChannel: make(chan struct{}),
+	}
+	interactionObject.partialResultsChannels = append(interactionObject.partialResultsChannels, make(chan struct{}))
+
+	return interactionObject
 }
 
 type asrCreateResult struct {
@@ -166,12 +163,12 @@ func (session *SessionObject) NewAsr(
 // an error will be returned.
 func (asrInteraction *AsrInteractionObject) WaitForBeginProcessing(timeout time.Duration) error {
 
-	if asrInteraction.vadBeginProcessingReceived {
+	if asrInteraction.vadBeginProcessing.fired() {
 		return nil
 	}
 
 	select {
-	case <-asrInteraction.vadBeginProcessingChannel:
+	case <-asrInteraction.vadBeginProcessing.done:
 		return nil
 	case <-time.After(timeout):
 		return TimeoutError
@@ -184,16 +181,16 @@ func (asrInteraction *AsrInteractionObject) WaitForBeginProcessing(timeout time.
 // received, an error will be returned.
 func (asrInteraction *AsrInteractionObject) WaitForBargeIn(timeout time.Duration) error {
 
-	if asrInteraction.vadBargeInReceived != -1 {
+	if asrInteraction.vadBargeIn.fired() {
 		return nil
-	} else if asrInteraction.vadBargeInTimeoutReceived {
+	} else if asrInteraction.vadBargeInTimeout.fired() {
 		return errors.New("barge-in timeout received")
 	}
 
 	select {
-	case <-asrInteraction.vadBargeInChannel:
+	case <-asrInteraction.vadBargeIn.done:
 		return nil
-	case <-asrInteraction.vadBargeInTimeoutChannel:
+	case <-asrInteraction.vadBargeInTimeout.done:
 		return errors.New("barge-in timeout received")
 	case <-time.After(timeout):
 		return TimeoutError
@@ -206,16 +203,16 @@ func (asrInteraction *AsrInteractionObject) WaitForBargeIn(timeout time.Duration
 // arrives, an error will be returned.
 func (asrInteraction *AsrInteractionObject) WaitForEndOfSpeech(timeout time.Duration) error {
 
-	if asrInteraction.vadBargeOutReceived != -1 {
+	if asrInteraction.vadBargeOut.fired() {
 		return nil
-	} else if asrInteraction.vadBargeOutTimeoutReceived {
+	} else if asrInteraction.vadBargeOutTimeout.fired() {
 		return errors.New("barge-out timeout received")
 	}
 
 	select {
-	case <-asrInteraction.vadBargeOutChannel:
+	case <-asrInteraction.vadBargeOut.done:
 		return nil
-	case <-asrInteraction.vadBargeOutTimeoutChannel:
+	case <-asrInteraction.vadBargeOutTimeout.done:
 		return errors.New("barge-out timeout received")
 	case <-time.After(timeout):
 		return TimeoutError
@@ -228,17 +225,16 @@ func (asrInteraction *AsrInteractionObject) WaitForEndOfSpeech(timeout time.Dura
 // or a barge-in arrives, an error will be returned.
 func (asrInteraction *AsrInteractionObject) WaitForBargeInTimeout(timeout time.Duration) error {
 
-	if asrInteraction.vadBargeInTimeoutReceived {
+	if asrInteraction.vadBargeInTimeout.fired() {
 		return nil
-	} else if asrInteraction.vadBargeInReceived != -1 {
+	} else if asrInteraction.vadBargeIn.fired() {
 		return errors.New("barge-in received")
 	}
 
-	// vadBargeInTimeoutChannel is closed when a barge-in timeout arrives
 	select {
-	case <-asrInteraction.vadBargeInTimeoutChannel:
+	case <-asrInteraction.vadBargeInTimeout.done:
 		return nil
-	case <-asrInteraction.vadBargeInChannel:
+	case <-asrInteraction.vadBargeIn.done:
 		return errors.New("barge-in received")
 	case <-time.After(timeout):
 		return TimeoutError
@@ -261,8 +257,8 @@ func (asrInteraction *AsrInteractionObject) WaitForFinalResults(timeout time.Dur
 	case <-asrInteraction.resultsReadyChannel:
 		// resultsReadyChannel is closed when final results arrive
 		return nil
-	case <-asrInteraction.vadBargeInTimeoutChannel:
-		// vadBargeInTimeoutChannel is closed when a barge-in timeout arrives
+	case <-asrInteraction.vadBargeInTimeout.done:
+		// vadBargeInTimeout fires when a barge-in timeout arrives
 		return nil
 	case <-time.After(timeout):
 		return TimeoutError
@@ -315,7 +311,7 @@ func (asrInteraction *AsrInteractionObject) WaitForNextResult(timeout time.Durat
 		// We received a new partial result. Return the index, and false to
 		// indicate a partial result.
 		return nextPartialResultIdx, false, nil
-	case <-asrInteraction.vadBargeInTimeoutChannel:
+	case <-asrInteraction.vadBargeInTimeout.done:
 		// We received a barge-in timeout. Return (0, true) to indicate that the
 		// interaction is complete.
 		return 0, true, nil
@@ -368,7 +364,7 @@ func (asrInteraction *AsrInteractionObject) GetFinalResults(timeout time.Duratio
 			errorString := fmt.Sprintf("%v: %v", asrInteraction.FinalResultStatus, asrInteraction.FinalStatus.Message)
 			return nil, errors.New(errorString)
 		}
-	} else if asrInteraction.vadBargeInTimeoutReceived {
+	} else if asrInteraction.vadBargeInTimeout.fired() {
 		// If we received a barge-in timeout, return an error.
 		return nil, errors.New("barge-in timeout")
 	} else {

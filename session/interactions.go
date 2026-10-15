@@ -1,13 +1,13 @@
 package session
 
 import (
-	"github.com/lumenvox/protos-go/lumenvox/api"
-
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/lumenvox/protos-go/lumenvox/api"
 )
 
 // vadInteractionRecord records the data from a single VAD interaction.
@@ -65,6 +65,75 @@ func (session *SessionObject) prepareInteractionFinalize(correlationId string, d
 	return
 }
 
+type sessionSettingsResult struct {
+	SessionSettings *api.SessionSettings
+	Error           error
+}
+
+type sessionGetSettingsHelper struct {
+	sessionSettingsChannel chan *sessionSettingsResult
+	deadline               time.Time
+}
+
+// prepareGetSessionSettings creates a channel in an internal map to prepare
+// for a get session settings request. It expects the correlationId of the
+// relevant get session settings request, which is used to route the response.
+// It returns a receive-only channel, as the creating thread should not close the
+// channel.
+func (session *SessionObject) prepareGetSessionSettings(correlationId string, deadline time.Duration) (
+	sessionSettingsChan <-chan *sessionSettingsResult, err error) {
+
+	session.sessionGetSettingsMapLock.Lock()
+	defer session.sessionGetSettingsMapLock.Unlock()
+
+	// if the correlationId is already in the map, return an error
+	if _, ok := session.sessionGetSettingsMap[correlationId]; ok {
+		return nil, errors.New("session get settings channel already exists")
+	}
+
+	// create the helper, put it in the map, and return it
+	settingsHelper := &sessionGetSettingsHelper{
+		sessionSettingsChannel: make(chan *sessionSettingsResult, 1),
+		deadline:               time.Now().Add(deadline),
+	}
+	session.sessionGetSettingsMap[correlationId] = settingsHelper
+	sessionSettingsChan = settingsHelper.sessionSettingsChannel
+
+	return
+}
+
+type sessionSetSettingsHelper struct {
+	responseChannel chan error
+	deadline        time.Time
+}
+
+// prepareSetSessionSettings creates a helper in an internal map to prepare
+// for a set session settings request. It expects the correlationId of the
+// relevant set session settings request, which is used to route the response.
+// It returns a receive-only channel, as the creating thread should not close the
+// channel.
+func (session *SessionObject) prepareSetSessionSettings(correlationId string, deadline time.Duration) (
+	responseChan <-chan error, err error) {
+
+	session.sessionSetSettingsMapLock.Lock()
+	defer session.sessionSetSettingsMapLock.Unlock()
+
+	// if the correlationId is already in the map, return an error
+	if _, ok := session.sessionSetSettingsMap[correlationId]; ok {
+		return nil, errors.New("session set settings channel already exists")
+	}
+
+	// create the helper, put it in the map, and return the channel
+	settingsHelper := &sessionSetSettingsHelper{
+		responseChannel: make(chan error, 1),
+		deadline:        time.Now().Add(deadline),
+	}
+	session.sessionSetSettingsMap[correlationId] = settingsHelper
+	responseChan = settingsHelper.responseChannel
+
+	return
+}
+
 // PullTtsAudio fetches generated audio from a specified TTS interaction.
 func (session *SessionObject) PullTtsAudio(interactionId string, audioChannel int32, audioStartMs int32,
 	audioLengthMs int32) (audioData []byte, err error) {
@@ -81,6 +150,9 @@ func (session *SessionObject) PullTtsAudio(interactionId string, audioChannel in
 			"session_id", session.SessionId)
 		return nil, err
 	}
+	// make sure the channel is removed from the map if we exit early (send
+	// failure or timeout). this is a no-op if a response handler already removed it.
+	defer session.cleanupAudioPull(correlationId)
 
 	// Send audio pull request using the provided interactionId, adding specified parameters
 	session.streamSendLock.Lock()
@@ -93,11 +165,11 @@ func (session *SessionObject) PullTtsAudio(interactionId string, audioChannel in
 		return nil, err
 	}
 
-	var audioPullResponse *api.AudioPullResponse
+	var pullResult *audioPullResult
 	isFinalDataChunk := false
 	for isFinalDataChunk == false {
 		select {
-		case audioPullResponse = <-audioPullChannel:
+		case pullResult = <-audioPullChannel:
 		case <-time.After(5 * time.Second):
 			// timed out - log error and return any data received so far
 			logger.Error("timed out waiting for final audio chunk",
@@ -106,12 +178,15 @@ func (session *SessionObject) PullTtsAudio(interactionId string, audioChannel in
 			return audioData, TimeoutError
 		}
 
-		if audioPullResponse == nil {
+		if pullResult == nil {
 			// This should not happen, but if it does, just continue the loop
 			continue
-		} else {
-			isFinalDataChunk = audioPullResponse.FinalDataChunk
-			audioData = append(audioData, audioPullResponse.AudioData...)
+		} else if pullResult.Error != nil {
+			// the API reported an error - return it along with any data received so far
+			return audioData, pullResult.Error
+		} else if pullResult.Response != nil {
+			isFinalDataChunk = pullResult.Response.FinalDataChunk
+			audioData = append(audioData, pullResult.Response.AudioData...)
 		}
 	}
 
@@ -181,6 +256,87 @@ func (session *SessionObject) FinalizeInteraction(interactionId string) (err err
 		logger.Error("timed out waiting for finalize response",
 			"interaction_id", interactionId,
 			"correlation_id", correlationId)
+		return TimeoutError
+	}
+}
+
+// GetSessionSettings fetches the current session settings from the API.
+func (session *SessionObject) GetSessionSettings() (settings *api.SessionSettings, err error) {
+
+	logger := getLogger()
+
+	// generate a correlation ID to track the response when it arrives
+	correlationId := uuid.NewString()
+
+	// create a helper struct to wait for the response
+	sessionSettingsChannel, err := session.prepareGetSessionSettings(correlationId, 10*time.Second)
+	if err != nil {
+		logger.Error("preparing get session settings coordination",
+			"error", err,
+			"correlation_id", correlationId,
+			"session_id", session.SessionId)
+		return nil, err
+	}
+
+	// no errors during preparation, send the get session settings request
+	session.streamSendLock.Lock()
+	err = session.sessionStream.Send(getGetSessionSettingsRequest(correlationId))
+	session.streamSendLock.Unlock()
+	if err != nil {
+		session.errorChan <- fmt.Errorf("sending SessionGetSettingsRequest error: %v", err)
+		logger.Error("sending session get settings request",
+			"error", err.Error())
+		return nil, err
+	}
+
+	// wait for the response
+	select {
+	case result := <-sessionSettingsChannel:
+		return result.SessionSettings, result.Error
+	case <-time.After(10 * time.Second):
+		logger.Error("timed out waiting for session settings response",
+			"correlation_id", correlationId,
+			"session_id", session.SessionId)
+		return nil, TimeoutError
+	}
+}
+
+func (session *SessionObject) SetSessionSettings(settings *api.SessionSettings) (err error) {
+
+	logger := getLogger()
+
+	// generate a correlation ID to track the response when it arrives
+	correlationId := uuid.NewString()
+
+	// create a helper struct to wait for the response
+	sessionSettingsChannel, err := session.prepareSetSessionSettings(correlationId, 10*time.Second)
+	if err != nil {
+		logger.Error("preparing set session settings coordination",
+			"error", err,
+			"correlation_id", correlationId,
+			"session_id", session.SessionId)
+		return err
+	}
+
+	// no errors during preparation, send the set session settings request
+	session.streamSendLock.Lock()
+	err = session.sessionStream.Send(getSetSessionSettingsRequest(correlationId, settings))
+	session.streamSendLock.Unlock()
+	if err != nil {
+		session.errorChan <- fmt.Errorf("sending SessionSetSettingsRequest error: %v", err)
+		logger.Error("sending session set settings request",
+			"error", err.Error())
+		return err
+	}
+
+	// wait for the response
+	select {
+	case responseErr := <-sessionSettingsChannel:
+		return responseErr
+	case <-time.After(10 * time.Second):
+		logger.Error("timed out waiting for set session settings response",
+			"correlation_id", correlationId,
+			"session_id", session.SessionId)
 		return TimeoutError
 	}
 }

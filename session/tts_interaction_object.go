@@ -1,8 +1,6 @@
 package session
 
 import (
-	"github.com/lumenvox/protos-go/lumenvox/api"
-
 	"errors"
 	"fmt"
 	"sync"
@@ -10,6 +8,8 @@ import (
 
 	"github.com/google/uuid"
 	"google.golang.org/genproto/googleapis/rpc/status"
+
+	"github.com/lumenvox/protos-go/lumenvox/api"
 )
 
 // TtsInteractionObject represents a TTS interaction.
@@ -30,8 +30,13 @@ type TtsInteractionObject struct {
 	resultsReadyChannel  chan struct{}
 }
 
+type ttsCreateResult struct {
+	InteractionObject *TtsInteractionObject
+	Error             error
+}
+
 type interactionCreateTtsHelper struct {
-	interactionCreateChannel chan *TtsInteractionObject
+	interactionCreateChannel chan *ttsCreateResult
 	deadline                 time.Time
 }
 
@@ -41,7 +46,7 @@ type interactionCreateTtsHelper struct {
 // well as a deadline to receive the response. It returns a receive-only channel,
 // as the creating thread should not close the channel.
 func (session *SessionObject) prepareInteractionCreateTts(correlationId string, deadline time.Duration) (
-	interactionCreateChan <-chan *TtsInteractionObject, err error) {
+	interactionCreateChan <-chan *ttsCreateResult, err error) {
 
 	session.interactionCreateTtsMapLock.Lock()
 	defer session.interactionCreateTtsMapLock.Unlock()
@@ -53,7 +58,7 @@ func (session *SessionObject) prepareInteractionCreateTts(correlationId string, 
 
 	// create the helper, put it in the map, and return the channel
 	interactionCreateHelper := &interactionCreateTtsHelper{
-		interactionCreateChannel: make(chan *TtsInteractionObject, 1),
+		interactionCreateChannel: make(chan *ttsCreateResult, 1),
 		deadline:                 time.Now().Add(deadline),
 	}
 	session.interactionCreateTtsMap[correlationId] = interactionCreateHelper
@@ -71,7 +76,8 @@ func (session *SessionObject) NewInlineTts(language string,
 	synthesizedAudioFormat *api.AudioFormat,
 	synthesisTimeoutMs *api.OptionalInt32,
 	generalInteractionSettings *api.GeneralInteractionSettings,
-	enablePartialResults *api.OptionalBool) (interactionObject *TtsInteractionObject, err error) {
+	enablePartialResults *api.OptionalBool,
+	ttsEngine api.InteractionCreateTtsRequest_TtsEngine) (interactionObject *TtsInteractionObject, err error) {
 
 	logger := getLogger()
 
@@ -91,7 +97,7 @@ func (session *SessionObject) NewInlineTts(language string,
 	session.streamSendLock.Lock()
 	err = session.sessionStream.Send(getInlineTtsRequest(correlationId, language, textToSynthesize,
 		synthesizedAudioFormat, synthesisTimeoutMs, inlineSettings, generalInteractionSettings,
-		enablePartialResults))
+		enablePartialResults, ttsEngine))
 	session.streamSendLock.Unlock()
 	if err != nil {
 		session.errorChan <- fmt.Errorf("sending InteractionCreateTtsRequest error: %v", err)
@@ -100,9 +106,10 @@ func (session *SessionObject) NewInlineTts(language string,
 		return nil, err
 	}
 
-	// Wait for the new interaction object.
+	// Wait for the new interaction object or error.
+	var result *ttsCreateResult
 	select {
-	case interactionObject = <-interactionCreateChan:
+	case result = <-interactionCreateChan:
 	case <-time.After(interactionCreateDeadline):
 		logger.Error("timed out waiting for interaction object",
 			"type", "tts",
@@ -111,13 +118,20 @@ func (session *SessionObject) NewInlineTts(language string,
 		return nil, errors.New("timed out waiting for interaction object")
 	}
 
-	if interactionObject == nil {
-		logger.Error("received nil interaction object",
+	if result.Error != nil {
+		// API returned an error, return it to the caller
+		return nil, result.Error
+	}
+
+	if result.InteractionObject == nil {
+		logger.Error("received nil interaction object without error",
 			"type", "tts",
 			"correlation_id", correlationId,
 			"session_id", session.SessionId)
 		return nil, errors.New("received nil interaction object")
 	}
+
+	interactionObject = result.InteractionObject
 
 	if EnableVerboseLogging {
 		logger.Debug("created new TTS interaction",
@@ -135,7 +149,8 @@ func (session *SessionObject) NewUrlTts(language string,
 	synthesizedAudioFormat *api.AudioFormat,
 	synthesisTimeoutMs *api.OptionalInt32,
 	generalInteractionSettings *api.GeneralInteractionSettings,
-	enablePartialResults *api.OptionalBool) (interactionObject *TtsInteractionObject, err error) {
+	enablePartialResults *api.OptionalBool,
+	ttsEngine api.InteractionCreateTtsRequest_TtsEngine) (interactionObject *TtsInteractionObject, err error) {
 
 	logger := getLogger()
 
@@ -155,7 +170,7 @@ func (session *SessionObject) NewUrlTts(language string,
 	session.streamSendLock.Lock()
 	err = session.sessionStream.Send(getUrlTtsRequest(correlationId, language, ssmlUrl,
 		synthesizedAudioFormat, synthesisTimeoutMs, sslVerifyPeer, generalInteractionSettings,
-		enablePartialResults))
+		enablePartialResults, ttsEngine))
 	session.streamSendLock.Unlock()
 	if err != nil {
 		session.errorChan <- fmt.Errorf("sending InteractionCreateTtsRequest error: %v", err)
@@ -164,9 +179,10 @@ func (session *SessionObject) NewUrlTts(language string,
 		return nil, err
 	}
 
-	// Wait for the new interaction object.
+	// Wait for the new interaction object or error.
+	var result *ttsCreateResult
 	select {
-	case interactionObject = <-interactionCreateChan:
+	case result = <-interactionCreateChan:
 	case <-time.After(interactionCreateDeadline):
 		logger.Error("timed out waiting for interaction object",
 			"type", "tts",
@@ -175,13 +191,20 @@ func (session *SessionObject) NewUrlTts(language string,
 		return nil, errors.New("timed out waiting for interaction object")
 	}
 
-	if interactionObject == nil {
-		logger.Error("received nil interaction object",
+	if result.Error != nil {
+		// API returned an error, return it to the caller
+		return nil, result.Error
+	}
+
+	if result.InteractionObject == nil {
+		logger.Error("received nil interaction object without error",
 			"type", "tts",
 			"correlation_id", correlationId,
 			"session_id", session.SessionId)
 		return nil, errors.New("received nil interaction object")
 	}
+
+	interactionObject = result.InteractionObject
 
 	if EnableVerboseLogging {
 		logger.Debug("created new TTS interaction",

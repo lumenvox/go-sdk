@@ -2,7 +2,7 @@
 // LumenVox API.
 //
 // The primary type is [SdkClient], which is obtained by calling
-// [github.com/lumenvox/go-sdk.CreateClient]. It provides methods to create
+// [github.com/lumenvox/go-sdk/v2.CreateClient]. It provides methods to create
 // sessions and to build settings objects for various interaction types.
 //
 // # Sessions

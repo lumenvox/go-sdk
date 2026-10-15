@@ -1,10 +1,10 @@
 package config
 
 import (
-	"github.com/lumenvox/go-sdk/logging"
-
 	"log/slog"
 	"sync"
+
+	"github.com/lumenvox/go-sdk/v2/logging"
 )
 
 var (

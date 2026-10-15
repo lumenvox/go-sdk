@@ -1,8 +1,6 @@
 package auth
 
 import (
-	"github.com/lumenvox/go-sdk/logging"
-
 	"bytes"
 	"context"
 	"encoding/json"
@@ -13,6 +11,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/lumenvox/go-sdk/v2/logging"
 )
 
 var enableVerboseLogging = func() bool {

@@ -1,14 +1,14 @@
 package session
 
 import (
-	"github.com/lumenvox/protos-go/lumenvox/api"
-
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/genproto/googleapis/rpc/status"
+
+	"github.com/lumenvox/protos-go/lumenvox/api"
 )
 
 // DiarizationInteractionObject represents a diarization interaction.
@@ -23,8 +23,13 @@ type DiarizationInteractionObject struct {
 	resultsReadyChannel  chan struct{}
 }
 
+type diarizationCreateResult struct {
+	InteractionObject *DiarizationInteractionObject
+	Error             error
+}
+
 type interactionCreateDiarizationHelper struct {
-	interactionCreateChannel chan *DiarizationInteractionObject
+	interactionCreateChannel chan *diarizationCreateResult
 	deadline                 time.Time
 }
 
@@ -34,7 +39,7 @@ type interactionCreateDiarizationHelper struct {
 // well as a deadline to receive the response. It returns a receive-only channel,
 // as the creating thread should not close the channel.
 func (session *SessionObject) prepareInteractionCreateDiarization(correlationId string, deadline time.Duration) (
-	interactionCreateChan <-chan *DiarizationInteractionObject, err error) {
+	interactionCreateChan <-chan *diarizationCreateResult, err error) {
 
 	session.interactionCreateDiarizationMapLock.Lock()
 	defer session.interactionCreateDiarizationMapLock.Unlock()
@@ -46,7 +51,7 @@ func (session *SessionObject) prepareInteractionCreateDiarization(correlationId 
 
 	// create the helper, put it in the map, and return the channel
 	interactionCreateHelper := &interactionCreateDiarizationHelper{
-		interactionCreateChannel: make(chan *DiarizationInteractionObject, 1),
+		interactionCreateChannel: make(chan *diarizationCreateResult, 1),
 		deadline:                 time.Now().Add(deadline),
 	}
 	session.interactionCreateDiarizationMap[correlationId] = interactionCreateHelper
@@ -92,9 +97,10 @@ func (session *SessionObject) NewDiarization(
 		return nil, err
 	}
 
-	// Wait for the new interaction object.
+	// Wait for the new interaction object or error.
+	var result *diarizationCreateResult
 	select {
-	case interactionObject = <-interactionCreateChan:
+	case result = <-interactionCreateChan:
 	case <-time.After(interactionCreateDeadline):
 		logger.Error("timed out waiting for interaction object",
 			"type", "diarization",
@@ -103,13 +109,20 @@ func (session *SessionObject) NewDiarization(
 		return nil, errors.New("timed out waiting for interaction object")
 	}
 
-	if interactionObject == nil {
-		logger.Error("received nil interaction object",
+	if result.Error != nil {
+		// API returned an error, return it to the caller
+		return nil, result.Error
+	}
+
+	if result.InteractionObject == nil {
+		logger.Error("received nil interaction object without error",
 			"type", "diarization",
 			"correlation_id", correlationId,
 			"session_id", session.SessionId)
 		return nil, errors.New("received nil interaction object")
 	}
+
+	interactionObject = result.InteractionObject
 
 	if EnableVerboseLogging {
 		logger.Debug("created new diarization interaction",

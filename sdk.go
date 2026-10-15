@@ -1,9 +1,9 @@
 package lumenvox_go_sdk
 
 import (
-	"github.com/lumenvox/go-sdk/auth"
-	"github.com/lumenvox/go-sdk/client"
-	"github.com/lumenvox/go-sdk/internal/connection"
+	"github.com/lumenvox/go-sdk/v2/auth"
+	"github.com/lumenvox/go-sdk/v2/client"
+	"github.com/lumenvox/go-sdk/v2/internal/connection"
 )
 
 // CreateConnection returns a gRPC connection object which can be used to create

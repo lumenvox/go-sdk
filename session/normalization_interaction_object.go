@@ -1,14 +1,14 @@
 package session
 
 import (
-	"github.com/lumenvox/protos-go/lumenvox/api"
-
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/genproto/googleapis/rpc/status"
+
+	"github.com/lumenvox/protos-go/lumenvox/api"
 )
 
 // NormalizationInteractionObject represents a normalization interaction.
@@ -23,8 +23,13 @@ type NormalizationInteractionObject struct {
 	resultsReadyChannel  chan struct{}
 }
 
+type normalizationCreateResult struct {
+	InteractionObject *NormalizationInteractionObject
+	Error             error
+}
+
 type interactionCreateNormalizeTextHelper struct {
-	interactionCreateChannel chan *NormalizationInteractionObject
+	interactionCreateChannel chan *normalizationCreateResult
 	deadline                 time.Time
 }
 
@@ -34,7 +39,7 @@ type interactionCreateNormalizeTextHelper struct {
 // well as a deadline to receive the response. It returns a receive-only channel,
 // as the creating thread should not close the channel.
 func (session *SessionObject) prepareInteractionCreateNormalization(correlationId string, deadline time.Duration) (
-	interactionCreateChan <-chan *NormalizationInteractionObject, err error) {
+	interactionCreateChan <-chan *normalizationCreateResult, err error) {
 
 	session.interactionCreateNormalizeTextMapLock.Lock()
 	defer session.interactionCreateNormalizeTextMapLock.Unlock()
@@ -46,7 +51,7 @@ func (session *SessionObject) prepareInteractionCreateNormalization(correlationI
 
 	// create the helper, put it in the map, and return the channel
 	interactionCreateHelper := &interactionCreateNormalizeTextHelper{
-		interactionCreateChannel: make(chan *NormalizationInteractionObject, 1),
+		interactionCreateChannel: make(chan *normalizationCreateResult, 1),
 		deadline:                 time.Now().Add(deadline),
 	}
 	session.interactionCreateNormalizeTextMap[correlationId] = interactionCreateHelper
@@ -89,9 +94,10 @@ func (session *SessionObject) NewNormalization(language string,
 		return nil, err
 	}
 
-	// Wait for the new interaction object.
+	// Wait for the new interaction object or error.
+	var result *normalizationCreateResult
 	select {
-	case interactionObject = <-interactionCreateChan:
+	case result = <-interactionCreateChan:
 	case <-time.After(interactionCreateDeadline):
 		logger.Error("timed out waiting for interaction object",
 			"type", "itn",
@@ -100,13 +106,20 @@ func (session *SessionObject) NewNormalization(language string,
 		return nil, errors.New("timed out waiting for interaction object")
 	}
 
-	if interactionObject == nil {
-		logger.Error("received nil interaction object",
+	if result.Error != nil {
+		// API returned an error, return it to the caller
+		return nil, result.Error
+	}
+
+	if result.InteractionObject == nil {
+		logger.Error("received nil interaction object without error",
 			"type", "itn",
 			"correlation_id", correlationId,
 			"session_id", session.SessionId)
 		return nil, errors.New("received nil interaction object")
 	}
+
+	interactionObject = result.InteractionObject
 
 	if EnableVerboseLogging {
 		logger.Debug("created new normalization interaction",

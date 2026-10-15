@@ -1,13 +1,13 @@
 package client
 
 import (
-	"github.com/lumenvox/go-sdk/auth"
-	"github.com/lumenvox/go-sdk/internal/connection"
-	"github.com/lumenvox/go-sdk/session"
-
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/lumenvox/go-sdk/v2/auth"
+	"github.com/lumenvox/go-sdk/v2/internal/connection"
+	"github.com/lumenvox/go-sdk/v2/session"
 )
 
 // SdkClient represents a client object with knowledge of API connectivity. It

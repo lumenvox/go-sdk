@@ -1,9 +1,6 @@
 package session
 
 import (
-	"github.com/lumenvox/go-sdk/auth"
-	"github.com/lumenvox/protos-go/lumenvox/api"
-
 	"context"
 	"errors"
 	"fmt"
@@ -15,6 +12,10 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+
+	"github.com/lumenvox/protos-go/lumenvox/api"
+
+	"github.com/lumenvox/go-sdk/v2/auth"
 )
 
 // TimeoutError represents a specific SDK error indicating that a timeout has occurred during an operation.
@@ -69,7 +70,6 @@ type SessionObject struct {
 	StreamLoopExitErr atomic.Pointer[error] // indicates streaming loop exit status
 
 	// channels
-	audioPullChannel    chan *api.AudioPullResponse
 	sessionLoadChannel  chan *api.SessionLoadGrammarResponse
 	sessionCloseChannel chan struct{}
 	grammarErrorChannel chan *api.SessionEvent
@@ -91,6 +91,8 @@ type SessionObject struct {
 	interactionCreateSentimentMapLock     sync.Mutex
 	loadSessionGrammarMapLock             sync.Mutex
 	interactionFinalizeMapLock            sync.Mutex
+	sessionGetSettingsMapLock             sync.Mutex
+	sessionSetSettingsMapLock             sync.Mutex
 
 	// maps to handle interactionCreate responses
 	interactionCreateAmdMap           map[string]*interactionCreateAmdHelper
@@ -107,6 +109,8 @@ type SessionObject struct {
 	interactionCreateSentimentMap     map[string]*interactionCreateSentimentHelper
 	loadSessionGrammarMap             map[string]*LoadSessionGrammarObject
 	interactionFinalizeMap            map[string]*interactionFinalizeHelper
+	sessionGetSettingsMap             map[string]*sessionGetSettingsHelper
+	sessionSetSettingsMap             map[string]*sessionSetSettingsHelper
 
 	// locks for individual interaction maps to reduce contention
 	amdInteractionsLock           sync.RWMutex
@@ -138,7 +142,7 @@ type SessionObject struct {
 
 	// map of channels to handle TTS audio
 	ttsAudioMapLock sync.Mutex
-	ttsAudioMap     map[string]chan *api.AudioPullResponse
+	ttsAudioMap     map[string]chan *audioPullResult
 
 	// settings
 	sessionSettingsChannel chan *api.SessionSettings
@@ -174,7 +178,6 @@ func newSessionObject(
 		audioConfig:   audioConfig,
 
 		// channels
-		audioPullChannel:       make(chan *api.AudioPullResponse, 100),
 		sessionLoadChannel:     make(chan *api.SessionLoadGrammarResponse, 100),
 		sessionCloseChannel:    make(chan struct{}, 1),
 		grammarErrorChannel:    make(chan *api.SessionEvent, 100),
@@ -197,6 +200,8 @@ func newSessionObject(
 		interactionCreateSentimentMap:     make(map[string]*interactionCreateSentimentHelper),
 		loadSessionGrammarMap:             make(map[string]*LoadSessionGrammarObject),
 		interactionFinalizeMap:            make(map[string]*interactionFinalizeHelper),
+		sessionGetSettingsMap:             make(map[string]*sessionGetSettingsHelper),
+		sessionSetSettingsMap:             make(map[string]*sessionSetSettingsHelper),
 
 		// interaction maps
 		amdInteractionsMap:           make(map[string]*AmdInteractionObject),
@@ -213,7 +218,7 @@ func newSessionObject(
 		sentimentInteractionsMap:     make(map[string]*SentimentInteractionObject),
 
 		// audio pull map
-		ttsAudioMap: make(map[string]chan *api.AudioPullResponse),
+		ttsAudioMap: make(map[string]chan *audioPullResult),
 	}
 }
 
@@ -401,13 +406,20 @@ func (session *SessionObject) HasListeningLoopExited() (bool, error) {
 	return true, *errPtr
 }
 
+// audioPullResult carries either a chunk of pulled audio or an error reported
+// by the API (via SessionEvent) for the audio pull request.
+type audioPullResult struct {
+	Response *api.AudioPullResponse
+	Error    error
+}
+
 // prepareAudioPull creates a channel in an internal map to prepare
 // for a series of audioPull response. It expects the correlationId of the
 // relevant audioPull request, which is used to route the responses. It
 // returns a receive-only channel, as the creating thread should not close the
 // channel.
 func (session *SessionObject) prepareAudioPull(correlationId string) (
-	audioPullChan <-chan *api.AudioPullResponse, err error) {
+	audioPullChan <-chan *audioPullResult, err error) {
 
 	session.ttsAudioMapLock.Lock()
 	defer session.ttsAudioMapLock.Unlock()
@@ -418,9 +430,19 @@ func (session *SessionObject) prepareAudioPull(correlationId string) (
 	}
 
 	// create the channel, put it in the map, and return it
-	audioPullChannel := make(chan *api.AudioPullResponse, 100)
+	audioPullChannel := make(chan *audioPullResult, 100)
 	session.ttsAudioMap[correlationId] = audioPullChannel
 	audioPullChan = audioPullChannel
 
 	return
+}
+
+// cleanupAudioPull removes the audio pull channel for the given correlationId
+// from the internal map, if it is still present. This is safe to call after
+// the response handlers have already removed the entry.
+func (session *SessionObject) cleanupAudioPull(correlationId string) {
+
+	session.ttsAudioMapLock.Lock()
+	delete(session.ttsAudioMap, correlationId)
+	session.ttsAudioMapLock.Unlock()
 }

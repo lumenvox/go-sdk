@@ -1,35 +1,22 @@
 package session
 
 import (
-	"github.com/lumenvox/protos-go/lumenvox/api"
-
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/genproto/googleapis/rpc/status"
+
+	"github.com/lumenvox/protos-go/lumenvox/api"
 )
 
 // AmdInteractionObject represents an AMD interaction.
 type AmdInteractionObject struct {
 	InteractionId string
 
-	// VAD begin processing tracking
-	vadBeginProcessingReceived bool
-	vadBeginProcessingChannel  chan struct{}
-
-	// VAD barge-in tracking
-	vadBargeInReceived int
-	vadBargeInChannel  chan int
-
-	// VAD barge-out tracking
-	vadBargeOutReceived int
-	vadBargeOutChannel  chan int
-
-	// VAD barge-in timeout tracking
-	vadBargeInTimeoutReceived bool
-	vadBargeInTimeoutChannel  chan struct{}
+	// VAD event tracking. Each signal fires at most once per interaction.
+	vadSignals
 
 	// Final result tracking
 	finalResultsReceived bool
@@ -39,8 +26,24 @@ type AmdInteractionObject struct {
 	resultsReadyChannel  chan struct{}
 }
 
+// newAmdInteractionObject creates an AMD interaction object, ready to receive
+// VAD events and results for the given interaction.
+func newAmdInteractionObject(interactionId string) *AmdInteractionObject {
+
+	return &AmdInteractionObject{
+		InteractionId:       interactionId,
+		vadSignals:          newVadSignals(),
+		resultsReadyChannel: make(chan struct{}),
+	}
+}
+
+type amdCreateResult struct {
+	InteractionObject *AmdInteractionObject
+	Error             error
+}
+
 type interactionCreateAmdHelper struct {
-	interactionCreateChannel chan *AmdInteractionObject
+	interactionCreateChannel chan *amdCreateResult
 	deadline                 time.Time
 }
 
@@ -50,7 +53,7 @@ type interactionCreateAmdHelper struct {
 // well as a deadline to receive the response. It returns a receive-only channel,
 // as the creating thread should not close the channel.
 func (session *SessionObject) prepareInteractionCreateAmd(correlationId string, deadline time.Duration) (
-	interactionCreateChan <-chan *AmdInteractionObject, err error) {
+	interactionCreateChan <-chan *amdCreateResult, err error) {
 
 	session.interactionCreateAmdMapLock.Lock()
 	defer session.interactionCreateAmdMapLock.Unlock()
@@ -62,7 +65,7 @@ func (session *SessionObject) prepareInteractionCreateAmd(correlationId string, 
 
 	// create the helper, put it in the map, and return the channel
 	interactionCreateHelper := &interactionCreateAmdHelper{
-		interactionCreateChannel: make(chan *AmdInteractionObject, 1),
+		interactionCreateChannel: make(chan *amdCreateResult, 1),
 		deadline:                 time.Now().Add(deadline),
 	}
 	session.interactionCreateAmdMap[correlationId] = interactionCreateHelper
@@ -106,9 +109,10 @@ func (session *SessionObject) NewAmd(
 		return nil, err
 	}
 
-	// Wait for the new interaction object.
+	// Wait for the new interaction object or error.
+	var result *amdCreateResult
 	select {
-	case interactionObject = <-interactionCreateChan:
+	case result = <-interactionCreateChan:
 	case <-time.After(interactionCreateDeadline):
 		logger.Error("timed out waiting for interaction object",
 			"type", "amd",
@@ -117,13 +121,20 @@ func (session *SessionObject) NewAmd(
 		return nil, errors.New("timed out waiting for interaction object")
 	}
 
-	if interactionObject == nil {
-		logger.Error("received nil interaction object",
+	if result.Error != nil {
+		// API returned an error, return it to the caller
+		return nil, result.Error
+	}
+
+	if result.InteractionObject == nil {
+		logger.Error("received nil interaction object without error",
 			"type", "amd",
 			"correlation_id", correlationId,
 			"session_id", session.SessionId)
 		return nil, errors.New("received nil interaction object")
 	}
+
+	interactionObject = result.InteractionObject
 
 	if EnableVerboseLogging {
 		logger.Debug("created new AMD interaction",
@@ -139,12 +150,12 @@ func (session *SessionObject) NewAmd(
 // an error will be returned.
 func (amdInteraction *AmdInteractionObject) WaitForBeginProcessing(timeout time.Duration) error {
 
-	if amdInteraction.vadBeginProcessingReceived {
+	if amdInteraction.vadBeginProcessing.fired() {
 		return nil
 	}
 
 	select {
-	case <-amdInteraction.vadBeginProcessingChannel:
+	case <-amdInteraction.vadBeginProcessing.done:
 		return nil
 	case <-time.After(timeout):
 		return TimeoutError
@@ -157,12 +168,12 @@ func (amdInteraction *AmdInteractionObject) WaitForBeginProcessing(timeout time.
 // returned.
 func (amdInteraction *AmdInteractionObject) WaitForBargeIn(timeout time.Duration) error {
 
-	if amdInteraction.vadBargeInReceived != -1 {
+	if amdInteraction.vadBargeIn.fired() {
 		return nil
 	}
 
 	select {
-	case <-amdInteraction.vadBargeInChannel:
+	case <-amdInteraction.vadBargeIn.done:
 		return nil
 	case <-time.After(timeout):
 		return TimeoutError
@@ -174,12 +185,12 @@ func (amdInteraction *AmdInteractionObject) WaitForBargeIn(timeout time.Duration
 // if the message does not return before the timeout, an error will be returned.
 func (amdInteraction *AmdInteractionObject) WaitForEndOfSpeech(timeout time.Duration) error {
 
-	if amdInteraction.vadBargeOutReceived != -1 {
+	if amdInteraction.vadBargeOut.fired() {
 		return nil
 	}
 
 	select {
-	case <-amdInteraction.vadBargeOutChannel:
+	case <-amdInteraction.vadBargeOut.done:
 		return nil
 	case <-time.After(timeout):
 		return TimeoutError
@@ -192,13 +203,12 @@ func (amdInteraction *AmdInteractionObject) WaitForEndOfSpeech(timeout time.Dura
 // an error will be returned.
 func (amdInteraction *AmdInteractionObject) WaitForBargeInTimeout(timeout time.Duration) error {
 
-	if amdInteraction.vadBargeInTimeoutReceived {
+	if amdInteraction.vadBargeInTimeout.fired() {
 		return nil
 	}
 
-	// vadBargeInTimeoutChannel is closed when a barge-in timeout arrives
 	select {
-	case <-amdInteraction.vadBargeInTimeoutChannel:
+	case <-amdInteraction.vadBargeInTimeout.done:
 		return nil
 	case <-time.After(timeout):
 		return TimeoutError
@@ -218,8 +228,8 @@ func (amdInteraction *AmdInteractionObject) WaitForFinalResults(timeout time.Dur
 	case <-amdInteraction.resultsReadyChannel:
 		// resultsReadyChannel is closed when final results arrive
 		return nil
-	case <-amdInteraction.vadBargeInTimeoutChannel:
-		// vadBargeInTimeoutChannel is closed when a barge-in timeout arrives
+	case <-amdInteraction.vadBargeInTimeout.done:
+		// vadBargeInTimeout fires when a barge-in timeout arrives
 		return nil
 	case <-time.After(timeout):
 		return TimeoutError
@@ -251,7 +261,7 @@ func (amdInteraction *AmdInteractionObject) GetFinalResults(timeout time.Duratio
 			errorString := fmt.Sprintf("%v: %v", amdInteraction.FinalResultStatus, amdInteraction.FinalStatus.Message)
 			return nil, errors.New(errorString)
 		}
-	} else if amdInteraction.vadBargeInTimeoutReceived {
+	} else if amdInteraction.vadBargeInTimeout.fired() {
 		// If we received a barge-in timeout, return an error.
 		return nil, errors.New("barge-in timeout")
 	} else {

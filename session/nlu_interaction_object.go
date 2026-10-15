@@ -1,14 +1,14 @@
 package session
 
 import (
-	"github.com/lumenvox/protos-go/lumenvox/api"
-
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/genproto/googleapis/rpc/status"
+
+	"github.com/lumenvox/protos-go/lumenvox/api"
 )
 
 // NluInteractionObject represents an NLU interaction.
@@ -23,8 +23,13 @@ type NluInteractionObject struct {
 	resultsReadyChannel  chan struct{}
 }
 
+type nluCreateResult struct {
+	InteractionObject *NluInteractionObject
+	Error             error
+}
+
 type interactionCreateNluHelper struct {
-	interactionCreateChannel chan *NluInteractionObject
+	interactionCreateChannel chan *nluCreateResult
 	deadline                 time.Time
 }
 
@@ -34,7 +39,7 @@ type interactionCreateNluHelper struct {
 // well as a deadline to receive the response. It returns a receive-only channel,
 // as the creating thread should not close the channel.
 func (session *SessionObject) prepareInteractionCreateNlu(correlationId string, deadline time.Duration) (
-	interactionCreateChan <-chan *NluInteractionObject, err error) {
+	interactionCreateChan <-chan *nluCreateResult, err error) {
 
 	session.interactionCreateNluMapLock.Lock()
 	defer session.interactionCreateNluMapLock.Unlock()
@@ -46,7 +51,7 @@ func (session *SessionObject) prepareInteractionCreateNlu(correlationId string, 
 
 	// create the helper, put it in the map, and return the channel
 	interactionCreateHelper := &interactionCreateNluHelper{
-		interactionCreateChannel: make(chan *NluInteractionObject, 1),
+		interactionCreateChannel: make(chan *nluCreateResult, 1),
 		deadline:                 time.Now().Add(deadline),
 	}
 	session.interactionCreateNluMap[correlationId] = interactionCreateHelper
@@ -89,9 +94,10 @@ func (session *SessionObject) NewNlu(language string,
 		return nil, err
 	}
 
-	// Wait for the new interaction object.
+	// Wait for the new interaction object or error.
+	var result *nluCreateResult
 	select {
-	case interactionObject = <-interactionCreateChan:
+	case result = <-interactionCreateChan:
 	case <-time.After(interactionCreateDeadline):
 		logger.Error("timed out waiting for interaction object",
 			"type", "nlu",
@@ -100,13 +106,20 @@ func (session *SessionObject) NewNlu(language string,
 		return nil, errors.New("timed out waiting for interaction object")
 	}
 
-	if interactionObject == nil {
-		logger.Error("received nil interaction object",
+	if result.Error != nil {
+		// API returned an error, return it to the caller
+		return nil, result.Error
+	}
+
+	if result.InteractionObject == nil {
+		logger.Error("received nil interaction object without error",
 			"type", "nlu",
 			"correlation_id", correlationId,
 			"session_id", session.SessionId)
 		return nil, errors.New("received nil interaction object")
 	}
+
+	interactionObject = result.InteractionObject
 
 	if EnableVerboseLogging {
 		logger.Debug("created new NLU interaction",

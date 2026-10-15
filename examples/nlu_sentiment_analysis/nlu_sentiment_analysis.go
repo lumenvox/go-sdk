@@ -15,16 +15,16 @@ removed in future versions.
 */
 
 import (
-	lumenvoxSdk "github.com/lumenvox/go-sdk"
-	"github.com/lumenvox/go-sdk/auth"
-	"github.com/lumenvox/go-sdk/config"
-	"github.com/lumenvox/go-sdk/logging"
-	"github.com/lumenvox/go-sdk/session"
+	"os"
+	"time"
 
 	"github.com/lumenvox/protos-go/lumenvox/api"
 
-	"os"
-	"time"
+	lumenvoxSdk "github.com/lumenvox/go-sdk/v2"
+	"github.com/lumenvox/go-sdk/v2/auth"
+	"github.com/lumenvox/go-sdk/v2/config"
+	"github.com/lumenvox/go-sdk/v2/logging"
+	"github.com/lumenvox/go-sdk/v2/session"
 )
 
 func main() {

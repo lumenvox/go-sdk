@@ -1,8 +1,6 @@
 package session
 
 import (
-	"github.com/lumenvox/protos-go/lumenvox/api"
-
 	"errors"
 	"fmt"
 	"sync"
@@ -10,6 +8,8 @@ import (
 
 	"github.com/google/uuid"
 	"google.golang.org/genproto/googleapis/rpc/status"
+
+	"github.com/lumenvox/protos-go/lumenvox/api"
 )
 
 // TranscriptionInteractionObject represents a transcription interaction.
@@ -89,6 +89,7 @@ func (session *SessionObject) prepareInteractionCreateTranscription(correlationI
 func (session *SessionObject) NewTranscription(
 	language string,
 	phrases []*api.TranscriptionPhraseList,
+	phraseListSettings *api.PhraseListSettings,
 	embeddedGrammars []*api.Grammar,
 	audioConsumeSettings *api.AudioConsumeSettings,
 	normalizationSettings *api.NormalizationSettings,
@@ -97,7 +98,8 @@ func (session *SessionObject) NewTranscription(
 	languageModelName string,
 	acousticModelName string,
 	enablePostProcessing string,
-	enableContinuousTranscription *api.OptionalBool) (interactionObject *TranscriptionInteractionObject, err error) {
+	enableContinuousTranscription *api.OptionalBool,
+	neuronModelName string) (interactionObject *TranscriptionInteractionObject, err error) {
 
 	logger := getLogger()
 
@@ -118,9 +120,9 @@ func (session *SessionObject) NewTranscription(
 
 	// send the interaction create request
 	session.streamSendLock.Lock()
-	err = session.sessionStream.Send(getTranscriptionRequest(correlationId, language, phrases, embeddedGrammars,
-		vadSettings, audioConsumeSettings, normalizationSettings, recognitionSettings,
-		languageModelName, acousticModelName, enablePostProcessing, enableContinuousTranscription))
+	err = session.sessionStream.Send(getTranscriptionRequest(correlationId, language, phrases, phraseListSettings,
+		embeddedGrammars, vadSettings, audioConsumeSettings, normalizationSettings, recognitionSettings,
+		languageModelName, acousticModelName, enablePostProcessing, enableContinuousTranscription, neuronModelName))
 	session.streamSendLock.Unlock()
 	if err != nil {
 		session.errorChan <- fmt.Errorf("sending InteractionCreateTranscriptionRequest error: %v", err)

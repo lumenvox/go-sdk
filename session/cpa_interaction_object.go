@@ -1,35 +1,22 @@
 package session
 
 import (
-	"github.com/lumenvox/protos-go/lumenvox/api"
-
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/genproto/googleapis/rpc/status"
+
+	"github.com/lumenvox/protos-go/lumenvox/api"
 )
 
 // CpaInteractionObject represents a CPA interaction.
 type CpaInteractionObject struct {
 	InteractionId string
 
-	// VAD begin processing tracking
-	vadBeginProcessingReceived bool
-	vadBeginProcessingChannel  chan struct{}
-
-	// VAD barge-in tracking
-	vadBargeInReceived int
-	vadBargeInChannel  chan int
-
-	// VAD barge-out tracking
-	vadBargeOutReceived int
-	vadBargeOutChannel  chan int
-
-	// VAD barge-in timeout tracking
-	vadBargeInTimeoutReceived bool
-	vadBargeInTimeoutChannel  chan struct{}
+	// VAD event tracking. Each signal fires at most once per interaction.
+	vadSignals
 
 	// Final result tracking
 	finalResultsReceived bool
@@ -39,8 +26,24 @@ type CpaInteractionObject struct {
 	resultsReadyChannel  chan struct{}
 }
 
+// newCpaInteractionObject creates a CPA interaction object, ready to receive
+// VAD events and results for the given interaction.
+func newCpaInteractionObject(interactionId string) *CpaInteractionObject {
+
+	return &CpaInteractionObject{
+		InteractionId:       interactionId,
+		vadSignals:          newVadSignals(),
+		resultsReadyChannel: make(chan struct{}),
+	}
+}
+
+type cpaCreateResult struct {
+	InteractionObject *CpaInteractionObject
+	Error             error
+}
+
 type interactionCreateCpaHelper struct {
-	interactionCreateChannel chan *CpaInteractionObject
+	interactionCreateChannel chan *cpaCreateResult
 	deadline                 time.Time
 }
 
@@ -50,7 +53,7 @@ type interactionCreateCpaHelper struct {
 // well as a deadline to receive the response. It returns a receive-only channel,
 // as the creating thread should not close the channel.
 func (session *SessionObject) prepareInteractionCreateCpa(correlationId string, deadline time.Duration) (
-	interactionCreateChan <-chan *CpaInteractionObject, err error) {
+	interactionCreateChan <-chan *cpaCreateResult, err error) {
 
 	session.interactionCreateCpaMapLock.Lock()
 	defer session.interactionCreateCpaMapLock.Unlock()
@@ -62,7 +65,7 @@ func (session *SessionObject) prepareInteractionCreateCpa(correlationId string, 
 
 	// create the helper, put it in the map, and return the channel
 	interactionCreateHelper := &interactionCreateCpaHelper{
-		interactionCreateChannel: make(chan *CpaInteractionObject, 1),
+		interactionCreateChannel: make(chan *cpaCreateResult, 1),
 		deadline:                 time.Now().Add(deadline),
 	}
 	session.interactionCreateCpaMap[correlationId] = interactionCreateHelper
@@ -106,9 +109,10 @@ func (session *SessionObject) NewCpa(
 		return nil, err
 	}
 
-	// Wait for the new interaction object.
+	// Wait for the new interaction object or error.
+	var result *cpaCreateResult
 	select {
-	case interactionObject = <-interactionCreateChan:
+	case result = <-interactionCreateChan:
 	case <-time.After(interactionCreateDeadline):
 		logger.Error("timed out waiting for interaction object",
 			"type", "cpa",
@@ -117,13 +121,20 @@ func (session *SessionObject) NewCpa(
 		return nil, errors.New("timed out waiting for interaction object")
 	}
 
-	if interactionObject == nil {
-		logger.Error("received nil interaction object",
+	if result.Error != nil {
+		// API returned an error, return it to the caller
+		return nil, result.Error
+	}
+
+	if result.InteractionObject == nil {
+		logger.Error("received nil interaction object without error",
 			"type", "cpa",
 			"correlation_id", correlationId,
 			"session_id", session.SessionId)
 		return nil, errors.New("received nil interaction object")
 	}
+
+	interactionObject = result.InteractionObject
 
 	if EnableVerboseLogging {
 		logger.Debug("created new CPA interaction",
@@ -139,12 +150,12 @@ func (session *SessionObject) NewCpa(
 // an error will be returned.
 func (cpaInteraction *CpaInteractionObject) WaitForBeginProcessing(timeout time.Duration) error {
 
-	if cpaInteraction.vadBeginProcessingReceived {
+	if cpaInteraction.vadBeginProcessing.fired() {
 		return nil
 	}
 
 	select {
-	case <-cpaInteraction.vadBeginProcessingChannel:
+	case <-cpaInteraction.vadBeginProcessing.done:
 		return nil
 	case <-time.After(timeout):
 		return TimeoutError
@@ -157,12 +168,12 @@ func (cpaInteraction *CpaInteractionObject) WaitForBeginProcessing(timeout time.
 // returned.
 func (cpaInteraction *CpaInteractionObject) WaitForBargeIn(timeout time.Duration) error {
 
-	if cpaInteraction.vadBargeInReceived != -1 {
+	if cpaInteraction.vadBargeIn.fired() {
 		return nil
 	}
 
 	select {
-	case <-cpaInteraction.vadBargeInChannel:
+	case <-cpaInteraction.vadBargeIn.done:
 		return nil
 	case <-time.After(timeout):
 		return TimeoutError
@@ -174,12 +185,12 @@ func (cpaInteraction *CpaInteractionObject) WaitForBargeIn(timeout time.Duration
 // if the message does not return before the timeout, an error will be returned.
 func (cpaInteraction *CpaInteractionObject) WaitForEndOfSpeech(timeout time.Duration) error {
 
-	if cpaInteraction.vadBargeOutReceived != -1 {
+	if cpaInteraction.vadBargeOut.fired() {
 		return nil
 	}
 
 	select {
-	case <-cpaInteraction.vadBargeOutChannel:
+	case <-cpaInteraction.vadBargeOut.done:
 		return nil
 	case <-time.After(timeout):
 		return TimeoutError
@@ -192,13 +203,12 @@ func (cpaInteraction *CpaInteractionObject) WaitForEndOfSpeech(timeout time.Dura
 // an error will be returned.
 func (cpaInteraction *CpaInteractionObject) WaitForBargeInTimeout(timeout time.Duration) error {
 
-	if cpaInteraction.vadBargeInTimeoutReceived {
+	if cpaInteraction.vadBargeInTimeout.fired() {
 		return nil
 	}
 
-	// vadBargeInTimeoutChannel is closed when a barge-in timeout arrives
 	select {
-	case <-cpaInteraction.vadBargeInTimeoutChannel:
+	case <-cpaInteraction.vadBargeInTimeout.done:
 		return nil
 	case <-time.After(timeout):
 		return TimeoutError
@@ -218,8 +228,8 @@ func (cpaInteraction *CpaInteractionObject) WaitForFinalResults(timeout time.Dur
 	case <-cpaInteraction.resultsReadyChannel:
 		// resultsReadyChannel is closed when final results arrive
 		return nil
-	case <-cpaInteraction.vadBargeInTimeoutChannel:
-		// vadBargeInTimeoutChannel is closed when a barge-in timeout arrives
+	case <-cpaInteraction.vadBargeInTimeout.done:
+		// vadBargeInTimeout fires when a barge-in timeout arrives
 		return nil
 	case <-time.After(timeout):
 		return TimeoutError
@@ -251,7 +261,7 @@ func (cpaInteraction *CpaInteractionObject) GetFinalResults(timeout time.Duratio
 			errorString := fmt.Sprintf("%v: %v", cpaInteraction.FinalResultStatus, cpaInteraction.FinalStatus.Message)
 			return nil, errors.New(errorString)
 		}
-	} else if cpaInteraction.vadBargeInTimeoutReceived {
+	} else if cpaInteraction.vadBargeInTimeout.fired() {
 		// If we received a barge-in timeout, return an error.
 		return nil, errors.New("barge-in timeout")
 	} else {

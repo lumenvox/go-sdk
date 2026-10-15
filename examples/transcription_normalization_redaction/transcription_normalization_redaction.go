@@ -1,16 +1,16 @@
 package main
 
 import (
-	lumenvoxSdk "github.com/lumenvox/go-sdk"
-	"github.com/lumenvox/go-sdk/auth"
-	"github.com/lumenvox/go-sdk/config"
-	"github.com/lumenvox/go-sdk/logging"
-	"github.com/lumenvox/go-sdk/session"
+	"os"
+	"time"
 
 	"github.com/lumenvox/protos-go/lumenvox/api"
 
-	"os"
-	"time"
+	lumenvoxSdk "github.com/lumenvox/go-sdk/v2"
+	"github.com/lumenvox/go-sdk/v2/auth"
+	"github.com/lumenvox/go-sdk/v2/config"
+	"github.com/lumenvox/go-sdk/v2/logging"
+	"github.com/lumenvox/go-sdk/v2/session"
 )
 
 func main() {
@@ -158,6 +158,7 @@ func main() {
 
 	// Other transcription settings
 	var phrases []*api.TranscriptionPhraseList = nil
+	var phraseListSettings *api.PhraseListSettings = nil
 	var embeddedGrammars []*api.Grammar = nil
 	languageModelName := ""
 	acousticModelName := ""
@@ -166,9 +167,9 @@ func main() {
 
 	// Create interaction.
 	transcriptionInteraction, err := sessionObject.NewTranscription(language, phrases,
-		embeddedGrammars, audioConsumeSettings, normalizationSettings, vadSettings,
-		recognitionSettings, languageModelName, acousticModelName, enablePostProcessing,
-		enableContinuousTranscription)
+		phraseListSettings, embeddedGrammars, audioConsumeSettings, normalizationSettings,
+		vadSettings, recognitionSettings, languageModelName, acousticModelName,
+		enablePostProcessing, enableContinuousTranscription, "")
 	if err != nil {
 		logger.Error("failed to create interaction",
 			"error", err)

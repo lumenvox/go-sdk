@@ -16,9 +16,9 @@
 //
 // # Sub-packages
 //
-//   - [github.com/lumenvox/go-sdk/auth] — authentication settings for OAuth-protected endpoints.
-//   - [github.com/lumenvox/go-sdk/client] — the SDK client type and settings builders.
-//   - [github.com/lumenvox/go-sdk/config] — optional convenience utilities for loading configuration from INI files.
-//   - [github.com/lumenvox/go-sdk/logging] — logger initialization and injection.
-//   - [github.com/lumenvox/go-sdk/session] — session and interaction lifecycle management.
+//   - [github.com/lumenvox/go-sdk/v2/auth] — authentication settings for OAuth-protected endpoints.
+//   - [github.com/lumenvox/go-sdk/v2/client] — the SDK client type and settings builders.
+//   - [github.com/lumenvox/go-sdk/v2/config] — optional convenience utilities for loading configuration from INI files.
+//   - [github.com/lumenvox/go-sdk/v2/logging] — logger initialization and injection.
+//   - [github.com/lumenvox/go-sdk/v2/session] — session and interaction lifecycle management.
 package lumenvox_go_sdk
